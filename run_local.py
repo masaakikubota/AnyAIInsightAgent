@@ -61,9 +61,13 @@ def create_env_from_keys():
             content = f.read().strip()
         
         # Keys.txtの内容を.env形式に変換
+        lines = content.split('\n')
+        gemini_key = lines[0] if len(lines) > 0 else content
+        openai_key = lines[1] if len(lines) > 1 else ''
+        
         env_content = f"""# 環境変数設定
-GEMINI_API_KEY={content.split('\\n')[0] if '\\n' in content else content}
-OPENAI_API_KEY={content.split('\\n')[1] if '\\n' in content else ''}
+GEMINI_API_KEY={gemini_key}
+OPENAI_API_KEY={openai_key}
 """
         
         with open(".env", "w") as f:
