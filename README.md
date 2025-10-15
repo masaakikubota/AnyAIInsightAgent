@@ -13,7 +13,38 @@ AnyAIMarketingSolutionAgent — スコアリングAIエージェント
   3) ルートの `@Keys.txt` に記載（`.env`未設定時に自動読み込み）
   4) コード埋め込み（ローカルのみ推奨）: `app/settings.py` の `DEFAULT_GEMINI_API_KEY`, `DEFAULT_OPENAI_API_KEY`
 
-セットアップ
+## クイックスタート（推奨）
+
+### 自動セットアップ
+```bash
+# 1. リポジトリをクローン
+git clone https://github.com/your-username/AnyAIMarketingAgentV2.git
+cd AnyAIMarketingAgentV2
+
+# 2. 自動セットアップ（Linux/Mac）
+chmod +x setup.sh
+./setup.sh
+
+# 3. 実行
+python3 run_local.py
+```
+
+### 手動セットアップ
+```bash
+# 1. 依存インストール
+pip install -r requirements.txt
+
+# 2. 環境変数設定（任意）
+# Keys.txtから自動生成されるか、.envファイルを作成
+
+# 3. 起動
+python3 run_local.py
+# または
+uvicorn app.main:app --host 0.0.0.0 --port 25253
+```
+
+## 詳細セットアップ
+
 1) 依存インストール
    pip install -r requirements.txt
 
@@ -22,7 +53,7 @@ AnyAIMarketingSolutionAgent — スコアリングAIエージェント
    # APIキーを設定
 
 3) 起動
-   uvicorn app.main:app --host 0.0.0.0 --port 25252
+   uvicorn app.main:app --host 0.0.0.0 --port 25253
    # または
    python -m app.main
 
