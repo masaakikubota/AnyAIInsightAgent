@@ -70,8 +70,10 @@ class ScoreCache:
         async with self._lock:
             now = time.time()
             entry = {
-                "scores": list(result.scores),
-                "pre_scores": list(result.pre_scores or result.scores),
+                "scores": list(result.scores or []),
+                "pre_scores": list(result.pre_scores or result.scores or []),
+                "analyses": list(result.analyses or []),
+                "likert_pmfs": [list(pmf) for pmf in (result.likert_pmfs or [])],
                 "provider": result.provider.value,
                 "model": result.model,
                 "missing_indices": list(result.missing_indices or []),
@@ -114,6 +116,8 @@ class ScoreCache:
         model = entry.get("model") or ""
         result = ScoreResult(
             scores=list(scores),
+            analyses=list(entry.get("analyses") or []),
+            likert_pmfs=[list(pmf) for pmf in (entry.get("likert_pmfs") or [])],
             provider=provider,
             model=model,
             pre_scores=list(entry.get("pre_scores") or scores),
