@@ -9,7 +9,7 @@ from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Sequence
 
 from .models import Category, RunConfig, ScoreResult
 from .services.google_sheets import GoogleSheetsError, batch_update_values, column_index_to_a1
-from .services.scoring import clamp_and_round, score_with_fallback, cache_key
+from .services.scoring import SSRSettings, cache_key, clamp_and_round, score_with_fallback
 from .services.clients import GEMINI_MODEL_VIDEO
 from .services.video import download_video_to_path, upload_video_to_gemini
 
@@ -138,6 +138,18 @@ class ScoringPipeline:
             thread_name_prefix="scoring-validation",
         )
         self._log_callback = event_logger
+        self._ssr_settings: Optional[SSRSettings] = None
+        if cfg.ssr_reference_path and cfg.ssr_reference_set:
+            reference_path = Path(cfg.ssr_reference_path).expanduser()
+            self._ssr_settings = SSRSettings(
+                reference_path=reference_path,
+                reference_set=cfg.ssr_reference_set,
+                embeddings_column=cfg.ssr_embeddings_column,
+                model_name=cfg.ssr_model_name,
+                device=cfg.ssr_device,
+                temperature=float(cfg.ssr_temperature),
+                epsilon=float(cfg.ssr_epsilon),
+            )
 
     def _log(self, message: str) -> None:
         if not self._log_callback:
@@ -311,6 +323,7 @@ class ScoringPipeline:
                             model_override=task.model_override,
                             cache=self.score_cache,
                             cache_write=False,
+                            ssr_settings=self._ssr_settings,
                         )
                     except Exception as exc:
                         error_trail = getattr(exc, "_trail", []) or []
@@ -320,9 +333,10 @@ class ScoringPipeline:
                                     self._stats.rate_429_count += 1
                         raise
                     else:
+                        score_len = len(result.scores or [])
                         self._log(
                             f"Invoker success: row={task.unit.row_index} block={task.unit.block_index} "
-                            f"cache_hit={from_cache} provider={result.provider.value} scores={len(result.scores)}"
+                            f"cache_hit={from_cache} provider={result.provider.value} scores={score_len}"
                         )
                         if error_trail:
                             for provider, status, _reason in error_trail:
