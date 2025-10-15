@@ -80,15 +80,17 @@ OPENAI_API_KEY={openai_key}
 def run_application():
     """アプリケーションを実行"""
     print("🚀 アプリケーションを起動中...")
-    print("📍 アクセス先: http://localhost:25253")
+    print("📍 アクセス先: http://localhost:25254")
     print("🛑 停止するには Ctrl+C を押してください")
     print("-" * 50)
     
     try:
-        # アプリケーションを実行
+        # 環境変数でポートを指定してアプリケーションを実行
+        env = os.environ.copy()
+        env['PORT'] = '25254'
         subprocess.run([
             sys.executable, "-m", "app.main"
-        ], check=True)
+        ], check=True, env=env)
     except KeyboardInterrupt:
         print("\\n👋 アプリケーションを停止しました")
     except subprocess.CalledProcessError as e:
