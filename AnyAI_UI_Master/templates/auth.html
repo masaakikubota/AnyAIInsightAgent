@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../assets/AnyAI_icon.png">
+<title>認証 — AnyAI UI Kit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- 依存はゼロでも動作、オンライン時に日本語可読性を向上 -->
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../core/anyai.tokens.css">
+<link rel="stylesheet" href="../core/anyai.components.css">
+<link rel="stylesheet" href="../core/anyai.utilities.css">
+<script defer src="../core/anyai.js"></script>
+<style>
+  .page { padding-bottom: var(--anyai-space-10); }
+  .logo-inline { height: 28px; vertical-align: middle; }
+</style>
+</head>
+
+<body>
+<header class="anyai-header">
+  <a class="brand" href="../index.html" aria-label="AnyAI ホーム">
+    <img src="../assets/AnyAI_logo.png" alt="AnyAI ロゴ">
+    <span>AnyAI</span>
+  </a>
+  <nav class="nav">
+    <a href="../docs/components.html" >コンポーネント</a>
+    <a href="../docs/patterns.html" >パターン</a>
+    <a href="../templates/app-shell.html" style="font-weight:700;">テンプレート</a>
+    <button class="btn btn-ghost" data-action="toggle-theme" title="ライト/ダーク切替">テーマ</button>
+  </nav>
+</header>
+
+<main class="page container">
+  <div class="grid">
+    <div class="card max-lg">
+      <div class="card-body">
+        <h1>サインイン</h1>
+        <form class="stack">
+          <div class="field">
+            <label>メール</label>
+            <input class="input" type="email" placeholder="you@example.com" required>
+          </div>
+          <div class="field">
+            <label>パスワード</label>
+            <input class="input" type="password" placeholder="••••••••" required>
+          </div>
+          <div class="row">
+            <button class="btn btn-primary" type="submit">サインイン</button>
+            <button class="btn btn-outline" type="button">SSO</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="anyai-footer">
+  <div class="container">
+    <div class="row">
+      <div>© AnyAI UI Kit</div>
+      <div class="right text-subtle">v1.0 — 軽量・ビルドレス</div>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

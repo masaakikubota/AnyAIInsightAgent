@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>AnyAI Cleansing — データクレンジングAIエージェント</title>
+    <link rel="icon" href="/static/anyai/assets/AnyAI_icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/anyai/core/anyai.tokens.css" />
+    <link rel="stylesheet" href="/static/anyai/core/anyai.components.css" />
+    <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css" />
+    <style>
+      body { font-family: 'Noto Sans JP', sans-serif; }
+      .layout { display:flex; flex-direction:column; min-height:100vh; }
+      .anyai-content { flex:1; display:flex; justify-content:center; padding: var(--anyai-space-5); }
+      .container { width: min(720px, 100%); display:flex; flex-direction:column; gap: var(--anyai-space-4); }
+      .card { padding: var(--anyai-space-4); border-radius: 18px; background: var(--anyai-panel); box-shadow: var(--anyai-shadow-sm); }
+      .stack { display:flex; flex-direction:column; gap: var(--anyai-space-4); }
+      .stack-sm { display:flex; flex-direction:column; gap: 8px; }
+      .field { display:flex; flex-direction:column; gap: 6px; }
+      label { font-weight: 600; font-size: var(--anyai-fs-2); }
+      input[type="text"] { width:100%; padding: 10px; border-radius: 10px; border: 1px solid var(--anyai-border); background: var(--anyai-panel); }
+      progress { width:100%; height:12px; }
+      .muted { color: var(--anyai-text-subtle); font-size: var(--anyai-fs-2); }
+      .nav { display:flex; gap: 12px; align-items:center; }
+      .nav-link { font-weight:600; text-decoration:none; color: var(--anyai-text); padding: 6px 12px; border-radius: 999px; transition: background 0.2s ease; }
+      .nav-link:hover { background: rgba(0,0,0,0.06); }
+      .nav-link.active { background: rgba(0,0,0,0.12); }
+      ul.error-list { margin:0; padding-left: 18px; }
+      ul.error-list li { word-break: break-word; }
+      @media (max-width: 720px) { .anyai-content { padding: var(--anyai-space-3); } }
+    </style>
+  </head>
+  <body class="layout">
+    <header class="anyai-header">
+      <a class="brand" href="/cleansing" aria-label="AnyAI Cleansing">
+        <img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ">
+        <span>AnyAI Cleansing</span>
+      </a>
+      <nav class="nav">
+        <a class="nav-link" href="/">AnyAI Scoring</a>
+        <a class="nav-link active" href="/cleansing">AnyAI Cleansing</a>
+        <a class="nav-link" href="/interview">AnyAI Interview</a>
+      </nav>
+    </header>
+
+    <main class="anyai-content">
+      <div class="container">
+        <h1 class="mt-0" style="margin:0;">スプレッドシートのRelated列を自動クレンジング</h1>
+        <div class="card">
+          <form id="cleansing-form" class="stack">
+            <div class="field">
+              <label for="sheet">SheetID / SheetURL</label>
+              <input type="text" id="sheet" name="sheet" placeholder="https://docs.google.com/spreadsheets/d/..." required />
+            </div>
+            <div class="field">
+              <label for="country">Country</label>
+              <input type="text" id="country" name="country" placeholder="例: 日本" required />
+            </div>
+            <div class="field">
+              <label for="product_category">Product Category</label>
+              <input type="text" id="product_category" name="product_category" placeholder="例: ガム" required />
+            </div>
+            <div class="field">
+              <label for="sheet_name">Sheet Name</label>
+              <input type="text" id="sheet_name" name="sheet_name" value="RawData_Master" required />
+              <div class="muted">ヘッダーに <code>content</code> と <code>Related</code> が含まれているシートを指定してください。</div>
+            </div>
+            <button class="btn btn-primary" type="submit">クレンジング開始</button>
+          </form>
+        </div>
+
+        <section id="job-section" class="card" style="display:none;">
+          <div class="stack-sm">
+            <div>ジョブID: <code id="job-id"></code></div>
+            <div class="muted" id="job-status"></div>
+            <progress id="job-progress" value="0" max="100"></progress>
+            <div class="muted" id="job-counts"></div>
+            <div id="job-message"></div>
+            <div id="job-errors" style="display:none;">
+              <h3 class="mt-0" style="margin:0 0 6px 0; font-size: var(--anyai-fs-2);">エラー詳細</h3>
+              <ul class="error-list" id="job-error-list"></ul>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const form = document.getElementById('cleansing-form');
+      const jobSection = document.getElementById('job-section');
+      const jobIdEl = document.getElementById('job-id');
+      const jobStatusEl = document.getElementById('job-status');
+      const jobCountsEl = document.getElementById('job-counts');
+      const jobMessageEl = document.getElementById('job-message');
+      const progressEl = document.getElementById('job-progress');
+      const errorBox = document.getElementById('job-errors');
+      const errorList = document.getElementById('job-error-list');
+
+      let currentJobId = null;
+      let pollTimer = null;
+
+      function stopPolling() {
+        if (pollTimer) {
+          clearTimeout(pollTimer);
+          pollTimer = null;
+        }
+      }
+
+      async function fetchStatus(jobId) {
+        const res = await fetch(`/cleansing/jobs/${jobId}`);
+        if (!res.ok) throw new Error('ステータス取得に失敗しました');
+        return res.json();
+      }
+
+      function renderStatus(state) {
+        jobSection.style.display = 'block';
+        jobIdEl.textContent = state.job_id;
+        jobStatusEl.textContent = `ステータス: ${state.status}`;
+        jobMessageEl.textContent = state.message || '';
+        const total = state.total_items || 0;
+        const processed = state.processed_items || 0;
+        const success = state.success_count || 0;
+        const fallback = state.fallback_count || 0;
+        const failure = state.failure_count || 0;
+        progressEl.value = total ? Math.floor((processed / total) * 100) : 0;
+        jobCountsEl.textContent = `対象 ${total} 件 / 処理済み ${processed} 件 (成功 ${success}, フォールバック ${fallback}, 失敗 ${failure})`;
+
+        const errors = state.errors || [];
+        if (errors.length) {
+          errorBox.style.display = 'block';
+          errorList.innerHTML = '';
+          errors.slice(0, 20).forEach((err) => {
+            const li = document.createElement('li');
+            li.textContent = `row ${err.row_number}: ${err.reason}`;
+            errorList.appendChild(li);
+          });
+          if (errors.length > 20) {
+            const li = document.createElement('li');
+            li.textContent = `… 残り ${errors.length - 20} 件`; 
+            errorList.appendChild(li);
+          }
+        } else {
+          errorBox.style.display = 'none';
+          errorList.innerHTML = '';
+        }
+
+        const stillRunning = state.status === 'pending' || state.status === 'running';
+        if (stillRunning) {
+          pollTimer = setTimeout(() => pollStatus(currentJobId), 2000);
+        } else {
+          stopPolling();
+        }
+      }
+
+      async function pollStatus(jobId) {
+        try {
+          const state = await fetchStatus(jobId);
+          renderStatus(state);
+        } catch (err) {
+          console.error(err);
+          jobStatusEl.textContent = 'ステータス取得に失敗しました';
+          stopPolling();
+        }
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        stopPolling();
+        const fd = new FormData(form);
+        const res = await fetch('/cleansing/jobs', { method: 'POST', body: fd });
+        if (!res.ok) {
+          alert('ジョブの作成に失敗しました');
+          return;
+        }
+        const data = await res.json();
+        currentJobId = data.job_id;
+        jobSection.style.display = 'block';
+        progressEl.value = 0;
+        jobStatusEl.textContent = 'ステータス: pending';
+        jobMessageEl.textContent = 'ジョブを開始しました。';
+        jobCountsEl.textContent = '';
+        errorList.innerHTML = '';
+        errorBox.style.display = 'none';
+        pollStatus(currentJobId);
+      });
+    </script>
+  </body>
+</html>

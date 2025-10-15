@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../assets/AnyAI_icon.png">
+<title>AnyX_UI（リファイン） — AnyAI UI Kit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- 依存はゼロでも動作、オンライン時に日本語可読性を向上 -->
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../core/anyai.tokens.css">
+<link rel="stylesheet" href="../core/anyai.components.css">
+<link rel="stylesheet" href="../core/anyai.utilities.css">
+<script defer src="../core/anyai.js"></script>
+<style>
+  .page { padding-bottom: var(--anyai-space-10); }
+  .logo-inline { height: 28px; vertical-align: middle; }
+</style>
+</head>
+
+<body>
+<header class="anyai-header">
+  <a class="brand" href="../index.html" aria-label="AnyAI ホーム">
+    <img src="../assets/AnyAI_logo.png" alt="AnyAI ロゴ">
+    <span>AnyAI</span>
+  </a>
+  <nav class="nav">
+    <a href="../docs/components.html" >コンポーネント</a>
+    <a href="../docs/patterns.html" >パターン</a>
+    <a href="../templates/app-shell.html" style="font-weight:700;">テンプレート</a>
+    <button class="btn btn-ghost" data-action="toggle-theme" title="ライト/ダーク切替">テーマ</button>
+  </nav>
+</header>
+
+<main class="page container">
+  <h1>AnyX_UI（リファイン例）</h1>
+  <p class="text-subtle">既存の構造にトークンとコンポーネントを適用し、ヘッダー左上ロゴとファビコンを統一しています。</p>
+
+  <div class="card mt-5">
+    <div class="card-header"><strong>推奨レイアウト</strong></div>
+    <div class="card-body">
+      <ol>
+        <li>共通ヘッダー：左上に <code>AnyAI_logo.png</code>（高さ28px）、ファビコンに <code>AnyAI_icon.png</code></li>
+        <li>主要ナビ：アプリはサイドバー / サイトはトップナビ</li>
+        <li>コンテナ幅：<code>--anyai-content-lg</code> を基準に</li>
+      </ol>
+    </div>
+  </div>
+
+  <section class="mt-5">
+    <div class="card">
+      <div class="card-header"><strong>サンプル画面</strong></div>
+      <div class="card-body">
+        <div class="row">
+          <button class="btn btn-primary">Primary</button>
+          <button class="btn btn-outline">Outline</button>
+          <button class="btn btn-ghost">Ghost</button>
+        </div>
+        <div class="row mt-3 w-100">
+          <div class="field w-100">
+            <label>検索</label>
+            <input class="input" placeholder="キーワードを入力">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  
+            <details class="mt-3">
+              <summary>参考: 元 HTML の冒頭ソースを表示</summary>
+              <pre><code>&lt;!DOCTYPE html> &lt;html lang=en data-kantu=1 data-mantine-color-scheme=light data-theme=any-x data-rh=data-theme>&lt;!-- Page saved with SingleFile url: https://app.any-x.com/52/home saved date: Thu Aug 14 2025 05:06:23 GMT+0900 (Japan Standard Time) -->&lt;head prefix="og: https://ogp.me/ns#">&lt;meta charset=utf-8> &lt;title class=notranslate>Mizuno Vietnam | AnyX&lt;/title> &lt;meta http-equiv=X-UA-Compatible content="IE=edge"> &lt;meta name=viewport content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,shrink-to-fit=no"> &lt;meta name=robots content=noindex,follow> &lt;meta name=keywords content=AnyX> &lt;meta name=description content="AnyX enables you to drive greater operational efficiency and data utilization across e-commerce channels through a one-stop, powerful and intuitive tool for forward-thinking businesses."> &lt;meta name=theme-color content=#3892E5> &lt;meta name=mobile-web-app-capable content=yes> &lt;meta name=apple-mobile-web-app-title content=AnyX> &lt;meta name=apple-mobile-web-app-capable content=yes> &lt;meta name=apple-mobile-web-app-status-bar-style content=default> &lt;meta name=msapplication-navbutton-color content=#3892E5> &lt;meta name=msapplication-TileColor content=#3892E5> &lt;meta name=msapplication-TileImage content=assets/pwa/144x144.png> &lt;meta name=application-name content=AnyX> &lt;meta name=msapplication-tooltip content="AnyX - E-commerce Management Platform"> &lt;meta name=msapplication-starturl content=/> &lt;meta name=full-screen content=yes> &lt;meta name=browsermode content=application> &lt;meta name=layoutmode content=fitscreen/standard> &lt;meta name=imagemode content=force> &lt;meta name=screen-orientation content=portrait> &lt;meta name=msapplication-tap-highlight content=no> &lt;meta property=og:title content="AnyX - E-commerce Management Platform"> &lt;meta property=og:site_name content=AnyX> &lt;meta property=og:description content="AnyX enables you to drive greater operational efficiency and data utilization across e-commerce channels through a one-stop, powerful and intuitive tool for forward-thinking businesses."> &lt;meta property=og:url content> &lt;meta property=og:image content=assets/banner/any-x/ogp_banner.png> &lt;meta property=og:type content=website> &lt;link rel=apple-touch-startup-image href=https://app.any-x.com/assets/pwa/any-x/iphone-320x480.png> &lt;style>@font-face{font-family:InterVariable;font-style:normal;font-weight:100 900;src:url(data:font/woff2;base64,d09GMgABAAAABV/wABMAAAANdbgABV91AAQAQgAAAAAAAAAAAAAAAAAAAAAAAAAAGsECG4mzChyBvlY/SFZBUtdnP01WQVKBKAZgP1NUQVSBXCc0AIHKLC+BNgqIy2iHsAQwm+8sATYCJAPbZAvbaAAEIAWaTAeCgAVbofjchl/SO317thTwxO+OOiix2RMp3YDazSKKy7TMhabXn38/nv9v/XdhgyrVmam6DL54ZLP3d4ILFSo1keBg13D8lIp3p2OMcrABqFZ1/2Y2lMrY/dgqwAAMrRZF7RreCqm8GhJI//////////////////////9/y8mPp9zqVXVS9X9fyd25DtKQhPMSCLegCKIojsCgMDrqjse4u0SoGmtdzw/CVDqTzeULRUReqWyptRUYaoyiSmslQ+qkYYghOWgWpaiApq1WvZpvW210GFV0x6gxrEjCejnE4zrRH+SKxeK4qXnDyeLU9DDyfU5ndJZ27Zy1VAxEySTMvDIiC+VFKQuKDWuYpYlWWyuN5RUP81DoqmBtPYShZsOENi3IIpbNJ2LLRbgab1X6QrfFI55gZ5TatZPNvX07l1b3AG7NI5L1rbFGVuvWPcz5vhSIl+lnhPSWQ+wL2T0KKuF+sTPwk+841Y72npITe1pC3sDyY5I0z5h1UkAQdLuH5HnSFZ5P0UZdj48sCTFrM/7Zi04c++cHFy+lm/UuF4pondQ8OkJuycRYRhCgh6K8ElxkLDYFPVkWGFEIWRISSD9WIguamJyg/TpzddQ2O6FnWuHIVt9U3yIcCJRKINA2K94G7KJYuFxJa6RT9yyso4PRNQlmFhhpKilIJBgsdnv2HTEelibcPxaVeAIfWcWmIAWj9r097W+RaeIPPWKMNe4wTVxXT3NF0iHm/SGzB62yhVLJFGBgJTtY1cgtZ8rM68JOEEJgYFQrQo2UxBMYH4HAwFRd1GFhiwit2jk/Rdptvbk9u6vSUwnWlC/jHVn40yKkunZ2xWyW9xPVvS98YD6e3OkD3RuhJdiAkI4wV0HAXD4aw4o4VnZbOI9bxF9qQmU08R8zbYxP42h9NnU5t6b9GcwyAp2qU+P8ufBnCWiwr0pItQPqOjgWZcb5bgIa7Kcec3BszAkuibXWokeNYUVYOXXYxvGaQG/XtefuPuvDQ9Co5wVFN+2SZSza2ZuA1Fw3IDlswjCfsf+Ws+ijHNGt1FzUIoGbfGOzm9jKzODN3iTXj5vK/Z3hBII2BCdGuYaqF6PcJRFdQr2MotDrkMnDVShzYeWc5hrWRkzVGBLhy6O1tMEUmJu8OwVRfD2X3Y3dYtuv+r4/apKZdVaEG5SU/UucDl6megtPiM1fn258IwN6LfMQhP+5R+ubizNkg33PRRu7/1hYBHjOKJ4xO9tDJpb9tG55WKsaA4Hs3WwRpTcBegIxZjogAnekUBPmSDbVd/V9i+k4bt9y+srZmYPQeSa7yFeE3EOgwt2TW7LasMzNjk/7InOoO8k9LeOa2WYuuWuIgycOZxNXdhYmf9qxJuEwI87WL5zvJc4/4IUJiTBCJEmezPXrqGIkf04pyTVwMT1uXIvc4LGzQDrfA/QFGaTZiYUiaUPIPRr0En+</code></pre>
+            </details>
+            
+</main>
+
+<footer class="anyai-footer">
+  <div class="container">
+    <div class="row">
+      <div>© AnyAI UI Kit</div>
+      <div class="right text-subtle">v1.0 — 軽量・ビルドレス</div>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

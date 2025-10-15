@@ -1,0 +1,1083 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>AnyAI Persona Dashboard</title>
+    <link rel="icon" href="/static/anyai/assets/AnyAI_icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/anyai/core/anyai.tokens.css" />
+    <link rel="stylesheet" href="/static/anyai/core/anyai.components.css" />
+    <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css" />
+    <style>
+      :root {
+        color-scheme: dark light;
+      }
+      body {
+        font-family: 'Noto Sans JP', sans-serif;
+        background: var(--anyai-bg);
+        color: var(--anyai-text);
+        min-height: 100vh;
+      }
+      .layout {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+      .anyai-app {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: var(--anyai-space-4);
+        padding: var(--anyai-space-4);
+        flex: 1;
+      }
+      @media (max-width: 1100px) {
+        .anyai-app {
+          grid-template-columns: 1fr;
+        }
+      }
+      .filters-panel, .content-panel {
+        background: var(--anyai-panel);
+        border-radius: 18px;
+        box-shadow: var(--anyai-shadow-sm);
+      }
+      .filters-panel {
+        padding: var(--anyai-space-4);
+        display: flex;
+        flex-direction: column;
+        gap: var(--anyai-space-4);
+      }
+      .content-panel {
+        padding: var(--anyai-space-4);
+        display: flex;
+        flex-direction: column;
+        gap: var(--anyai-space-4);
+      }
+      .muted {
+        color: var(--anyai-text-subtle);
+        font-size: var(--anyai-fs-2);
+      }
+      .section-title {
+        margin: 0 0 var(--anyai-space-2);
+        font-size: 1.1rem;
+        font-weight: 700;
+      }
+      .select-field, .text-field, .number-field {
+        width: 100%;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid var(--anyai-border);
+        background: var(--anyai-surface);
+        color: inherit;
+      }
+      .checkbox-grid {
+        display: grid;
+        gap: 6px;
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+      }
+      @media (min-width: 840px) {
+        .checkbox-grid.two-col {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      .filter-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: var(--anyai-surface-strong);
+        font-size: var(--anyai-fs-2);
+      }
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .metrics-grid {
+        display: grid;
+        gap: var(--anyai-space-3);
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+      .metric-card {
+        border-radius: 16px;
+        background: var(--anyai-surface);
+        padding: var(--anyai-space-4);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .metric-label {
+        font-size: var(--anyai-fs-2);
+        color: var(--anyai-text-subtle);
+      }
+      .metric-value {
+        font-size: 1.6rem;
+        font-weight: 700;
+      }
+      .highlight-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .highlight-item {
+        background: var(--anyai-surface);
+        border-radius: 12px;
+        padding: var(--anyai-space-3);
+        font-size: var(--anyai-fs-2);
+      }
+      .dataset-card {
+        background: var(--anyai-surface);
+        border-radius: 18px;
+        padding: var(--anyai-space-4);
+        display: grid;
+        gap: var(--anyai-space-3);
+      }
+      .dataset-content {
+        display: grid;
+        gap: var(--anyai-space-3);
+      }
+      .dataset-header {
+        display: flex;
+        justify-content: space-between;
+        gap: var(--anyai-space-3);
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .dataset-metrics {
+        display: flex;
+        gap: var(--anyai-space-2);
+        flex-wrap: wrap;
+      }
+      .dataset-metric {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: var(--anyai-panel);
+        font-size: var(--anyai-fs-2);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: var(--anyai-fs-2);
+      }
+      thead {
+        background: var(--anyai-panel);
+      }
+      th, td {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 1px solid var(--anyai-border);
+      }
+      tbody tr:hover {
+        background: var(--anyai-panel);
+      }
+      .heatmap-cell {
+        position: relative;
+      }
+      .heatmap-cell span {
+        position: relative;
+        z-index: 1;
+      }
+      .heatmap-cell::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 6px;
+        opacity: 0.55;
+        background: var(--heatmap-color, transparent);
+      }
+      .records-table-wrapper {
+        overflow-x: auto;
+      }
+      .records-table {
+        min-width: 720px;
+      }
+      .actions-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .btn {
+        cursor: pointer;
+        border: none;
+        border-radius: 10px;
+        padding: 10px 16px;
+        font-weight: 600;
+        transition: background 0.2s ease;
+      }
+      .btn-primary {
+        background: var(--anyai-primary);
+        color: #fff;
+      }
+      .btn-outline {
+        background: transparent;
+        color: var(--anyai-text);
+        border: 1px solid var(--anyai-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--anyai-text-subtle);
+      }
+      .loading {
+        opacity: 0.5;
+        pointer-events: none;
+      }
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 6px 12px;
+        background: var(--anyai-surface);
+        font-size: var(--anyai-fs-2);
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--anyai-success);
+      }
+      .nav {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .nav-link {
+        font-weight: 600;
+        text-decoration: none;
+        color: var(--anyai-text);
+        padding: 6px 12px;
+        border-radius: 999px;
+        transition: background 0.2s ease;
+      }
+      .nav-link:hover {
+        background: rgba(0,0,0,0.06);
+      }
+      .nav-link.active {
+        background: rgba(0,0,0,0.12);
+      }
+      .toast {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        background: rgba(20,20,20,0.88);
+        color: #fff;
+        padding: 12px 18px;
+        border-radius: 12px;
+        box-shadow: var(--anyai-shadow-lg);
+        opacity: 0;
+        transform: translateY(12px);
+        transition: opacity 0.3s ease, transform 0.3s ease;
+        pointer-events: none;
+        z-index: 999;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    </style>
+  </head>
+  <body class="layout">
+    <header class="anyai-header">
+      <a class="brand" href="/dashboard" aria-label="AnyAI Persona Dashboard">
+        <img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ">
+        <span>AnyAI Persona Dashboard</span>
+      </a>
+      <nav class="nav">
+        <a class="nav-link" href="/">AnyAI Scoring</a>
+        <a class="nav-link" href="/cleansing">AnyAI Cleansing</a>
+        <a class="nav-link" href="/interview">AnyAI Interview</a>
+        <a class="nav-link" href="/persona">Mass Persona</a>
+        <a class="nav-link active" href="/dashboard">Dashboard</a>
+      </nav>
+    </header>
+
+    <div class="anyai-app" id="dashboard-app">
+      <aside class="filters-panel" id="filters-panel">
+        <div>
+          <h2 class="section-title">ダッシュボード選択</h2>
+          <select id="run-select" class="select-field"></select>
+          <p class="muted" id="run-meta"></p>
+        </div>
+        <div>
+          <div class="section-title">フィルタ</div>
+          <div class="actions-row">
+            <button class="btn btn-outline" id="reset-filters">リセット</button>
+            <button class="btn btn-ghost" id="refresh-data">再読み込み</button>
+          </div>
+        </div>
+        <div>
+          <h3 class="section-title">セグメント</h3>
+          <div id="segment-filters"></div>
+        </div>
+        <div>
+          <h3 class="section-title">刺激 (Stimuli)</h3>
+          <div id="stimulus-filter" class="checkbox-grid two-col"></div>
+        </div>
+        <div>
+          <h3 class="section-title">検索</h3>
+          <input type="text" id="search-text" class="text-field" placeholder="自由文テキスト検索" />
+        </div>
+        <div>
+          <h3 class="section-title">SSR スコア</h3>
+          <div style="display:flex; gap:8px;">
+            <input type="number" id="min-ssr" class="number-field" placeholder="最小" min="1" max="5" step="0.1" />
+            <input type="number" id="max-ssr" class="number-field" placeholder="最大" min="1" max="5" step="0.1" />
+          </div>
+        </div>
+        <div>
+          <h3 class="section-title">表示件数</h3>
+          <input type="number" id="record-limit" class="number-field" value="200" min="50" max="5000" step="50" />
+        </div>
+        <div>
+          <h3 class="section-title">エクスポート</h3>
+          <div class="actions-row">
+            <button class="btn btn-outline" id="export-csv">CSV</button>
+            <button class="btn btn-outline" id="export-png">PNG</button>
+            <button class="btn btn-outline" id="export-pdf">PDF</button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="content-panel" id="dashboard-content">
+        <section id="overview-section">
+          <div class="status-badge" id="status-badge">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="status-text">読み込み中…</span>
+          </div>
+          <h1 id="dashboard-title" style="margin-top: var(--anyai-space-3); margin-bottom: var(--anyai-space-1);"></h1>
+          <p class="muted" id="dashboard-overview"></p>
+          <div class="metrics-grid" id="metrics-grid"></div>
+        </section>
+
+        <section id="highlights-section">
+          <h2 class="section-title">ハイライト</h2>
+          <div class="highlight-list" id="highlight-list"></div>
+        </section>
+
+        <section id="datasets-section">
+          <h2 class="section-title">セグメント別インサイト</h2>
+          <div class="dataset-content" id="dataset-grid"></div>
+        </section>
+
+        <section id="records-section">
+          <h2 class="section-title">サンプル回答</h2>
+          <div class="records-table-wrapper">
+            <table class="records-table" id="records-table">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-Tk0iQF+zA7bCSk9xUL4XpG0cEzbHPo9jMspF3fYC3ZxCmTiYEm51AyFVNOWgvJ3a" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha384-YNHskPi0tLxe3LjXLp8dkUBaRdOy+nK8BPVKx/aRXefxWWEXUvhYaL6VLdmgL4+0" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" integrity="sha384-aNRn9ofuUBev5nYeD1yfknhk+aoCA8DmF5asJ5AZt0pOEtpJR/YWZ02f5e6osw8H" crossorigin="anonymous"></script>
+    <script>
+      const state = {
+        runs: [],
+        runDetails: new Map(),
+        currentRunId: null,
+        filters: {
+          segments: {},
+          stimuli: [],
+          persona_ids: [],
+          min_ssr_score: null,
+          max_ssr_score: null,
+          search_text: "",
+        },
+        limit: 200,
+        dashboard: null,
+        charts: {},
+        loadingCount: 0,
+      };
+
+      const elements = {
+        runSelect: document.getElementById('run-select'),
+        runMeta: document.getElementById('run-meta'),
+        statusBadge: document.getElementById('status-badge'),
+        statusText: document.getElementById('status-text'),
+        dashboardTitle: document.getElementById('dashboard-title'),
+        dashboardOverview: document.getElementById('dashboard-overview'),
+        metricsGrid: document.getElementById('metrics-grid'),
+        highlightList: document.getElementById('highlight-list'),
+        datasetGrid: document.getElementById('dataset-grid'),
+        recordsTable: document.getElementById('records-table'),
+        segmentFilters: document.getElementById('segment-filters'),
+        stimulusFilter: document.getElementById('stimulus-filter'),
+        searchText: document.getElementById('search-text'),
+        minSSR: document.getElementById('min-ssr'),
+        maxSSR: document.getElementById('max-ssr'),
+        recordLimit: document.getElementById('record-limit'),
+        resetFilters: document.getElementById('reset-filters'),
+        refreshData: document.getElementById('refresh-data'),
+        exportCsv: document.getElementById('export-csv'),
+        exportPng: document.getElementById('export-png'),
+        exportPdf: document.getElementById('export-pdf'),
+        filtersPanel: document.getElementById('filters-panel'),
+        dashboardContent: document.getElementById('dashboard-content'),
+        toast: document.getElementById('toast'),
+      };
+
+      function showToast(message, tone = 'info') {
+        elements.toast.textContent = message;
+        elements.toast.classList.add('show');
+        elements.toast.style.background = tone === 'error' ? 'rgba(200,30,30,0.9)' : (tone === 'success' ? 'rgba(32,128,72,0.9)' : 'rgba(20,20,20,0.88)');
+        clearTimeout(elements.toast._timer);
+        elements.toast._timer = setTimeout(() => elements.toast.classList.remove('show'), 3200);
+      }
+
+      function setLoading(isLoading) {
+        state.loadingCount = Math.max(0, state.loadingCount + (isLoading ? 1 : -1));
+        const busy = state.loadingCount > 0;
+        elements.filtersPanel.classList.toggle('loading', busy);
+        elements.dashboardContent.classList.toggle('loading', busy);
+        elements.statusText.textContent = busy ? '更新中…' : '最新データ表示';
+      }
+
+      async function fetchJSON(url, options = {}) {
+        setLoading(true);
+        try {
+          const res = await fetch(url, options);
+          if (!res.ok) {
+            const detail = await res.text();
+            throw new Error(detail || res.statusText);
+          }
+          return await res.json();
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      function formatDateTime(isoString) {
+        if (!isoString) return '日時情報なし';
+        const dt = new Date(isoString);
+        return dt.toLocaleString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
+
+      function renderRunOptions() {
+        elements.runSelect.innerHTML = "";
+        if (!state.runs.length) {
+          const opt = document.createElement('option');
+          opt.textContent = "ダッシュボードが見つかりません";
+          opt.disabled = true;
+          elements.runSelect.appendChild(opt);
+          return;
+        }
+        state.runs.forEach(run => {
+          const opt = document.createElement('option');
+          opt.value = run.job_id;
+          opt.textContent = `${run.project_name || 'Unnamed'} — ${run.domain || ''}`.trim();
+          elements.runSelect.appendChild(opt);
+        });
+        if (state.currentRunId) {
+          elements.runSelect.value = state.currentRunId;
+        }
+      }
+
+      function updateRunMeta(run) {
+        if (!run) {
+          elements.runMeta.textContent = "";
+          return;
+        }
+        const pieces = [];
+        if (run.domain) pieces.push(`カテゴリ: ${run.domain}`);
+        if (run.language) pieces.push(`言語: ${run.language.toUpperCase()}`);
+        if (run.total_pairs) pieces.push(`総レスポンス: ${run.total_pairs}`);
+        if (run.updated_at) pieces.push(`更新: ${formatDateTime(run.updated_at)}`);
+        elements.runMeta.textContent = pieces.join(" / ");
+      }
+
+      function sanitizeFilters() {
+        const payload = { ...state.filters, segments: {} };
+        Object.entries(state.filters.segments || {}).forEach(([key, values]) => {
+          if (Array.isArray(values) && values.length) {
+            payload.segments[key] = values;
+          }
+        });
+        if (!Object.keys(payload.segments).length) delete payload.segments;
+        if (!payload.stimuli?.length) delete payload.stimuli;
+        if (!payload.persona_ids?.length) delete payload.persona_ids;
+        if (!payload.min_ssr_score && payload.min_ssr_score !== 0) delete payload.min_ssr_score;
+        if (!payload.max_ssr_score && payload.max_ssr_score !== 0) delete payload.max_ssr_score;
+        if (!payload.search_text) delete payload.search_text;
+        return payload;
+      }
+
+      async function loadRuns() {
+        try {
+          const runs = await fetchJSON('/dashboard/persona/runs');
+          state.runs = runs;
+          renderRunOptions();
+          if (runs.length) {
+            await selectRun(runs[0].job_id);
+          } else {
+            showToast('ダッシュボードがまだ生成されていません', 'info');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('ダッシュボード一覧の取得に失敗しました', 'error');
+        }
+      }
+
+      async function selectRun(jobId) {
+        state.currentRunId = jobId;
+        renderRunOptions();
+        await ensureRunDetail(jobId);
+        await fetchDashboard(jobId);
+      }
+
+      async function ensureRunDetail(jobId) {
+        if (state.runDetails.has(jobId)) {
+          updateRunMeta(state.runDetails.get(jobId));
+          return;
+        }
+        try {
+          const detail = await fetchJSON(`/dashboard/persona/runs/${jobId}`);
+          state.runDetails.set(jobId, detail);
+          updateRunMeta(detail);
+        } catch (err) {
+          console.error(err);
+          showToast('ダッシュボード詳細の取得に失敗しました', 'error');
+        }
+      }
+
+      function renderSegmentFilters(options) {
+        elements.segmentFilters.innerHTML = "";
+        const segments = options?.segments || {};
+        Object.entries(segments).forEach(([key, values]) => {
+          const container = document.createElement('div');
+          container.style.marginBottom = '16px';
+          const heading = document.createElement('div');
+          heading.textContent = key;
+          heading.style.fontWeight = '600';
+          heading.style.marginBottom = '6px';
+          container.appendChild(heading);
+
+          const grid = document.createElement('div');
+          grid.classList.add('checkbox-grid', 'two-col');
+
+          values.forEach(item => {
+            const id = `seg-${key}-${item.value}`;
+            const label = document.createElement('label');
+            label.style.display = 'flex';
+            label.style.alignItems = 'center';
+            label.style.gap = '6px';
+            label.style.padding = '6px 4px';
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.id = id;
+            input.value = item.value;
+            input.dataset.segment = key;
+            input.checked = state.filters.segments[key]?.includes(item.value) || false;
+            input.addEventListener('change', onSegmentFilterChange);
+            const span = document.createElement('span');
+            span.textContent = `${item.value} (${item.count})`;
+            label.appendChild(input);
+            label.appendChild(span);
+            grid.appendChild(label);
+          });
+
+          container.appendChild(grid);
+          elements.segmentFilters.appendChild(container);
+        });
+      }
+
+      function renderStimulusFilter(options) {
+        elements.stimulusFilter.innerHTML = "";
+        const stimuli = options?.stimuli || [];
+        stimuli.slice(0, 40).forEach(item => {
+          const id = `stim-${item.value}`;
+          const label = document.createElement('label');
+          label.style.display = 'flex';
+          label.style.alignItems = 'center';
+          label.style.gap = '6px';
+          label.style.padding = '6px 4px';
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.id = id;
+          input.value = item.value;
+          input.checked = state.filters.stimuli.includes(item.value);
+          input.addEventListener('change', onStimulusFilterChange);
+          const span = document.createElement('span');
+          span.textContent = `${item.value} (${item.count})`;
+          label.appendChild(input);
+          label.appendChild(span);
+          elements.stimulusFilter.appendChild(label);
+        });
+      }
+
+      function onSegmentFilterChange(event) {
+        const { segment } = event.target.dataset;
+        const value = event.target.value;
+        if (!state.filters.segments[segment]) {
+          state.filters.segments[segment] = [];
+        }
+        if (event.target.checked) {
+          if (!state.filters.segments[segment].includes(value)) {
+            state.filters.segments[segment].push(value);
+          }
+        } else {
+          state.filters.segments[segment] = state.filters.segments[segment].filter(v => v !== value);
+        }
+        fetchDashboard(state.currentRunId);
+      }
+
+      function onStimulusFilterChange(event) {
+        const value = event.target.value;
+        if (event.target.checked) {
+          if (!state.filters.stimuli.includes(value)) {
+            state.filters.stimuli.push(value);
+          }
+        } else {
+          state.filters.stimuli = state.filters.stimuli.filter(v => v !== value);
+        }
+        fetchDashboard(state.currentRunId);
+      }
+
+      async function fetchDashboard(jobId, explicitLimit) {
+        if (!jobId) return;
+        const limit = explicitLimit ?? parseInt(elements.recordLimit.value, 10) || state.limit;
+        state.limit = limit;
+        const body = {
+          filters: sanitizeFilters(),
+          limit: limit,
+          include_records: true,
+        };
+        try {
+          const data = await fetchJSON(`/dashboard/persona/runs/${jobId}/query`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          state.dashboard = data;
+          renderDashboard(data);
+          renderSegmentFilters(data.available_filters_all);
+          renderStimulusFilter(data.available_filters_all);
+        } catch (err) {
+          console.error(err);
+          showToast('ダッシュボードデータの取得に失敗しました', 'error');
+        }
+      }
+
+      function renderDashboard(data) {
+        if (!data || !data.request) return;
+        elements.dashboardTitle.textContent = data.request.title || 'Persona Insight Dashboard';
+        elements.dashboardOverview.textContent = data.request.overview || '';
+        renderMetrics(data);
+        renderHighlights(data.request.highlights);
+        renderDatasets(data.request.datasets || []);
+        renderRecords(data.records || []);
+      }
+
+      function renderMetrics(data) {
+        elements.metricsGrid.innerHTML = "";
+        const metrics = [
+          { label: 'レスポンス数', value: data.filtered_responses, sub: `全体 ${data.total_responses}` },
+          { label: 'ペルソナ数', value: data.filtered_personas, sub: `全体 ${data.total_personas}` },
+          { label: '刺激数', value: data.filtered_stimuli, sub: `全体 ${data.total_stimuli}` },
+        ];
+
+        const ssrDataset = data.request.datasets.find(ds => ds.name === 'SSR Distribution Summary');
+        if (ssrDataset?.metrics?.length) {
+          ssrDataset.metrics.forEach(metric => {
+            metrics.push({
+              label: metric.name,
+              value: metric.value ?? '—',
+              sub: metric.description || '',
+            });
+          });
+        }
+
+        metrics.forEach(metric => {
+          const card = document.createElement('div');
+          card.classList.add('metric-card');
+          const label = document.createElement('div');
+          label.classList.add('metric-label');
+          label.textContent = metric.label;
+          const value = document.createElement('div');
+          value.classList.add('metric-value');
+          value.textContent = metric.value ?? 0;
+          const sub = document.createElement('div');
+          sub.classList.add('muted');
+          sub.textContent = metric.sub;
+          card.appendChild(label);
+          card.appendChild(value);
+          card.appendChild(sub);
+          elements.metricsGrid.appendChild(card);
+        });
+      }
+
+      function renderHighlights(highlights) {
+        elements.highlightList.innerHTML = "";
+        if (!highlights || !highlights.length) {
+          elements.highlightList.innerHTML = "<div class='muted'>ハイライトがありません</div>";
+          return;
+        }
+        highlights.forEach(text => {
+          const item = document.createElement('div');
+          item.classList.add('highlight-item');
+          item.textContent = text;
+          elements.highlightList.appendChild(item);
+        });
+      }
+
+      function ensureChart(canvasId) {
+        if (state.charts[canvasId]) {
+          state.charts[canvasId].destroy();
+          delete state.charts[canvasId];
+        }
+      }
+
+      function renderDatasets(datasets) {
+        elements.datasetGrid.innerHTML = "";
+        datasets.forEach(dataset => {
+          const card = document.createElement('section');
+          card.classList.add('dataset-card');
+          const header = document.createElement('div');
+          header.classList.add('dataset-header');
+          const title = document.createElement('h3');
+          title.classList.add('section-title');
+          title.textContent = dataset.name || 'Dataset';
+          header.appendChild(title);
+
+          if (dataset.metrics && dataset.metrics.length) {
+            const metrics = document.createElement('div');
+            metrics.classList.add('dataset-metrics');
+            dataset.metrics.forEach(metric => {
+              const chip = document.createElement('div');
+              chip.classList.add('dataset-metric');
+              chip.textContent = `${metric.name}: ${metric.value}`;
+              metrics.appendChild(chip);
+            });
+            header.appendChild(metrics);
+          }
+
+          card.appendChild(header);
+
+          const canvasId = `chart-${dataset.name.replace(/\s+/g, '-').toLowerCase()}`;
+          if (dataset.chart_type && ['bar', 'column'].includes(dataset.chart_type) && dataset.table_rows?.length) {
+            const canvas = document.createElement('canvas');
+            canvas.id = canvasId;
+            canvas.height = 260;
+            card.appendChild(canvas);
+            renderBarChart(canvasId, dataset);
+          } else if (dataset.chart_type === 'heatmap' && dataset.table_rows?.length) {
+            card.appendChild(renderHeatmap(dataset));
+          }
+
+          if (dataset.table_headers && dataset.table_rows) {
+            const tableWrapper = document.createElement('div');
+            tableWrapper.classList.add('records-table-wrapper');
+            const table = document.createElement('table');
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            dataset.table_headers.forEach(h => {
+              const th = document.createElement('th');
+              th.textContent = h;
+              headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            const tbody = document.createElement('tbody');
+            dataset.table_rows.forEach(row => {
+              const tr = document.createElement('tr');
+              row.forEach(cell => {
+                const td = document.createElement('td');
+                td.textContent = cell ?? '';
+                tr.appendChild(td);
+              });
+              tbody.appendChild(tr);
+            });
+            table.appendChild(thead);
+            table.appendChild(tbody);
+            tableWrapper.appendChild(table);
+            card.appendChild(tableWrapper);
+          }
+
+          elements.datasetGrid.appendChild(card);
+        });
+      }
+
+      function renderBarChart(canvasId, dataset) {
+        ensureChart(canvasId);
+        const labels = dataset.table_rows.map(row => row[0]);
+        const responses = dataset.table_rows.map(row => typeof row[1] === 'number' ? row[1] : parseFloat(row[1]) || 0);
+        const ssr = dataset.table_rows.map(row => typeof row[2] === 'number' ? row[2] : parseFloat(row[2]) || null);
+
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+
+        const data = {
+          labels,
+          datasets: [
+            {
+              label: 'Responses',
+              data: responses,
+              backgroundColor: 'rgba(52, 116, 255, 0.6)',
+              borderRadius: 6,
+              yAxisID: 'y',
+            },
+          ],
+        };
+
+        if (ssr.some(value => value !== null && !Number.isNaN(value))) {
+          data.datasets.push({
+            label: 'Avg SSR',
+            data: ssr,
+            type: 'line',
+            yAxisID: 'y1',
+            borderColor: 'rgba(248, 168, 47, 0.9)',
+            backgroundColor: 'rgba(248, 168, 47, 0.4)',
+            tension: 0.25,
+            spanGaps: true,
+            pointRadius: 3,
+          });
+        }
+
+        state.charts[canvasId] = new Chart(ctx, {
+          type: 'bar',
+          data,
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom' },
+              tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}` } },
+            },
+            scales: {
+              x: { ticks: { autoSkip: false, maxRotation: 45, minRotation: 0 } },
+              y: { beginAtZero: true, title: { display: true, text: 'Responses' } },
+              y1: {
+                beginAtZero: true,
+                position: 'right',
+                grid: { drawOnChartArea: false },
+                title: { display: true, text: 'Avg SSR' },
+                suggestedMax: 5,
+              },
+            },
+          },
+        });
+      }
+
+      function renderHeatmap(dataset) {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('records-table-wrapper');
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        dataset.table_headers.forEach(header => {
+          const th = document.createElement('th');
+          th.textContent = header;
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        dataset.table_rows.forEach(row => {
+          const tr = document.createElement('tr');
+          row.forEach((cell, idx) => {
+            const td = document.createElement('td');
+            if (idx === 0) {
+              td.textContent = cell ?? 'unknown';
+            } else {
+              const value = typeof cell === 'number' ? cell : parseFloat(cell);
+              if (!Number.isNaN(value)) {
+                td.classList.add('heatmap-cell');
+                const intensity = Math.min(1, Math.max(0, (value - 1) / 4));
+                const hue = 200 - intensity * 120;
+                td.style.setProperty('--heatmap-color', `hsl(${hue}, 75%, ${40 + intensity * 20}%)`);
+                const span = document.createElement('span');
+                span.textContent = value.toFixed(2);
+                td.appendChild(span);
+              } else {
+                td.textContent = cell ?? '';
+              }
+            }
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        wrapper.appendChild(table);
+        return wrapper;
+      }
+
+      function renderRecords(records) {
+        const thead = elements.recordsTable.querySelector('thead');
+        const tbody = elements.recordsTable.querySelector('tbody');
+        thead.innerHTML = "";
+        tbody.innerHTML = "";
+        if (!records.length) {
+          thead.innerHTML = "<tr><th>データがありません</th></tr>";
+          return;
+        }
+        const columns = Object.keys(records[0]);
+        const headerRow = document.createElement('tr');
+        columns.forEach(col => {
+          const th = document.createElement('th');
+          th.textContent = col;
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        records.forEach(row => {
+          const tr = document.createElement('tr');
+          columns.forEach(col => {
+            const td = document.createElement('td');
+            const value = row[col];
+            td.textContent = value === null || value === undefined ? '' : value;
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+      }
+
+      function resetFilters() {
+        state.filters = {
+          segments: {},
+          stimuli: [],
+          persona_ids: [],
+          min_ssr_score: null,
+          max_ssr_score: null,
+          search_text: "",
+        };
+        elements.searchText.value = "";
+        elements.minSSR.value = "";
+        elements.maxSSR.value = "";
+        fetchDashboard(state.currentRunId);
+      }
+
+      function onSearchInput() {
+        state.filters.search_text = elements.searchText.value.trim();
+        debounceFetch();
+      }
+
+      function onSSRChange() {
+        const minVal = parseFloat(elements.minSSR.value);
+        const maxVal = parseFloat(elements.maxSSR.value);
+        state.filters.min_ssr_score = Number.isFinite(minVal) ? minVal : null;
+        state.filters.max_ssr_score = Number.isFinite(maxVal) ? maxVal : null;
+        debounceFetch();
+      }
+
+      function onLimitChange() {
+        const limit = parseInt(elements.recordLimit.value, 10);
+        if (Number.isFinite(limit) && limit > 0) {
+          state.limit = limit;
+          fetchDashboard(state.currentRunId, limit);
+        }
+      }
+
+      let fetchTimer = null;
+      function debounceFetch() {
+        clearTimeout(fetchTimer);
+        fetchTimer = setTimeout(() => fetchDashboard(state.currentRunId), 420);
+      }
+
+      function exportCSV() {
+        if (!state.dashboard?.records?.length) {
+          showToast('エクスポート対象のレコードがありません', 'info');
+          return;
+        }
+        const rows = state.dashboard.records;
+        const headers = Object.keys(rows[0]);
+        const csvLines = [];
+        csvLines.push(headers.join(','));
+        rows.forEach(row => {
+          const line = headers.map(header => {
+            const value = row[header];
+            if (value === null || value === undefined) return '';
+            const str = String(value).replace(/"/g, '""');
+            return `"${str}"`;
+          }).join(',');
+          csvLines.push(line);
+        });
+        const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const run = state.runDetails.get(state.currentRunId);
+        const fileName = `dashboard_${run?.project_name || 'run'}_${Date.now()}.csv`;
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        showToast('CSVをエクスポートしました', 'success');
+      }
+
+      async function exportPNG() {
+        const target = document.getElementById('dashboard-content');
+        if (!target) return;
+        try {
+          const canvas = await html2canvas(target, { scale: 2, useCORS: true });
+          canvas.toBlob(blob => {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const run = state.runDetails.get(state.currentRunId);
+            link.setAttribute('download', `dashboard_${run?.project_name || 'run'}.png`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+          });
+          showToast('PNGをエクスポートしました', 'success');
+        } catch (err) {
+          console.error(err);
+          showToast('PNGの生成に失敗しました', 'error');
+        }
+      }
+
+      async function exportPDF() {
+        const target = document.getElementById('dashboard-content');
+        if (!target) return;
+        try {
+          const canvas = await html2canvas(target, { scale: 2, useCORS: true });
+          const imgData = canvas.toDataURL('image/png');
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF('p', 'mm', 'a4');
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          const margin = 10;
+          let imgWidth = pageWidth - margin * 2;
+          let imgHeight = canvas.height * imgWidth / canvas.width;
+          if (imgHeight > pageHeight - margin * 2) {
+            const scale = (pageHeight - margin * 2) / imgHeight;
+            imgHeight *= scale;
+            imgWidth *= scale;
+          }
+          pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, imgHeight);
+          const run = state.runDetails.get(state.currentRunId);
+          pdf.save(`dashboard_${run?.project_name || 'run'}.pdf`);
+          showToast('PDFをエクスポートしました', 'success');
+        } catch (err) {
+          console.error(err);
+          showToast('PDFの生成に失敗しました', 'error');
+        }
+      }
+
+      elements.runSelect.addEventListener('change', event => selectRun(event.target.value));
+      elements.searchText.addEventListener('input', onSearchInput);
+      elements.minSSR.addEventListener('input', onSSRChange);
+      elements.maxSSR.addEventListener('input', onSSRChange);
+      elements.recordLimit.addEventListener('change', onLimitChange);
+      elements.resetFilters.addEventListener('click', resetFilters);
+      elements.refreshData.addEventListener('click', () => fetchDashboard(state.currentRunId, state.limit));
+      elements.exportCsv.addEventListener('click', exportCSV);
+      elements.exportPng.addEventListener('click', exportPNG);
+      elements.exportPdf.addEventListener('click', exportPDF);
+
+      window.addEventListener('DOMContentLoaded', () => {
+        loadRuns();
+      });
+    </script>
+  </body>
+</html>

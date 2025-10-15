@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>AnyAI Persona Seeds — 発話データ取込</title>
+    <link rel="icon" href="/static/anyai/assets/AnyAI_icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/anyai/core/anyai.tokens.css" />
+    <link rel="stylesheet" href="/static/anyai/core/anyai.components.css" />
+    <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css" />
+    <style>
+      body { font-family: 'Noto Sans JP', sans-serif; }
+      .layout { display:flex; flex-direction:column; min-height:100vh; }
+      .anyai-content { flex:1; display:flex; justify-content:center; padding: var(--anyai-space-5); }
+      .container { width: min(960px, 100%); display:flex; flex-direction:column; gap: var(--anyai-space-4); }
+      .card { padding: var(--anyai-space-4); border-radius: 18px; background: var(--anyai-panel); box-shadow: var(--anyai-shadow-sm); }
+      .stack { display:flex; flex-direction:column; gap: var(--anyai-space-4); }
+      .stack-sm { display:flex; flex-direction:column; gap: 8px; }
+      .grid { display:grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+      .field { display:flex; flex-direction:column; gap: 6px; }
+      label { font-weight: 600; font-size: var(--anyai-fs-2); }
+      input[type="text"], input[type="number"], textarea, select {
+        width:100%; padding:10px; border-radius:10px; border:1px solid var(--anyai-border); background:var(--anyai-panel);
+      }
+      textarea { min-height: 180px; }
+      progress { width:100%; height:12px; }
+      .muted { color: var(--anyai-text-subtle); font-size: var(--anyai-fs-2); }
+      .nav { display:flex; gap: 12px; align-items:center; }
+      .nav-link { font-weight:600; text-decoration:none; color: var(--anyai-text); padding:6px 12px; border-radius:999px; transition:background 0.2s ease; }
+      .nav-link:hover { background: rgba(0,0,0,0.06); }
+      .nav-link.active { background: rgba(0,0,0,0.12); }
+      code { font-family: 'JetBrains Mono', monospace; }
+      ul { margin:0; padding-left:18px; }
+      @media (max-width: 720px) {
+        .anyai-content { padding: var(--anyai-space-3); }
+        .container { gap: var(--anyai-space-3); }
+      }
+    </style>
+  </head>
+  <body class="layout">
+    <header class="anyai-header">
+      <a class="brand" href="/persona" aria-label="AnyAI Persona Seeds">
+        <img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ">
+        <span>AnyAI Persona Seeds</span>
+      </a>
+      <nav class="nav">
+        <a class="nav-link" href="/">AnyAI Scoring</a>
+        <a class="nav-link" href="/cleansing">AnyAI Cleansing</a>
+        <a class="nav-link" href="/interview">AnyAI Interview</a>
+        <a class="nav-link active" href="/persona">Mass Persona</a>
+      </nav>
+    </header>
+
+    <main class="anyai-content">
+      <div class="container">
+        <section class="card">
+          <h1 class="mt-0" style="margin:0;">大量ペルソナ向け 発話データ取込</h1>
+          <p class="muted">
+            地域・カテゴリ別の発話データを集約し、Mass Persona パイプラインの種データとして保存します。
+            シートと手入力の両方が利用可能です。フォーム送信後、自動的にGoogle Sheetsから取得し <code>runs/mass_persona/*</code> に JSON 形式で保存します。
+          </p>
+        </section>
+
+        <section class="card">
+          <form id="persona-form" class="stack">
+            <div class="grid">
+              <div class="field">
+                <label for="project_name">プロジェクト名</label>
+                <input type="text" id="project_name" name="project_name" placeholder="例: 2025Q4 Consumer Seeds" required />
+              </div>
+              <div class="field">
+                <label for="domain">ドメイン / カテゴリ</label>
+                <input type="text" id="domain" name="domain" placeholder="例: haircare" required />
+              </div>
+              <div class="field">
+                <label for="language">対象言語</label>
+                <select id="language" name="language">
+                  <option value="ja" selected>日本語</option>
+                  <option value="en">英語</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="persona_goal">ペルソナ目標数</label>
+                <input type="number" id="persona_goal" name="persona_goal" value="200" min="1" max="5000" />
+              </div>
+            </div>
+
+            <div class="grid">
+              <div class="field">
+                <label for="default_region">既定地域（任意）</label>
+                <input type="text" id="default_region" name="default_region" placeholder="例: JP_Kanto" />
+              </div>
+              <div class="field">
+                <label for="max_records">最大取込件数</label>
+                <input type="number" id="max_records" name="max_records" value="2000" min="1" max="20000" />
+              </div>
+            </div>
+
+            <div class="stack">
+              <label for="utterance_source">手入力（地域|発話 の形式、行単位。例: <code>JP_Kanto|夜勤明けでも肌が乾燥しないシャンプーが欲しい</code>）</label>
+              <textarea id="utterance_source" name="utterance_source" placeholder="地域|発話 の形式で入力。地域が無い場合は既定地域が適用されます。"></textarea>
+              <div class="muted">
+                # で始まる行はコメントとして無視します。<br/>
+                パイプラインは重複を削除せず、上から順に最大件数まで取り込みます。
+              </div>
+            </div>
+
+            <div class="stack">
+              <h2 style="margin:0;">Google Sheets から読み込む</h2>
+              <div class="grid">
+                <div class="field">
+                  <label for="sheet_url">シートURL / ID</label>
+                  <input type="text" id="sheet_url" name="sheet_url" placeholder="https://docs.google.com/spreadsheets/d/..." />
+                </div>
+                <div class="field">
+                  <label for="sheet_name">シート名（任意）</label>
+                  <input type="text" id="sheet_name" name="sheet_name" placeholder="未指定の場合は PersonaSeeds を検索" />
+                </div>
+                <div class="field">
+                  <label for="sheet_start_row">開始行</label>
+                  <input type="number" id="sheet_start_row" name="sheet_start_row" value="2" min="1" />
+                </div>
+              </div>
+              <div class="grid">
+                <div class="field">
+                  <label for="sheet_utterance_column">発話列 (A〜)</label>
+                  <input type="text" id="sheet_utterance_column" name="sheet_utterance_column" value="A" maxlength="3" />
+                </div>
+                <div class="field">
+                  <label for="sheet_region_column">地域列 (任意)</label>
+                  <input type="text" id="sheet_region_column" name="sheet_region_column" placeholder="例: B" maxlength="3" />
+                </div>
+                <div class="field">
+                  <label for="sheet_tags_column">タグ列 (任意)</label>
+                  <input type="text" id="sheet_tags_column" name="sheet_tags_column" placeholder="例: C" maxlength="3" />
+                </div>
+              </div>
+              <div class="muted">
+                タグ列が指定されている場合はカンマ区切り（<code>シャンプー, ドライヘア</code>）または全角読点で複数タグを取り込みます。
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="notes">メモ（任意）</label>
+              <textarea id="notes" name="notes" placeholder="特記事項やデータソースの説明など"></textarea>
+            </div>
+
+            <button class="btn btn-primary" type="submit">発話データ取込を実行</button>
+          </form>
+        </section>
+
+        <section class="card">
+          <h2 style="margin:0;">ペルソナ生成 (LLM)</h2>
+          <p class="muted">
+            `persona_blueprints.json` をもとに GPT-4.1 で詳細ペルソナを生成し、`persona_catalog.json` と JSONL を出力します。
+            必要に応じて Google Sheets へ書き戻しも行います。
+          </p>
+          <form id="persona-build-form" class="stack">
+            <div class="grid">
+              <div class="field">
+                <label for="build_project_name">プロジェクト名</label>
+                <input type="text" id="build_project_name" name="project_name" placeholder="例: 2025Q4 Consumer Seeds" required />
+              </div>
+              <div class="field">
+                <label for="build_domain">ドメイン / カテゴリ</label>
+                <input type="text" id="build_domain" name="domain" placeholder="例: haircare" required />
+              </div>
+              <div class="field">
+                <label for="build_language">対象言語</label>
+                <select id="build_language" name="language">
+                  <option value="ja" selected>日本語</option>
+                  <option value="en">英語</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="build_persona_goal">生成上限（ペルソナ数）</label>
+                <input type="number" id="build_persona_goal" name="persona_goal" value="200" min="1" max="5000" />
+              </div>
+            </div>
+
+            <div class="grid">
+              <div class="field">
+                <label for="blueprint_path">ブループリントファイルパス</label>
+                <input type="text" id="blueprint_path" name="blueprint_path" placeholder="例: mass_persona/<job_id>/persona_blueprints.json" required />
+              </div>
+              <div class="field">
+                <label for="build_output_dir">出力先ディレクトリ（runs/ 以下任意）</label>
+                <input type="text" id="build_output_dir" name="output_dir" placeholder="例: persona_build/output_20251013" />
+              </div>
+              <div class="field">
+                <label for="build_concurrency">同時実行</label>
+                <input type="number" id="build_concurrency" name="concurrency" value="6" min="1" max="50" />
+              </div>
+              <div class="field">
+                <label for="build_seed_offset">シードオフセット</label>
+                <input type="number" id="build_seed_offset" name="persona_seed_offset" value="0" min="0" max="1000000" />
+              </div>
+            </div>
+
+            <div class="grid">
+              <div class="field">
+                <label for="build_openai_model">OpenAIモデル</label>
+                <input type="text" id="build_openai_model" name="openai_model" value="gpt-4.1" />
+              </div>
+              <div class="field">
+                <label for="build_sheet_url">ペルソナ出力先シートURL（任意）</label>
+                <input type="text" id="build_sheet_url" name="persona_sheet_url" placeholder="https://docs.google.com/spreadsheets/d/..." />
+                <div class="muted">指定時はシート名・列情報も入力してください。</div>
+              </div>
+            </div>
+
+            <div class="grid">
+              <div class="field">
+                <label for="build_sheet_name">シート名</label>
+                <input type="text" id="build_sheet_name" name="persona_sheet_name" value="PersonaCatalog" />
+              </div>
+              <div class="field">
+                <label for="build_overview_column">概要列（既定B）</label>
+                <input type="text" id="build_overview_column" name="persona_overview_column" value="B" maxlength="3" />
+              </div>
+              <div class="field">
+                <label for="build_prompt_column">詳細列（既定C）</label>
+                <input type="text" id="build_prompt_column" name="persona_prompt_column" value="C" maxlength="3" />
+              </div>
+              <div class="field">
+                <label for="build_start_row">開始行</label>
+                <input type="number" id="build_start_row" name="persona_start_row" value="2" min="1" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="build_notes">ペルソナ指示メモ（任意）</label>
+              <textarea id="build_notes" name="notes" placeholder="LLMへのトーン指示や制約など"></textarea>
+            </div>
+
+            <button class="btn btn-primary" type="submit">ペルソナ生成を実行</button>
+          </form>
+        </section>
+
+        <section class="card">
+          <h2 style="margin:0;">大量回答生成 (Gemini Flash)</h2>
+          <p class="muted">
+            生成済みペルソナカタログと製品刺激を組み合わせ、Gemini Flash が自由文回答を生成します。必要に応じて SSR による Likert 推定も実行します。
+          </p>
+          <form id="persona-response-form" class="stack">
+            <div class="grid">
+              <div class="field">
+                <label for="response_project_name">プロジェクト名</label>
+                <input type="text" id="response_project_name" name="project_name" placeholder="例: 2025Q4 Consumer Seeds" required />
+              </div>
+              <div class="field">
+                <label for="response_domain">ドメイン / カテゴリ</label>
+                <input type="text" id="response_domain" name="domain" placeholder="例: haircare" required />
+              </div>
+              <div class="field">
+                <label for="response_language">対象言語</label>
+                <select id="response_language" name="language">
+                  <option value="ja" selected>日本語</option>
+                  <option value="en">英語</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="persona_catalog_path">ペルソナカタログパス</label>
+                <input type="text" id="persona_catalog_path" name="persona_catalog_path" placeholder="例: persona_build/<job_id>/persona_catalog.json" required />
+              </div>
+            </div>
+
+            <div class="stack">
+              <label for="response_stimuli_source">刺激（手入力, カンマ区切り可）</label>
+              <textarea id="response_stimuli_source" name="stimuli_source" placeholder="例: 新ボタニカルシャンプー, ナイトケアトリートメント"></textarea>
+            </div>
+
+            <div class="stack">
+              <h3 style="margin:0;">Google Sheets から刺激を読み込む（任意）</h3>
+              <div class="grid">
+                <div class="field">
+                  <label for="response_sheet_url">シートURL/ID</label>
+                  <input type="text" id="response_sheet_url" name="stimuli_sheet_url" placeholder="https://docs.google.com/spreadsheets/d/..." />
+                </div>
+                <div class="field">
+                  <label for="response_sheet_name">シート名</label>
+                  <input type="text" id="response_sheet_name" name="stimuli_sheet_name" placeholder="未指定の場合は ProductStimuli を検索" />
+                </div>
+                <div class="field">
+                  <label for="response_sheet_column">列（既定A）</label>
+                  <input type="text" id="response_sheet_column" name="stimuli_sheet_column" value="A" maxlength="3" />
+                </div>
+                <div class="field">
+                  <label for="response_sheet_start_row">開始行</label>
+                  <input type="number" id="response_sheet_start_row" name="stimuli_sheet_start_row" value="2" min="1" />
+                </div>
+              </div>
+            </div>
+
+            <div class="grid">
+              <div class="field">
+                <label for="response_output_dir">出力先ディレクトリ（runs/ 以下任意）</label>
+                <input type="text" id="response_output_dir" name="output_dir" placeholder="例: persona_responses/output_20251013" />
+              </div>
+              <div class="field">
+                <label for="response_persona_limit">ペルソナ数の上限</label>
+                <input type="number" id="response_persona_limit" name="persona_limit" value="0" min="0" max="5000" />
+                <div class="muted">0 は全件。</div>
+              </div>
+              <div class="field">
+                <label for="response_stimuli_limit">刺激数の上限</label>
+                <input type="number" id="response_stimuli_limit" name="stimuli_limit" value="0" min="0" max="500" />
+              </div>
+              <div class="field">
+                <label for="response_concurrency">同時実行</label>
+                <input type="number" id="response_concurrency" name="concurrency" value="12" min="1" max="100" />
+              </div>
+            </div>
+
+            <div class="grid">
+              <div class="field">
+                <label for="response_model">Geminiモデル</label>
+                <input type="text" id="response_model" name="gemini_model" value="gemini-flash-latest" />
+              </div>
+              <div class="field">
+                <label for="response_style">応答スタイル</label>
+                <select id="response_style" name="response_style">
+                  <option value="monologue" selected>モノローグ</option>
+                  <option value="qa">Q&A</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="response_structured">構造化サマリーを含める</label>
+                <select id="response_structured" name="include_structured_summary">
+                  <option value="true" selected>含める</option>
+                  <option value="false">含めない</option>
+                </select>
+              </div>
+            </div>
+
+            <details class="card" style="padding: var(--anyai-space-3);">
+              <summary>SSRマッピング設定（任意）</summary>
+              <div class="stack" style="margin-top: var(--anyai-space-3);">
+                <div class="field">
+                  <label for="response_ssr_reference_path">参照文データパス</label>
+                  <input type="text" id="response_ssr_reference_path" name="ssr_reference_path" placeholder="例: references/purchase_intent.json" />
+                </div>
+                <div class="grid">
+                  <div class="field">
+                    <label for="response_ssr_reference_set">参照セットID</label>
+                    <input type="text" id="response_ssr_reference_set" name="ssr_reference_set" placeholder="例: purchase_intent_v1" />
+                  </div>
+                  <div class="field">
+                    <label for="response_ssr_embeddings_column">埋め込み列名</label>
+                    <input type="text" id="response_ssr_embeddings_column" name="ssr_embeddings_column" value="embedding" />
+                  </div>
+                  <div class="field">
+                    <label for="response_ssr_model_name">Sentence-Transformer</label>
+                    <input type="text" id="response_ssr_model_name" name="ssr_model_name" value="sentence-transformers/all-MiniLM-L6-v2" />
+                  </div>
+                  <div class="field">
+                    <label for="response_ssr_device">デバイス</label>
+                    <input type="text" id="response_ssr_device" name="ssr_device" placeholder="例: cuda" />
+                  </div>
+                </div>
+                <div class="grid">
+                  <div class="field">
+                    <label for="response_ssr_temperature">温度 (>=0)</label>
+                    <input type="number" step="0.01" id="response_ssr_temperature" name="ssr_temperature" value="1.0" min="0" />
+                  </div>
+                  <div class="field">
+                    <label for="response_ssr_epsilon">イプシロン (>=0)</label>
+                    <input type="number" step="0.01" id="response_ssr_epsilon" name="ssr_epsilon" value="0.0" min="0" />
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <div class="field">
+              <label for="response_notes">LLM 指示メモ（任意）</label>
+              <textarea id="response_notes" name="notes" placeholder="語調や購買意図の表現スタイルなど"></textarea>
+            </div>
+
+            <button class="btn btn-primary" type="submit">大量回答生成を実行</button>
+          </form>
+        </section>
+
+        <section id="job-section" class="card" style="display:none;">
+          <div class="stack-sm">
+            <div>ジョブID: <code id="job-id"></code></div>
+            <div class="muted" id="job-status"></div>
+            <progress id="record-progress" value="0" max="100"></progress>
+            <div class="muted" id="record-counts"></div>
+            <div class="muted" id="blueprint-counts"></div>
+            <div id="job-message"></div>
+            <div id="artifact-list" class="muted"></div>
+          </div>
+        </section>
+
+        <section id="build-job-section" class="card" style="display:none;">
+          <div class="stack-sm">
+            <div>ジョブID: <code id="build-job-id"></code></div>
+            <div class="muted" id="build-job-status"></div>
+            <progress id="build-progress" value="0" max="100"></progress>
+            <div class="muted" id="build-counts"></div>
+            <div id="build-message"></div>
+            <div id="build-artifacts" class="muted"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const form = document.getElementById('persona-form');
+      const buildForm = document.getElementById('persona-build-form');
+      const responseForm = document.getElementById('persona-response-form');
+      const jobSection = document.getElementById('job-section');
+      const jobIdEl = document.getElementById('job-id');
+      const jobStatusEl = document.getElementById('job-status');
+      const recordProgress = document.getElementById('record-progress');
+      const recordCounts = document.getElementById('record-counts');
+      const blueprintCounts = document.getElementById('blueprint-counts');
+      const jobMessage = document.getElementById('job-message');
+      const artifactList = document.getElementById('artifact-list');
+      const buildJobSection = document.getElementById('build-job-section');
+      const buildJobIdEl = document.getElementById('build-job-id');
+      const buildJobStatusEl = document.getElementById('build-job-status');
+      const buildProgressEl = document.getElementById('build-progress');
+      const buildCountsEl = document.getElementById('build-counts');
+      const buildMessageEl = document.getElementById('build-message');
+      const buildArtifactsEl = document.getElementById('build-artifacts');
+      const responseJobSection = document.getElementById('response-job-section');
+      const responseJobIdEl = document.getElementById('response-job-id');
+      const responseJobStatusEl = document.getElementById('response-job-status');
+      const responseProgressEl = document.getElementById('response-progress');
+      const responseCountsEl = document.getElementById('response-counts');
+      const responseMessageEl = document.getElementById('response-message');
+      const responseArtifactsEl = document.getElementById('response-artifacts');
+
+      let currentJobId = null;
+      let pollTimer = null;
+      let currentBuildJobId = null;
+      let buildPollTimer = null;
+      let currentResponseJobId = null;
+      let responsePollTimer = null;
+
+      function stopPolling() {
+        if (pollTimer) {
+          clearTimeout(pollTimer);
+          pollTimer = null;
+        }
+      }
+
+      function stopBuildPolling() {
+        if (buildPollTimer) {
+          clearTimeout(buildPollTimer);
+          buildPollTimer = null;
+        }
+      }
+
+      function stopResponsePolling() {
+        if (responsePollTimer) {
+          clearTimeout(responsePollTimer);
+          responsePollTimer = null;
+        }
+      }
+
+      const sanitizeColumn = (value, fallback) => {
+        const v = (value || fallback).trim().toUpperCase();
+        return /^[A-Z]+$/.test(v) ? v : fallback;
+      };
+
+      async function fetchStatus(jobId) {
+        const res = await fetch(`/persona/jobs/${jobId}`);
+        if (!res.ok) {
+          throw new Error('ステータス取得に失敗しました');
+        }
+        return res.json();
+      }
+
+      async function fetchBuildStatus(jobId) {
+        const res = await fetch(`/persona/build/jobs/${jobId}`);
+        if (!res.ok) {
+          throw new Error('ステータス取得に失敗しました');
+        }
+        return res.json();
+      }
+
+      async function fetchResponseStatus(jobId) {
+        const res = await fetch(`/persona/respond/jobs/${jobId}`);
+        if (!res.ok) {
+          throw new Error('ステータス取得に失敗しました');
+        }
+        return res.json();
+      }
+
+      function renderStatus(state) {
+        jobSection.style.display = 'block';
+        jobIdEl.textContent = state.job_id;
+        jobStatusEl.textContent = `ステータス: ${state.status} / ステージ: ${state.stage}`;
+        jobMessage.textContent = state.message || '';
+
+        const total = state.total_seed_records || 0;
+        const processed = state.processed_records || 0;
+        recordProgress.value = total ? Math.floor((processed / total) * 100) : 0;
+        recordCounts.textContent = total
+          ? `処理済みレコード: ${processed} / ${total}`
+          : 'レコード読み込み中…';
+        if (blueprintCounts) {
+          const bp = state.generated_blueprints || 0;
+          blueprintCounts.textContent =
+            bp > 0
+              ? `生成済みブループリント: ${bp}`
+              : (state.stage === 'blueprint' || state.stage === 'completed'
+                 ? 'ブループリントを生成中…'
+                 : 'ブループリント準備中…');
+        }
+
+        if (state.artifacts) {
+          const items = Object.entries(state.artifacts)
+            .map(([key, path]) => `<div><strong>${key}</strong>: <code>${path}</code></div>`)
+            .join('');
+          artifactList.innerHTML = items;
+        } else {
+          artifactList.innerHTML = '';
+        }
+
+        const stillRunning = state.status === 'pending' || state.status === 'running';
+        if (stillRunning) {
+          pollTimer = setTimeout(() => pollStatus(state.job_id), 1500);
+        } else {
+          stopPolling();
+        }
+      }
+
+      async function pollStatus(jobId) {
+        try {
+          const state = await fetchStatus(jobId);
+          renderStatus(state);
+        } catch (err) {
+          console.error(err);
+          jobStatusEl.textContent = 'ステータス取得に失敗しました';
+          stopPolling();
+        }
+      }
+
+      function renderBuildStatus(state) {
+        buildJobSection.style.display = 'block';
+        buildJobIdEl.textContent = state.job_id;
+        buildJobStatusEl.textContent = `ステータス: ${state.status} / ステージ: ${state.stage}`;
+        buildMessageEl.textContent = state.message || '';
+
+        const total = state.total_blueprints || 0;
+        const generated = state.generated_personas || 0;
+        buildProgressEl.value = total ? Math.floor((generated / total) * 100) : 0;
+        buildCountsEl.textContent = total
+          ? `生成済みペルソナ: ${generated} / ${total}`
+          : 'ブループリントを読み込み中…';
+
+        if (state.artifacts) {
+          const items = Object.entries(state.artifacts)
+            .map(([key, path]) => `<div><strong>${key}</strong>: <code>${path}</code></div>`)
+            .join('');
+          buildArtifactsEl.innerHTML = items;
+        } else {
+          buildArtifactsEl.innerHTML = '';
+        }
+
+        const stillRunning = state.status === 'pending' || state.status === 'running';
+        if (stillRunning) {
+          buildPollTimer = setTimeout(() => pollBuildStatus(state.job_id), 1500);
+        } else {
+          stopBuildPolling();
+        }
+      }
+
+      async function pollBuildStatus(jobId) {
+        try {
+          const state = await fetchBuildStatus(jobId);
+          renderBuildStatus(state);
+        } catch (err) {
+          console.error(err);
+          buildJobStatusEl.textContent = 'ステータス取得に失敗しました';
+          stopBuildPolling();
+        }
+      }
+
+      function renderResponseStatus(state) {
+        responseJobSection.style.display = 'block';
+        responseJobIdEl.textContent = state.job_id;
+        responseJobStatusEl.textContent = `ステータス: ${state.status} / ステージ: ${state.stage}`;
+        responseMessageEl.textContent = state.message || '';
+
+        const total = state.total_pairs || 0;
+        const processed = state.processed_pairs || 0;
+        responseProgressEl.value = total ? Math.floor((processed / total) * 100) : 0;
+        responseCountsEl.textContent = total
+          ? `生成済み応答: ${processed} / ${total}`
+          : '応答生成を準備中…';
+
+        if (state.artifacts) {
+          const items = Object.entries(state.artifacts)
+            .map(([key, path]) => `<div><strong>${key}</strong>: <code>${path}</code></div>`)
+            .join('');
+          responseArtifactsEl.innerHTML = items;
+        } else {
+          responseArtifactsEl.innerHTML = '';
+        }
+
+        const stillRunning = state.status === 'pending' || state.status === 'running';
+        if (stillRunning) {
+          responsePollTimer = setTimeout(() => pollResponseStatus(state.job_id), 1500);
+        } else {
+          stopResponsePolling();
+        }
+      }
+
+      async function pollResponseStatus(jobId) {
+        try {
+          const state = await fetchResponseStatus(jobId);
+          renderResponseStatus(state);
+        } catch (err) {
+          console.error(err);
+          responseJobStatusEl.textContent = 'ステータス取得に失敗しました';
+          stopResponsePolling();
+        }
+      }
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        stopPolling();
+        stopBuildPolling();
+        stopResponsePolling();
+        const fd = new FormData(form);
+
+        fd.set('sheet_utterance_column', sanitizeColumn(fd.get('sheet_utterance_column'), 'A'));
+        const regionCol = fd.get('sheet_region_column');
+        if (regionCol) {
+          fd.set('sheet_region_column', sanitizeColumn(regionCol, regionCol));
+        }
+        const tagsCol = fd.get('sheet_tags_column');
+        if (tagsCol) {
+          fd.set('sheet_tags_column', sanitizeColumn(tagsCol, tagsCol));
+        }
+
+        try {
+          const res = await fetch('/persona/jobs', { method: 'POST', body: fd });
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || '取込ジョブの作成に失敗しました');
+          }
+          const data = await res.json();
+          currentJobId = data.job_id;
+          jobSection.style.display = 'block';
+          recordProgress.value = 0;
+          recordCounts.textContent = '';
+          blueprintCounts.textContent = '';
+          jobStatusEl.textContent = 'ステータス: pending';
+          jobMessage.textContent = '発話データの取り込みを開始しました。';
+          artifactList.innerHTML = '';
+          pollStatus(currentJobId);
+        } catch (err) {
+          alert(err.message || '取込ジョブの作成に失敗しました');
+        }
+      });
+
+      if (buildForm) {
+        buildForm.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          stopBuildPolling();
+          stopResponsePolling();
+          const fd = new FormData(buildForm);
+
+          fd.set('persona_overview_column', sanitizeColumn(fd.get('persona_overview_column'), 'B'));
+          fd.set('persona_prompt_column', sanitizeColumn(fd.get('persona_prompt_column'), 'C'));
+
+          try {
+            const res = await fetch('/persona/build/jobs', { method: 'POST', body: fd });
+            if (!res.ok) {
+              const text = await res.text();
+              throw new Error(text || 'ペルソナ生成ジョブの作成に失敗しました');
+            }
+            const data = await res.json();
+            currentBuildJobId = data.job_id;
+            buildJobSection.style.display = 'block';
+            buildProgressEl.value = 0;
+            buildCountsEl.textContent = '';
+            buildJobStatusEl.textContent = 'ステータス: pending';
+            buildMessageEl.textContent = 'ペルソナ生成を開始しました。';
+            buildArtifactsEl.innerHTML = '';
+            pollBuildStatus(currentBuildJobId);
+          } catch (err) {
+            alert(err.message || 'ペルソナ生成ジョブの作成に失敗しました');
+          }
+        });
+      }
+
+      if (responseForm) {
+        responseForm.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          stopResponsePolling();
+          const fd = new FormData(responseForm);
+
+          fd.set('stimuli_sheet_column', sanitizeColumn(fd.get('stimuli_sheet_column'), 'A'));
+          fd.set('include_structured_summary', fd.get('include_structured_summary') === 'false' ? 'false' : 'true');
+          fd.set('ssr_embeddings_column', (fd.get('ssr_embeddings_column') || 'embedding').trim() || 'embedding');
+          fd.set('ssr_model_name', (fd.get('ssr_model_name') || 'sentence-transformers/all-MiniLM-L6-v2').trim() || 'sentence-transformers/all-MiniLM-L6-v2');
+
+          try {
+            const res = await fetch('/persona/respond/jobs', { method: 'POST', body: fd });
+            if (!res.ok) {
+              const text = await res.text();
+              throw new Error(text || '大量回答ジョブの作成に失敗しました');
+            }
+            const data = await res.json();
+            currentResponseJobId = data.job_id;
+            responseJobSection.style.display = 'block';
+            responseProgressEl.value = 0;
+            responseCountsEl.textContent = '';
+            responseJobStatusEl.textContent = 'ステータス: pending';
+            responseMessageEl.textContent = '大量回答生成を開始しました。';
+            responseArtifactsEl.innerHTML = '';
+            pollResponseStatus(currentResponseJobId);
+          } catch (err) {
+            alert(err.message || '大量回答ジョブの作成に失敗しました');
+          }
+        });
+      }
+    </script>
+  </body>
+</html>
+        <section id="response-job-section" class="card" style="display:none;">
+          <div class="stack-sm">
+            <div>ジョブID: <code id="response-job-id"></code></div>
+            <div class="muted" id="response-job-status"></div>
+            <progress id="response-progress" value="0" max="100"></progress>
+            <div class="muted" id="response-counts"></div>
+            <div id="response-message"></div>
+            <div id="response-artifacts" class="muted"></div>
+          </div>
+        </section>

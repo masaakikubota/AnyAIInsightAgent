@@ -1,0 +1,2 @@
+DEFAULT_GEMINI_API_KEY = "your-gemini-api-key"
+DEFAULT_OPENAI_API_KEY = "your-openai-api-key"

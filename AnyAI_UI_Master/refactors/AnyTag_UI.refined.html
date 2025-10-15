@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../assets/AnyAI_icon.png">
+<title>AnyTag_UI（リファイン） — AnyAI UI Kit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- 依存はゼロでも動作、オンライン時に日本語可読性を向上 -->
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../core/anyai.tokens.css">
+<link rel="stylesheet" href="../core/anyai.components.css">
+<link rel="stylesheet" href="../core/anyai.utilities.css">
+<script defer src="../core/anyai.js"></script>
+<style>
+  .page { padding-bottom: var(--anyai-space-10); }
+  .logo-inline { height: 28px; vertical-align: middle; }
+</style>
+</head>
+
+<body>
+<header class="anyai-header">
+  <a class="brand" href="../index.html" aria-label="AnyAI ホーム">
+    <img src="../assets/AnyAI_logo.png" alt="AnyAI ロゴ">
+    <span>AnyAI</span>
+  </a>
+  <nav class="nav">
+    <a href="../docs/components.html" >コンポーネント</a>
+    <a href="../docs/patterns.html" >パターン</a>
+    <a href="../templates/app-shell.html" style="font-weight:700;">テンプレート</a>
+    <button class="btn btn-ghost" data-action="toggle-theme" title="ライト/ダーク切替">テーマ</button>
+  </nav>
+</header>
+
+<main class="page container">
+  <h1>AnyTag_UI（リファイン例）</h1>
+  <p class="text-subtle">既存の構造にトークンとコンポーネントを適用し、ヘッダー左上ロゴとファビコンを統一しています。</p>
+
+  <div class="card mt-5">
+    <div class="card-header"><strong>推奨レイアウト</strong></div>
+    <div class="card-body">
+      <ol>
+        <li>共通ヘッダー：左上に <code>AnyAI_logo.png</code>（高さ28px）、ファビコンに <code>AnyAI_icon.png</code></li>
+        <li>主要ナビ：アプリはサイドバー / サイトはトップナビ</li>
+        <li>コンテナ幅：<code>--anyai-content-lg</code> を基準に</li>
+      </ol>
+    </div>
+  </div>
+
+  <section class="mt-5">
+    <div class="card">
+      <div class="card-header"><strong>サンプル画面</strong></div>
+      <div class="card-body">
+        <div class="row">
+          <button class="btn btn-primary">Primary</button>
+          <button class="btn btn-outline">Outline</button>
+          <button class="btn btn-ghost">Ghost</button>
+        </div>
+        <div class="row mt-3 w-100">
+          <div class="field w-100">
+            <label>検索</label>
+            <input class="input" placeholder="キーワードを入力">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  
+            <details class="mt-3">
+              <summary>参考: 元 HTML の冒頭ソースを表示</summary>
+              <pre><code>&lt;!DOCTYPE html> &lt;html lang=en data-kantu=1>&lt;!-- Page saved with SingleFile url: https://app.anytag.jp/marketplace?limit=20&page=1&state=%7B%7D&filter=%7B%22keyword%22%3A%22%22%2C%22countryId%22%3A%22%22%2C%22status%22%3A%22%22%2C%22campaignDetailType%22%3A%22%22%7D&sort=%7B%22field%22%3Anull%2C%22order%22%3Anull%7D saved date: Thu Aug 14 2025 05:04:35 GMT+0900 (Japan Standard Time) -->&lt;meta charset=utf-8>&lt;meta name=viewport content="width=device-width,user-scalable=no,initial-scale=1,maximum-scale=1">&lt;meta http-equiv=X-UA-Compatible content="IE=edge">&lt;title>Marketplace Campaigns | AnyTag&lt;/title>&lt;style>@media screen and (width&lt;=509px){}@media screen and (width&lt;=992px){}@media screen and (width&lt;=768px){}@media screen and (width&lt;=992px){}@media screen and (width&lt;=768px){}@keyframes blinker{50%{opacity:0}}@keyframes spinner{to{transform:rotate(361deg)}}@keyframes rdp-slide_in_left{0%{transform:translateX(-100%)}100%{transform:translateX(0)}}@keyframes rdp-slide_in_right{0%{transform:translateX(100%)}100%{transform:translateX(0)}}@keyframes rdp-slide_out_left{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}@keyframes rdp-slide_out_right{0%{transform:translateX(0)}100%{transform:translateX(100%)}}@keyframes rdp-fade_in{from{opacity:0}to{opacity:1}}@keyframes rdp-fade_out{from{opacity:1}to{opacity:0}}&lt;/style>&lt;style>@font-face{font-family:"Inter";font-style:normal;font-weight:400;src:url(data:font/woff2;base64,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</code></pre>
+            </details>
+            
+</main>
+
+<footer class="anyai-footer">
+  <div class="container">
+    <div class="row">
+      <div>© AnyAI UI Kit</div>
+      <div class="right text-subtle">v1.0 — 軽量・ビルドレス</div>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

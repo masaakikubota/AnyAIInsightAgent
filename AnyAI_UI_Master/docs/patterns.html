@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../assets/AnyAI_icon.png">
+<title>パターン — AnyAI UI Kit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- 依存はゼロでも動作、オンライン時に日本語可読性を向上 -->
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../core/anyai.tokens.css">
+<link rel="stylesheet" href="../core/anyai.components.css">
+<link rel="stylesheet" href="../core/anyai.utilities.css">
+<script defer src="../core/anyai.js"></script>
+<style>
+  .page { padding-bottom: var(--anyai-space-10); }
+  .logo-inline { height: 28px; vertical-align: middle; }
+</style>
+</head>
+
+<body>
+<header class="anyai-header">
+  <a class="brand" href="../index.html" aria-label="AnyAI ホーム">
+    <img src="../assets/AnyAI_logo.png" alt="AnyAI ロゴ">
+    <span>AnyAI</span>
+  </a>
+  <nav class="nav">
+    <a href="../docs/components.html" >コンポーネント</a>
+    <a href="../docs/patterns.html" style="font-weight:700;">パターン</a>
+    <a href="../templates/app-shell.html" >テンプレート</a>
+    <button class="btn btn-ghost" data-action="toggle-theme" title="ライト/ダーク切替">テーマ</button>
+  </nav>
+</header>
+
+<main class="page container">
+  <h1>パターン</h1>
+  <p class="text-subtle">実務で頻出する UI フローの標準構成。目的の体験を最短距離で。</p>
+
+  <section class="mt-5 grid grid-2">
+    <article class="card">
+      <div class="card-header"><strong>一覧 / 詳細</strong></div>
+      <div class="card-body">
+        <ol>
+          <li>検索・フィルタ・ソート（テーブルヘッダ/ツールバー）</li>
+          <li>ページング（サーバー or 無限スクロール）</li>
+          <li>詳細ペインの 2 カラム化（>1024px）</li>
+        </ol>
+        <p class="text-subtle mb-0">サンプル: <a href="../templates/tables.html">テーブル</a></p>
+      </div>
+    </article>
+    <article class="card">
+      <div class="card-header"><strong>作成 / 編集フォーム</strong></div>
+      <div class="card-body">
+        <ol>
+          <li>フィールドは 1 行 1 項目。ラベルと入力は縦積み。</li>
+          <li>検証メッセージはフィールド直下/赤色。</li>
+          <li>アクションは右寄せ（保存 / キャンセル）。</li>
+        </ol>
+        <p class="text-subtle mb-0">サンプル: <a href="../templates/forms.html">フォーム</a></p>
+      </div>
+    </article>
+    <article class="card">
+      <div class="card-header"><strong>状態管理（空/ロード/エラー）</strong></div>
+      <div class="card-body">
+        <ul>
+          <li>空: 目的と次の行動を説明 / CTA を配置</li>
+          <li>ロード: スケルトン / スピナー</li>
+          <li>エラー: 問題 + 再試行 / サポート導線</li>
+        </ul>
+        <p class="text-subtle mb-0">サンプル: <a href="../templates/empty-loading-error.html">状態テンプレート</a></p>
+      </div>
+    </article>
+    <article class="card">
+      <div class="card-header"><strong>認証</strong></div>
+      <div class="card-body">
+        <ul>
+          <li>メール + パスワード / SSO</li>
+          <li>パスワードリセット / 2FA</li>
+          <li>入力は即時検証（onBlur）</li>
+        </ul>
+        <p class="text-subtle mb-0">サンプル: <a href="../templates/auth.html">Auth</a></p>
+      </div>
+    </article>
+  </section>
+</main>
+
+<footer class="anyai-footer">
+  <div class="container">
+    <div class="row">
+      <div>© AnyAI UI Kit</div>
+      <div class="right text-subtle">v1.0 — 軽量・ビルドレス</div>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

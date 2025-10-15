@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+.video_cache/
+runs/
+server.log
+server.pid
+.DS_Store
+.oauth_token.json
+AnyAgent_serviceaccount.json
+AnyAgent_OAuth.json
+Keys.txt
