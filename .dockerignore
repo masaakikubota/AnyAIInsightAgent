@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.venv_run/
+env.bak/
+venv.bak/
+
+# 環境設定ファイル
+.env
+.env.local
+.env.*.local
+
+# 秘密情報
+Keys.txt
+Keys.example.txt
+AnyAgent_serviceaccount.json
+AnyAgent_OAuth.json
+.oauth_token.json
+
+# データファイル
+*.csv
+*.xlsx
+*.xls
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ログファイル
+*.log
+*.pid
+
+# キャッシュ
+.video_cache/
+.serena/
+
+# テスト
+tests/
+.pytest_cache/
+
+# ドキュメント
+*.md
+docs/
+
+# 一時ファイル
+runs/
+*.tmp
+*.temp
