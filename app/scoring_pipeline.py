@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .models import Category, RunConfig, ScoreResult
-from .services.google_sheets import GoogleSheetsError, batch_update_values, column_index_to_a1
+from .services.google_sheets import GoogleSheetsError, batch_update_values
 from .services.scoring import clamp_and_round, score_with_fallback, cache_key
 from .services.clients import GEMINI_MODEL_VIDEO
 from .services.video import download_video_to_path, upload_video_to_gemini
+from .services.sheet_updates import build_batched_value_ranges
 
 
 @dataclass(frozen=True)
@@ -87,6 +88,7 @@ class ScoringPipeline:
         writer_retry_limit: Optional[int] = None,
         writer_retry_initial_delay: Optional[float] = None,
         writer_retry_backoff_multiplier: Optional[float] = None,
+        sheet_batch_row_size: Optional[int] = None,
         video_mode: bool = False,
         event_logger: Optional[Callable[[str], None]] = None,
     ) -> None:
@@ -127,6 +129,12 @@ class ScoringPipeline:
             else float(cfg.writer_retry_backoff_multiplier)
         )
         self.writer_retry_backoff_multiplier = max(1.0, backoff_multiplier)
+        batch_rows_value = sheet_batch_row_size
+        if batch_rows_value is None:
+            batch_rows_value = getattr(cfg, "sheet_chunk_rows", None)
+        if not batch_rows_value or batch_rows_value <= 0:
+            batch_rows_value = 500
+        self.sheet_batch_row_size = max(1, int(batch_rows_value))
         self._cleanup_queue: asyncio.Queue[str] = asyncio.Queue()
 
         self._stats = PipelineStats()
@@ -464,13 +472,21 @@ class ScoringPipeline:
                 return
             snapshot_buffer = buffer
             snapshot_updates = list(pending_updates)
-            payload = _convert_updates(self.cfg, self.sheet_name, snapshot_buffer)
+            payload_batches = build_batched_value_ranges(
+                category_start_col=self.cfg.category_start_col,
+                sheet_name=self.sheet_name,
+                update_buffer=snapshot_buffer,
+                max_rows_per_batch=self.sheet_batch_row_size,
+            )
             attempts = 0
             delay = self.writer_retry_initial_delay
             last_error: Optional[Exception] = None
             while attempts < self.writer_retry_limit:
                 try:
-                    await asyncio.to_thread(batch_update_values, self.spreadsheet_id, payload)
+                    for updates in payload_batches:
+                        if not updates:
+                            continue
+                        await asyncio.to_thread(batch_update_values, self.spreadsheet_id, updates)
                     last_flush = time.monotonic()
                     self._stats.flush_count += 1
                     buffer = {}
@@ -480,7 +496,7 @@ class ScoringPipeline:
                     pending_updates = []
                     self._log(
                         f"Writer flush success: rows={len(snapshot_buffer)} entries={len(snapshot_updates)} "
-                        f"attempts={attempts + 1}"
+                        f"gs_calls={len(payload_batches)} attempts={attempts + 1}"
                     )
                     return
                 except GoogleSheetsError as exc:
@@ -547,35 +563,3 @@ class ScoringPipeline:
                         pass
         except Exception:
             pass
-
-
-def _convert_updates(cfg: RunConfig, sheet_name: str, update_buffer: Dict[int, Dict[int, float]]) -> List[dict]:
-    if not update_buffer:
-        return []
-    sorted_rows = sorted(update_buffer.items())
-    value_ranges: List[dict] = []
-    for row_number, columns in sorted_rows:
-        offsets = sorted(columns.keys())
-        if not offsets:
-            continue
-        grouped: List[List[int]] = []
-        current: List[int] = [offsets[0]]
-        for offset in offsets[1:]:
-            if offset == current[-1] + 1:
-                current.append(offset)
-            else:
-                grouped.append(current)
-                current = [offset]
-        grouped.append(current)
-        for group in grouped:
-            start_offset = group[0]
-            end_offset = group[-1]
-            start_idx = cfg.category_start_col - 1 + start_offset
-            end_idx = cfg.category_start_col - 1 + end_offset
-            start_col = column_index_to_a1(start_idx)
-            end_col = column_index_to_a1(end_idx)
-            sheet_label = sheet_name.replace("'", "''")
-            rng = f"'{sheet_label}'!{start_col}{row_number}:{end_col}{row_number}"
-            values = [[columns[offset] for offset in group]]
-            value_ranges.append({"range": rng, "values": values})
-    return value_ranges

@@ -29,7 +29,7 @@ class RunConfig(BaseModel):
     concurrency: conint(ge=1, le=200) = 50
     auto_slowdown: bool = True
     timeout_sec: conint(ge=10, le=600) = 60
-    sheet_chunk_rows: conint(ge=10, le=500) = 30
+    sheet_chunk_rows: conint(ge=10, le=500) = 500
     chunk_row_limit: conint(ge=50, le=5000) = 500
     chunk_retry_limit: conint(ge=0, le=10) = 3
     cache_enabled: bool = True
