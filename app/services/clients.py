@@ -42,11 +42,6 @@ async def call_gemini(req: ScoreRequest) -> Tuple[ScoreResult, int]:
         f"{model}:generateContent?key={api_key}"
     )
 
-    categories_payload = [
-        {"name": c.name, "definition": c.definition, "detail": c.detail}
-        for c in req.categories
-    ]
-
     user_text_lines = [
         "[発話]",
         req.utterance,
@@ -60,10 +55,17 @@ async def call_gemini(req: ScoreRequest) -> Tuple[ScoreResult, int]:
     user_text = "\n".join(user_text_lines)
 
     response_schema = {
-        "type": "array",
-        "minItems": len(req.categories),
-        "maxItems": len(req.categories),
-        "items": {"type": "number", "minimum": -1, "maximum": 1},
+        "type": "object",
+        "properties": {
+            "analyses": {
+                "type": "array",
+                "minItems": len(req.categories),
+                "maxItems": len(req.categories),
+                "items": {"type": "string", "minLength": 4},
+            }
+        },
+        "required": ["analyses"],
+        "additionalProperties": False,
     }
 
     parts: List[dict] = []
@@ -120,65 +122,33 @@ async def call_gemini(req: ScoreRequest) -> Tuple[ScoreResult, int]:
     except json.JSONDecodeError as exc:  # noqa: BLE001
         raise ValueError(f"Gemini returned non-JSON: {text}") from exc
 
-    if isinstance(scores, dict) and "scores" in scores:
-        scores = scores["scores"]
+    if isinstance(scores, dict) and "analyses" in scores:
+        analyses = scores["analyses"]
+    else:
+        raise ValueError(f"Gemini returned unexpected payload: {scores}")
 
-    if not isinstance(scores, list):
-        raise ValueError(f"Gemini returned non-list scores: {scores}")
+    if not isinstance(analyses, list) or len(analyses) != len(req.categories):
+        raise ValueError("Gemini analyses length mismatch")
+
+    cleaned_analyses: List[str] = []
+    for item in analyses:
+        if not isinstance(item, str):
+            raise ValueError("Gemini analysis entries must be strings")
+        cleaned_analyses.append(item.strip())
 
     expected_len = len(req.categories)
-    aligned: List[Optional[float]] = [None] * expected_len
-    missing_indices: List[int] = []
-
-    resp_items = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[-1]
-    resp_items_list = resp_items.get("items") if isinstance(resp_items, dict) else None
-
-    try:
-        if isinstance(resp_items_list, list) and all(isinstance(x, dict) for x in resp_items_list):
-            score_map = {}
-            for item in resp_items_list:
-                idx = item.get("index")
-                value = item.get("score")
-                if idx is not None:
-                    try:
-                        score_map[int(idx)] = float(value) if value is not None else None
-                    except Exception:
-                        score_map[int(idx)] = None
-            for i in range(expected_len):
-                aligned[i] = score_map.get(i, None)
-        else:
-            for i in range(expected_len):
-                if i < len(scores) and scores[i] is not None:
-                    aligned[i] = float(scores[i])
-    except Exception as exc:  # noqa: BLE001
-        import logging
-
-        logging.getLogger(__name__).warning("Gemini response alignment failure, positional fallback used: %s", exc)
-        for i in range(expected_len):
-            if i < len(scores) and scores[i] is not None:
-                aligned[i] = float(scores[i])
-
-    for idx, value in enumerate(aligned):
-        if value is None:
-            missing_indices.append(idx)
 
     result = ScoreResult(
-        scores=[float(v) if v is not None else None for v in aligned],
-        pre_scores=aligned,
+        scores=[None] * expected_len,
+        analyses=cleaned_analyses,
+        pre_scores=None,
         provider=Provider.gemini,
         model=model,
         raw_text=text,
         request_text=user_text,
-        missing_indices=missing_indices or None,
-        partial=bool(missing_indices),
+        missing_indices=None,
+        partial=False,
     )
-
-    if missing_indices:
-        import logging
-
-        logging.getLogger(__name__).warning(
-            "Gemini returned partial scores: missing indices %s", missing_indices
-        )
 
     return result, status
 
@@ -209,18 +179,18 @@ async def call_openai(req: ScoreRequest) -> Tuple[ScoreResult, int]:
     user_text = "\n".join(user_text_lines)
 
     schema = {
-        "name": "scores_schema",
+        "name": "analyses_schema",
         "schema": {
             "type": "object",
             "properties": {
-                "scores": {
+                "analyses": {
                     "type": "array",
                     "minItems": len(req.categories),
                     "maxItems": len(req.categories),
-                    "items": {"type": "number", "minimum": -1, "maximum": 1},
+                    "items": {"type": "string", "minLength": 4},
                 }
             },
-            "required": ["scores"],
+            "required": ["analyses"],
             "additionalProperties": False,
         },
         "strict": True,
@@ -252,16 +222,29 @@ async def call_openai(req: ScoreRequest) -> Tuple[ScoreResult, int]:
 
     try:
         obj = json.loads(text)
-        scores = obj["scores"]
+        scores = obj["analyses"]
     except Exception as e:  # noqa: BLE001
         raise ValueError(f"OpenAI returned invalid JSON: {text}") from e
 
     if not (isinstance(scores, list) and len(scores) == len(req.categories)):
-        raise ValueError("OpenAI scores length mismatch")
+        raise ValueError("OpenAI analyses length mismatch")
 
-    fl = [float(x) for x in scores]
+    analyses: List[str] = []
+    for item in scores:
+        if not isinstance(item, str):
+            raise ValueError("OpenAI analysis entries must be strings")
+        analyses.append(item.strip())
+
     return (
-        ScoreResult(scores=list(fl), pre_scores=list(fl), provider=Provider.openai, model=OPENAI_MODEL, raw_text=text, request_text=user_text),
+        ScoreResult(
+            scores=[None] * len(analyses),
+            analyses=analyses,
+            pre_scores=None,
+            provider=Provider.openai,
+            model=OPENAI_MODEL,
+            raw_text=text,
+            request_text=user_text,
+        ),
         status,
     )
 
