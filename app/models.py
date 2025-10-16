@@ -47,11 +47,22 @@ class RunConfig(BaseModel):
     # Providers
     primary_provider: Provider = Provider.gemini
     fallback_provider: Provider = Provider.openai
+    enable_ssr: bool = True
+    ssr_reference_path: Optional[str] = None
+    ssr_reference_set: Optional[str] = None
+    ssr_embeddings_column: str = "embedding"
+    ssr_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    ssr_device: Optional[str] = None
+    ssr_temperature: confloat(ge=0.0) = 1.0
+    ssr_epsilon: confloat(ge=0.0) = 0.0
     spreadsheet_url: str = Field(..., min_length=5)
     sheet_keyword: str = "Link"
+    score_sheet_keyword: str = "Embedding"
     spreadsheet_id: Optional[str] = None
     sheet_name: Optional[str] = None
     sheet_gid: Optional[int] = None
+    score_sheet_name: Optional[str] = None
+    score_sheet_gid: Optional[int] = None
     mode: Literal["csv", "video"] = "csv"
     video_concurrency_default: conint(ge=1, le=50) = 7
     video_timeout_default: conint(ge=10, le=900) = 300
@@ -64,7 +75,7 @@ class RunConfig(BaseModel):
         "        <ban>Surface-level keyword matching is strictly forbidden.</ban>"
         "    </role>"
         "\n"
-        "    <mission>For a given utterance and N concepts, calculate a relevance score 'r' (float 0.0-1.0, no rounding) based on the utterance's core intent. Execute via the internal process below.</mission>"
+        "    <mission>For a given utterance and N concepts, perform Semantic Similarity Rating (SSR) as described in AnyAI Scoring research (2025-10-14). First verbalize how similar each concept definition is to the latent intent of the utterance. Then provide succinct natural-language rationales that can be embedded for quantitative scoring.</mission>"
         "\n"
         "    <process>"
         "        <step id=\"1\" name=\"Normalize & Enrich\">"
@@ -82,32 +93,18 @@ class RunConfig(BaseModel):
         "            <desc>Identify the \"real question\" or \"unspoken need\" behind the literal words.</desc>"
         "            <ex>\"Any good cafes around here?\" -> might mean \"Need a quiet place with Wi-Fi to work.\"</ex>"
         "        </step>"
-        "        <step id=\"4\" name=\"Map & Score\">"
-        "            <desc>Semantically map the latent intent to each concept's definition. Score relevance 'r' based on the criteria below.</desc>"
+        "        <step id=\"4\" name=\"Describe Similarity\">"
+        "            <desc>For each concept, articulate how closely the latent intent aligns with the concept definition and detail, referencing SSR anchors (Core/Strong/Reasonable/Weak/None).</desc>"
         "        </step>"
         "    </process>"
         "\n"
-        "    <criteria type=\"relevance_score_r\">"
-        "        <score r=\"0.9-1.0\" name=\"Core\">Intent and concept are identical. The utterance exists to express the concept.</score>"
-        "        <score r=\"0.7-0.89\" name=\"Strong\">Concept is the primary subject, strongly inferred from context and intent.</score>"
-        "        <score r=\"0.4-0.69\" name=\"Reasonable\">Concept is a logical extension or component of the intent.</score>"
-        "        <score r=\"0.1-0.39\" name=\"Weak\">Faintly associated by situation/words, but not the main focus.</score>"
-        "        <score r=\"0.0\" name=\"None\">No logical connection can be inferred.</score>"
-        "    </criteria>"
-        "    \n"
-        "    <rules>"
-        "        <rule id=\"lang\">Auto-detect language, internally translate to a standard model (e.g., English) for processing.</rule>"
-        "        <rule id=\"silent\">Internal thought processes must NOT be included in the output.</rule>"
-        "    </rules>"
-        "\n"
         "    <output>"
-        "        <primary>Return an N-length array of float numbers (0.0–1.0), ordered by the given concepts. No rounding.</primary>"
-        "        <compat>If the platform enforces a JSON object wrapper, return only: {\"scores\": [..the same array..]} with no extra keys or text.</compat>"
-        "        <ban>No extra text, explanations, or markdown.</ban>"
+        "        <primary>Return a JSON object with the single key \"analyses\" whose value is an array of length N. Each element must be a short paragraph in natural language (1-2 sentences) that begins with one of [Core|Strong|Reasonable|Weak|None] and explains the similarity between the utterance and the concept's definition/detail.</primary>"
+        "        <ban>Do not output numeric ratings or markdown tables. No additional keys beyond \"analyses\".</ban>"
         "    </output>"
         "\n"
         "    <example>"
-        "        <out>[0.85, 0.1, 0.65]</out>"
+        "        <out>{\"analyses\": [\"Strong: Mentions planning a cafe visit matching the concept...\", \"Weak: Only tangential reference...\"]}</out>"
         "    </example>"
         "</prompt>"
     )
@@ -158,7 +155,9 @@ class ScoreRequest(BaseModel):
 
 
 class ScoreResult(BaseModel):
-    scores: List[Optional[confloat(ge=-1.0, le=1.0)]]
+    scores: Optional[List[Optional[confloat(ge=-1.0, le=1.0)]]] = None
+    analyses: Optional[List[str]] = None
+    likert_pmfs: Optional[List[List[float]]] = None
     provider: Provider
     model: str
     raw_text: Optional[str] = None

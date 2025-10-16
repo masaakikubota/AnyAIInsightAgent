@@ -38,6 +38,7 @@ def _make_pipeline(
         cfg=cfg,
         spreadsheet_id="spreadsheet",
         sheet_name="Scores",
+        score_sheet_name="Embeddings",
         invoke_concurrency=1,
         rows=[["utterance"]],
         utter_col_index=0,
@@ -205,6 +206,54 @@ class ScoringPipelineWriterTests(unittest.TestCase):
             pipeline._validation_executor.shutdown(wait=True)
 
         self.assertTrue(pipeline._terminate.is_set())
+
+    def test_writer_writes_analyses_and_scores_to_distinct_sheets(self) -> None:
+        _, pipeline = _make_pipeline(
+            score_cache=None,
+            writer_retry_limit=1,
+            writer_retry_initial_delay=0.1,
+            writer_retry_backoff_multiplier=1.0,
+        )
+        updates: list[list[dict]] = []
+
+        def capture_updates(spreadsheet_id: str, payload: list[dict]) -> None:
+            updates.append(payload)
+
+        async def run_writer_with_text() -> None:
+            writer_queue: asyncio.Queue[Optional[SheetUpdate]] = asyncio.Queue()
+            writer = asyncio.create_task(pipeline._writer(writer_queue))
+            unit = PipelineUnit(row_index=0, block_index=0, col_offset=0)
+            await writer_queue.put(
+                SheetUpdate(
+                    unit=unit,
+                    scores=[0.25],
+                    analyses=["Strong alignment"],
+                    result=ScoreResult(
+                        scores=[0.25],
+                        analyses=["Strong alignment"],
+                        provider=Provider.gemini,
+                        model="gemini-test",
+                    ),
+                )
+            )
+            await writer_queue.put(None)
+            await writer
+
+        try:
+            with patch("app.scoring_pipeline.batch_update_values", side_effect=capture_updates):
+                asyncio.run(run_writer_with_text())
+        finally:
+            pipeline._validation_executor.shutdown(wait=True)
+
+        self.assertEqual(len(updates), 1)
+        payload = updates[0]
+        self.assertEqual(len(payload), 2)
+        analysis_update = payload[0]
+        score_update = payload[1]
+        self.assertIn("Scores" , analysis_update["range"])
+        self.assertEqual(analysis_update["values"], [["Strong alignment"]])
+        self.assertIn("Embeddings", score_update["range"])
+        self.assertEqual(score_update["values"], [[0.25]])
 
 
 if __name__ == "__main__":

@@ -211,6 +211,7 @@ async def create_job(
     background: BackgroundTasks,
     spreadsheet_url: str = Form(...),
     sheet_keyword: str = Form("Link"),
+    score_sheet_keyword: str = Form("Embedding"),
     utterance_col: int = Form(3),
     category_start_col: int = Form(4),
     name_row: int = Form(2),
@@ -227,21 +228,47 @@ async def create_job(
     video_download_timeout: int = Form(120),
     video_temp_dir: Optional[str] = Form(None),
     system_prompt: Optional[str] = Form(None),
+    enable_ssr: bool = Form(True),
+    ssr_reference_path: str = Form(""),
+    ssr_reference_set: str = Form(""),
+    ssr_embeddings_column: str = Form("embedding"),
+    ssr_model_name: str = Form("sentence-transformers/all-MiniLM-L6-v2"),
+    ssr_device: str = Form(""),
+    ssr_temperature: float = Form(1.0),
+    ssr_epsilon: float = Form(0.0),
     action: str = Form("queue"),  # "queue" or "start"
 ):
     try:
         spreadsheet_id = extract_spreadsheet_id(spreadsheet_url)
         await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
-        sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, sheet_keyword)
+        primary_keyword = (sheet_keyword or "").strip() or "Link"
+        score_keyword = (score_sheet_keyword or "").strip() or primary_keyword
+        sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, primary_keyword)
+        score_sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_keyword)
     except GoogleSheetsError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    def _clamp_float(value: float, default: float, minimum: float = 0.0) -> float:
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return default
+        return parsed if parsed >= minimum else minimum
+
+    ssr_temp_default = float(RunConfig.model_fields["ssr_temperature"].default)
+    ssr_eps_default = float(RunConfig.model_fields["ssr_epsilon"].default)
+    ssr_temperature_val = _clamp_float(ssr_temperature, ssr_temp_default, 0.0)
+    ssr_epsilon_val = _clamp_float(ssr_epsilon, ssr_eps_default, 0.0)
+
     cfg = RunConfig(
         spreadsheet_url=spreadsheet_url,
-        sheet_keyword=sheet_keyword,
+        sheet_keyword=primary_keyword,
+        score_sheet_keyword=score_keyword,
         spreadsheet_id=sheet_match.spreadsheet_id,
         sheet_name=sheet_match.sheet_name,
         sheet_gid=sheet_match.sheet_id,
+        score_sheet_name=score_sheet_match.sheet_name,
+        score_sheet_gid=score_sheet_match.sheet_id,
         mode=mode,
         utterance_col=utterance_col,
         category_start_col=category_start_col,
@@ -258,6 +285,15 @@ async def create_job(
         video_download_timeout=video_download_timeout,
         video_temp_dir=video_temp_dir,
         system_prompt=system_prompt or RunConfig.model_fields["system_prompt"].default,
+        enable_ssr=enable_ssr,
+        ssr_reference_path=(ssr_reference_path or "").strip() or None,
+        ssr_reference_set=(ssr_reference_set or "").strip() or None,
+        ssr_embeddings_column=(ssr_embeddings_column or "embedding").strip() or "embedding",
+        ssr_model_name=(ssr_model_name or "sentence-transformers/all-MiniLM-L6-v2").strip()
+        or "sentence-transformers/all-MiniLM-L6-v2",
+        ssr_device=ssr_device.strip() or None,
+        ssr_temperature=ssr_temperature_val,
+        ssr_epsilon=ssr_epsilon_val,
     )
 
     if cfg.mode == "video":
@@ -358,6 +394,7 @@ async def edit_job(
     background: BackgroundTasks,
     spreadsheet_url: str = Form(...),
     sheet_keyword: str = Form("Link"),
+    score_sheet_keyword: str = Form("Embedding"),
     utterance_col: int = Form(3),
     category_start_col: int = Form(4),
     name_row: int = Form(2),
@@ -374,6 +411,14 @@ async def edit_job(
     video_download_timeout: int = Form(120),
     video_temp_dir: Optional[str] = Form(None),
     system_prompt: Optional[str] = Form(None),
+    enable_ssr: bool = Form(True),
+    ssr_reference_path: str = Form(""),
+    ssr_reference_set: str = Form(""),
+    ssr_embeddings_column: str = Form("embedding"),
+    ssr_model_name: str = Form("sentence-transformers/all-MiniLM-L6-v2"),
+    ssr_device: str = Form(""),
+    ssr_temperature: float = Form(1.0),
+    ssr_epsilon: float = Form(0.0),
 ):
     # Can only edit non-running
     job = manager.jobs.get(job_id)
@@ -381,16 +426,34 @@ async def edit_job(
         raise HTTPException(400, "Job is running and cannot be edited")
     try:
         spreadsheet_id = extract_spreadsheet_id(spreadsheet_url)
-        sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, sheet_keyword)
+        primary_keyword = (sheet_keyword or "").strip() or "Link"
+        score_keyword = (score_sheet_keyword or "").strip() or primary_keyword
+        sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, primary_keyword)
+        score_sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_keyword)
     except GoogleSheetsError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    def _clamp_float(value: float, default: float, minimum: float = 0.0) -> float:
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return default
+        return parsed if parsed >= minimum else minimum
+
+    ssr_temp_default = float(RunConfig.model_fields["ssr_temperature"].default)
+    ssr_eps_default = float(RunConfig.model_fields["ssr_epsilon"].default)
+    ssr_temperature_val = _clamp_float(ssr_temperature, ssr_temp_default, 0.0)
+    ssr_epsilon_val = _clamp_float(ssr_epsilon, ssr_eps_default, 0.0)
+
     cfg = RunConfig(
         spreadsheet_url=spreadsheet_url,
-        sheet_keyword=sheet_keyword,
+        sheet_keyword=primary_keyword,
+        score_sheet_keyword=score_keyword,
         spreadsheet_id=sheet_match.spreadsheet_id,
         sheet_name=sheet_match.sheet_name,
         sheet_gid=sheet_match.sheet_id,
+        score_sheet_name=score_sheet_match.sheet_name,
+        score_sheet_gid=score_sheet_match.sheet_id,
         mode=mode,
         utterance_col=utterance_col,
         category_start_col=category_start_col,
@@ -407,6 +470,15 @@ async def edit_job(
         video_download_timeout=video_download_timeout,
         video_temp_dir=video_temp_dir,
         system_prompt=system_prompt or RunConfig.model_fields["system_prompt"].default,
+        enable_ssr=enable_ssr,
+        ssr_reference_path=(ssr_reference_path or "").strip() or None,
+        ssr_reference_set=(ssr_reference_set or "").strip() or None,
+        ssr_embeddings_column=(ssr_embeddings_column or "embedding").strip() or "embedding",
+        ssr_model_name=(ssr_model_name or "sentence-transformers/all-MiniLM-L6-v2").strip()
+        or "sentence-transformers/all-MiniLM-L6-v2",
+        ssr_device=ssr_device.strip() or None,
+        ssr_temperature=ssr_temperature_val,
+        ssr_epsilon=ssr_epsilon_val,
     )
 
     # Update job artifacts on disk and in-memory if loaded
