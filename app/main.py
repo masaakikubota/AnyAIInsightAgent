@@ -1,39 +1,13 @@
 from __future__ import annotations
 
-import asyncio
-import os
-import shutil
-import sys
-import uuid
 from pathlib import Path
-from typing import List, Optional
 
-
-def _ensure_runtime_compat() -> None:
-    """Fail fast with分かりやすいメッセージ when pydantic_core is missing (e.g., Python 3.13)."""
-    py = sys.version_info
-    try:
-        import pydantic  # noqa: F401
-        import pydantic_core  # type: ignore  # noqa: F401
-    except Exception as e:  # noqa: BLE001
-        hint = (
-            "pydantic_core が読み込めません。Python 3.13 では未対応のバイナリが原因の可能性があります。\n"
-            "対処案:\n"
-            "  1) Python 3.12/3.11 で仮想環境を作成し直す (推奨)\n"
-            "     pyenv 例: pyenv install 3.12.6 && pyenv local 3.12.6\n"
-            "  2) Python 3.13 のまま pydantic/pydantic-core を対応版へ更新 (要Rust等、非推奨)\n"
-        )
-        raise RuntimeError(hint) from e
-
-
-_ensure_runtime_compat()
-
-from dotenv import load_dotenv
-from fastapi import BackgroundTasks, Body, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
+from .routers import cleansing, interview, jobs, persona, settings
 from . import settings as app_settings
 from .cleansing_manager import CleansingJobManager
 from .models import (
@@ -422,52 +396,33 @@ async def edit_job(
     return {"ok": True}
 
 
-@app.get("/jobs/{job_id}", response_model=ProgressResponse)
-async def get_progress(job_id: str):
-    job = manager.jobs.get(job_id)
-    if not job:
-        raise HTTPException(404, "Job not found")
-    # simple ETA: assume constant
-    eta = None
-    if job.processed_rows and job.total_rows:
-        from time import time as now
 
-        elapsed = max(1.0, now() - job.started_at)
-        rate = job.processed_rows / elapsed
-        remaining = max(0, job.total_rows - job.processed_rows)
-        eta = remaining / rate if rate > 0 else None
-    return ProgressResponse(
-        job_id=job_id,
-        status=job.status,
-        total_rows=job.total_rows,
-        processed_rows=job.processed_rows,
-        current_utterance_index=job.current_utterance_index,
-        current_category_block_index=job.current_category_block_index,
-        eta_seconds=eta,
-    )
+def create_app() -> FastAPI:
+    app = FastAPI(title="AnyAIMarketingSolutionAgent - Scoring")
+    app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
+
+    app.include_router(jobs.router)
+    app.include_router(settings.router)
+    app.include_router(cleansing.router)
+    app.include_router(interview.router)
+    app.include_router(persona.router)
+
+    @app.get("/", response_class=HTMLResponse)
+    def index() -> str:
+        return (Path(__file__).parent / "static" / "index.html").read_text(encoding="utf-8")
+
+    @app.get("/dashboard", response_class=HTMLResponse)
+    def dashboard_index() -> str:
+        return (Path(__file__).parent / "static" / "dashboard.html").read_text(encoding="utf-8")
+
+    return app
 
 
-@app.get("/jobs/{job_id}/download/meta")
-async def download_meta(job_id: str):
-    job = manager.jobs.get(job_id)
-    if not job or not job.run_meta_path or not job.run_meta_path.exists():
-        raise HTTPException(404, "Meta not found")
-    return FileResponse(job.run_meta_path)
+app = create_app()
 
 
-# UIログ/Audit保存は廃止
-
-
-@app.post("/jobs/{job_id}/cancel")
-async def cancel_job(job_id: str):
-    job = manager.jobs.get(job_id)
-    if not job:
-        raise HTTPException(404, "Job not found")
-    await manager.cancel_job(job_id, reason="user")
-    return {"ok": True, "status": "cancelling"}
-
-
-def run():  # for `python -m app.main`
+def run() -> None:
+    import os
     import uvicorn
 
     host = os.getenv("HOST", "0.0.0.0")
