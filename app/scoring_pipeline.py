@@ -12,6 +12,7 @@ from .services.google_sheets import GoogleSheetsError, batch_update_values, colu
 from .services.scoring import SSRSettings, cache_key, clamp_and_round, score_with_fallback
 from .services.clients import GEMINI_MODEL_VIDEO
 from .services.video import download_video_to_path, upload_video_to_gemini
+from .services.sheet_updates import build_batched_value_ranges
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,7 @@ class ScoringPipeline:
         writer_retry_limit: Optional[int] = None,
         writer_retry_initial_delay: Optional[float] = None,
         writer_retry_backoff_multiplier: Optional[float] = None,
+        sheet_batch_row_size: Optional[int] = None,
         video_mode: bool = False,
         event_logger: Optional[Callable[[str], None]] = None,
     ) -> None:
@@ -130,6 +132,12 @@ class ScoringPipeline:
             else float(cfg.writer_retry_backoff_multiplier)
         )
         self.writer_retry_backoff_multiplier = max(1.0, backoff_multiplier)
+        batch_rows_value = sheet_batch_row_size
+        if batch_rows_value is None:
+            batch_rows_value = getattr(cfg, "sheet_chunk_rows", None)
+        if not batch_rows_value or batch_rows_value <= 0:
+            batch_rows_value = 500
+        self.sheet_batch_row_size = max(1, int(batch_rows_value))
         self._cleanup_queue: asyncio.Queue[str] = asyncio.Queue()
 
         self._stats = PipelineStats()
@@ -537,7 +545,10 @@ class ScoringPipeline:
             last_error: Optional[Exception] = None
             while attempts < self.writer_retry_limit:
                 try:
-                    await asyncio.to_thread(batch_update_values, self.spreadsheet_id, payload)
+                    for updates in payload_batches:
+                        if not updates:
+                            continue
+                        await asyncio.to_thread(batch_update_values, self.spreadsheet_id, updates)
                     last_flush = time.monotonic()
                     self._stats.flush_count += 1
                     buffer_scores = {}

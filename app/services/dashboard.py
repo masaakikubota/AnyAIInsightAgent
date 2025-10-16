@@ -6,9 +6,6 @@ from pathlib import Path
 from ..models import DashboardRequest, DashboardResponse
 from .clients import call_openai_dashboard_plan, call_openai_dashboard_html
 
-
-UI_REFERENCE_DIR = Path(__file__).resolve().parents[2] / "AnyAI_UI_Master"
-
 PLAN_SYSTEM_PROMPT = """あなたはシニアなUXストラテジストです。与えられたデータ概要をもとに、AnyAI UIデザインガイド（AnyAI_UI_Master）を参照したダッシュボード構築計画を作成してください。
 
 要件:

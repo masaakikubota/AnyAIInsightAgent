@@ -15,11 +15,11 @@ from .services.clients import GEMINI_MODEL, GEMINI_MODEL_VIDEO, OPENAI_MODEL
 from .services.google_sheets import (
     GoogleSheetsError,
     batch_update_values,
-    column_index_to_a1,
     extract_spreadsheet_id,
     fetch_sheet_values,
     find_sheet,
 )
+from .services.sheet_updates import build_batched_value_ranges
 from .services.scoring_cache import CachePolicy, ScoreCache
 from .scoring_pipeline import ScoringPipeline, PipelineUnit
 
@@ -58,21 +58,6 @@ def read_categories_from_sheet(
     return categories
 
 
-def _group_offsets(offsets: List[int]) -> List[List[int]]:
-    if not offsets:
-        return []
-    groups: List[List[int]] = []
-    current = [offsets[0]]
-    for off in offsets[1:]:
-        if off == current[-1] + 1:
-            current.append(off)
-        else:
-            groups.append(current)
-            current = [off]
-    groups.append(current)
-    return groups
-
-
 def apply_updates_to_sheet(
     spreadsheet_id: str,
     sheet_name: str,
@@ -82,31 +67,16 @@ def apply_updates_to_sheet(
     if not update_buffer:
         return
 
-    sorted_rows = sorted(update_buffer.keys())
-    chunk_size = cfg.sheet_chunk_rows
+    batches = build_batched_value_ranges(
+        category_start_col=cfg.category_start_col,
+        sheet_name=sheet_name,
+        update_buffer=update_buffer,
+        max_rows_per_batch=cfg.sheet_chunk_rows,
+    )
 
-    for idx in range(0, len(sorted_rows), chunk_size):
-        chunk_rows = sorted_rows[idx : idx + chunk_size]
-        value_ranges: List[dict] = []
-        for row_idx in chunk_rows:
-            col_map = update_buffer.get(row_idx)
-            if not col_map:
-                continue
-            grouped = _group_offsets(sorted(col_map.keys()))
-            for group in grouped:
-                start_offset = group[0]
-                end_offset = group[-1]
-                start_col_idx = cfg.category_start_col - 1 + start_offset
-                end_col_idx = cfg.category_start_col - 1 + end_offset
-                start_col = column_index_to_a1(start_col_idx)
-                end_col = column_index_to_a1(end_col_idx)
-                row_number_str = str(row_idx)
-                sheet_label = sheet_name.replace("'", "''")
-                rng = f"'{sheet_label}'!{start_col}{row_number_str}:{end_col}{row_number_str}"
-                values = [[col_map[offset] for offset in group]]
-                value_ranges.append({"range": rng, "values": values})
-        if value_ranges:
-            batch_update_values(spreadsheet_id, value_ranges)
+    for payload in batches:
+        if payload:
+            batch_update_values(spreadsheet_id, payload)
 
 @dataclass
 class Job:
@@ -525,6 +495,7 @@ class JobManager:
                         writer_retry_limit=job.cfg.writer_retry_limit,
                         writer_retry_initial_delay=job.cfg.writer_retry_initial_delay_sec,
                         writer_retry_backoff_multiplier=job.cfg.writer_retry_backoff_multiplier,
+                        sheet_batch_row_size=job.cfg.sheet_chunk_rows,
                         video_mode=job.cfg.mode == "video",
                         event_logger=lambda msg, cid=chunk_idx + 1: job_log(f"[chunk {cid}] {msg}"),
                     )
@@ -658,6 +629,7 @@ class JobManager:
                         writer_retry_limit=job.cfg.writer_retry_limit,
                         writer_retry_initial_delay=job.cfg.writer_retry_initial_delay_sec,
                         writer_retry_backoff_multiplier=job.cfg.writer_retry_backoff_multiplier,
+                        sheet_batch_row_size=job.cfg.sheet_chunk_rows,
                         video_mode=job.cfg.mode == "video",
                         event_logger=lambda msg, rid=retry_round + 1: job_log(f"[retry {rid}] {msg}"),
                     )
@@ -746,7 +718,8 @@ class JobManager:
             job.cfg.timeout_sec = job.cfg.timeout_sec or job.cfg.video_timeout_default
             job.cfg.sheet_chunk_rows = 30
         else:
-            job.cfg.sheet_chunk_rows = 300
+            job.cfg.sheet_chunk_rows = 500
+        job.cfg.chunk_row_limit = 500
 
     def _prune_old_runs(self, keep: int = 2) -> None:
         try:

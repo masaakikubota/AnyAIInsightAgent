@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import unittest
 from typing import List, Optional
 from unittest.mock import patch
@@ -15,6 +16,7 @@ from app.scoring_pipeline import (
 )
 from app.services.scoring import cache_key
 from app.services.google_sheets import GoogleSheetsError
+from app.services.sheet_updates import build_batched_value_ranges, build_row_value_ranges
 
 
 async def _noop_mark_unit(unit: PipelineUnit, result: ScoreResult) -> None:
@@ -32,8 +34,10 @@ def _make_pipeline(
     writer_retry_limit: int = 3,
     writer_retry_initial_delay: float = 0.1,
     writer_retry_backoff_multiplier: float = 1.0,
+    sheet_batch_row_size: int = 500,
 ) -> tuple[RunConfig, ScoringPipeline]:
     cfg = RunConfig(spreadsheet_url="https://docs.google.com/spreadsheets/d/test")
+    cfg.sheet_chunk_rows = sheet_batch_row_size
     pipeline = ScoringPipeline(
         cfg=cfg,
         spreadsheet_id="spreadsheet",
@@ -53,6 +57,7 @@ def _make_pipeline(
         writer_retry_limit=writer_retry_limit,
         writer_retry_initial_delay=writer_retry_initial_delay,
         writer_retry_backoff_multiplier=writer_retry_backoff_multiplier,
+        sheet_batch_row_size=sheet_batch_row_size,
         video_mode=False,
     )
     return cfg, pipeline

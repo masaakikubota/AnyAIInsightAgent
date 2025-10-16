@@ -1,38 +1,13 @@
 from __future__ import annotations
 
-import asyncio
-import os
-import shutil
-import sys
-import uuid
 from pathlib import Path
-from typing import List, Optional
 
-
-def _ensure_runtime_compat() -> None:
-    """Fail fast with分かりやすいメッセージ when pydantic_core is missing (e.g., Python 3.13)."""
-    py = sys.version_info
-    try:
-        import pydantic  # noqa: F401
-        import pydantic_core  # type: ignore  # noqa: F401
-    except Exception as e:  # noqa: BLE001
-        hint = (
-            "pydantic_core が読み込めません。Python 3.13 では未対応のバイナリが原因の可能性があります。\n"
-            "対処案:\n"
-            "  1) Python 3.12/3.11 で仮想環境を作成し直す (推奨)\n"
-            "     pyenv 例: pyenv install 3.12.6 && pyenv local 3.12.6\n"
-            "  2) Python 3.13 のまま pydantic/pydantic-core を対応版へ更新 (要Rust等、非推奨)\n"
-        )
-        raise RuntimeError(hint) from e
-
-
-_ensure_runtime_compat()
-
-from dotenv import load_dotenv
-from fastapi import BackgroundTasks, Body, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
+from .routers import cleansing, interview, jobs, persona, settings
 from . import settings as app_settings
 from .cleansing_manager import CleansingJobManager
 from .models import (
@@ -52,13 +27,10 @@ from .models import (
     InterviewJobProgress,
     InterviewJobResponse,
     JobStatus,
-    MassPersonaJobConfig,
     MassPersonaJobProgress,
     MassPersonaJobResponse,
-    PersonaBuildJobConfig,
     PersonaBuildJobProgress,
     PersonaBuildJobResponse,
-    PersonaResponseJobConfig,
     PersonaResponseJobProgress,
     PersonaResponseJobResponse,
     ProgressResponse,
@@ -71,6 +43,12 @@ from .services.google_sheets import (
     find_sheet,
 )
 from .worker import JobManager
+from .forms import (
+    InterviewJobForm,
+    MassPersonaJobForm,
+    PersonaBuildJobForm,
+    PersonaResponseJobForm,
+)
 from .interview_manager import InterviewJobManager
 from .mass_persona_manager import MassPersonaJobManager
 from .persona_builder_manager import PersonaBuildJobManager
@@ -490,52 +468,33 @@ async def edit_job(
     return {"ok": True}
 
 
-@app.get("/jobs/{job_id}", response_model=ProgressResponse)
-async def get_progress(job_id: str):
-    job = manager.jobs.get(job_id)
-    if not job:
-        raise HTTPException(404, "Job not found")
-    # simple ETA: assume constant
-    eta = None
-    if job.processed_rows and job.total_rows:
-        from time import time as now
 
-        elapsed = max(1.0, now() - job.started_at)
-        rate = job.processed_rows / elapsed
-        remaining = max(0, job.total_rows - job.processed_rows)
-        eta = remaining / rate if rate > 0 else None
-    return ProgressResponse(
-        job_id=job_id,
-        status=job.status,
-        total_rows=job.total_rows,
-        processed_rows=job.processed_rows,
-        current_utterance_index=job.current_utterance_index,
-        current_category_block_index=job.current_category_block_index,
-        eta_seconds=eta,
-    )
+def create_app() -> FastAPI:
+    app = FastAPI(title="AnyAIMarketingSolutionAgent - Scoring")
+    app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
+
+    app.include_router(jobs.router)
+    app.include_router(settings.router)
+    app.include_router(cleansing.router)
+    app.include_router(interview.router)
+    app.include_router(persona.router)
+
+    @app.get("/", response_class=HTMLResponse)
+    def index() -> str:
+        return (Path(__file__).parent / "static" / "index.html").read_text(encoding="utf-8")
+
+    @app.get("/dashboard", response_class=HTMLResponse)
+    def dashboard_index() -> str:
+        return (Path(__file__).parent / "static" / "dashboard.html").read_text(encoding="utf-8")
+
+    return app
 
 
-@app.get("/jobs/{job_id}/download/meta")
-async def download_meta(job_id: str):
-    job = manager.jobs.get(job_id)
-    if not job or not job.run_meta_path or not job.run_meta_path.exists():
-        raise HTTPException(404, "Meta not found")
-    return FileResponse(job.run_meta_path)
+app = create_app()
 
 
-# UIログ/Audit保存は廃止
-
-
-@app.post("/jobs/{job_id}/cancel")
-async def cancel_job(job_id: str):
-    job = manager.jobs.get(job_id)
-    if not job:
-        raise HTTPException(404, "Job not found")
-    await manager.cancel_job(job_id, reason="user")
-    return {"ok": True, "status": "cancelling"}
-
-
-def run():  # for `python -m app.main`
+def run() -> None:
+    import os
     import uvicorn
 
     host = os.getenv("HOST", "0.0.0.0")
@@ -636,69 +595,50 @@ async def create_interview_job(
     persona_per_tribe: int = Form(3),
     questions_per_persona: int = Form(5),
 ) -> InterviewJobResponse:
-    def _to_bool(value: object, default: bool = False) -> bool:
-        if isinstance(value, bool):
-            return value
-        if value is None:
-            return default
-        return str(value).lower() in {"1", "true", "on", "yes"}
-
-    lang = (language or "ja").lower()
-    if lang not in ("ja", "en"):
-        lang = "ja"
-    mode = (stimulus_mode or "text").lower()
-    if mode not in ("text", "image", "mixed"):
-        mode = "text"
-
-    sheet_url_val = (stimuli_sheet_url or "").strip()
-    sheet_name_val = (stimuli_sheet_name or "").strip()
-    column_val = (stimuli_sheet_column or "A").strip().upper()
-    if not column_val.isalpha():
-        column_val = "A"
-    def _safe_int(val: int | str, default: int, minimum: int = 1) -> int:
-        try:
-            parsed = int(val)
-        except (TypeError, ValueError):
-            parsed = default
-        if parsed < minimum:
-            return minimum
-        return parsed
-
-    start_row_val = _safe_int(stimuli_sheet_start_row, 2)
-    persona_start_row_val = _safe_int(persona_start_row, 2)
-    tribe_count_val = max(1, min(_safe_int(tribe_count, 10), 200))
-    persona_per_tribe_val = max(1, min(_safe_int(persona_per_tribe, 3), 50))
-    max_rounds_input_val = max(1, min(_safe_int(max_rounds, 3), 30))
-    questions_per_persona_val = max(1, min(_safe_int(questions_per_persona, 5), 30))
-    if max_rounds_input_val != questions_per_persona_val:
-        raise HTTPException(
-            status_code=400,
-            detail="max_rounds は questions_per_persona と同じ値で送信してください。",
+    try:
+        form = InterviewJobForm(
+            project_name=project_name,
+            domain=domain,
+            country_region=country_region,
+            stimuli_source=stimuli_source,
+            stimuli_sheet_url=stimuli_sheet_url,
+            stimuli_sheet_name=stimuli_sheet_name,
+            stimuli_sheet_column=stimuli_sheet_column,
+            stimuli_sheet_start_row=stimuli_sheet_start_row,
+            persona_sheet_url=persona_sheet_url,
+            persona_sheet_name=persona_sheet_name,
+            persona_overview_column=persona_overview_column,
+            persona_prompt_column=persona_prompt_column,
+            persona_start_row=persona_start_row,
+            ssr_reference_path=ssr_reference_path,
+            ssr_reference_set=ssr_reference_set,
+            ssr_embeddings_column=ssr_embeddings_column,
+            ssr_model_name=ssr_model_name,
+            ssr_device=ssr_device,
+            ssr_temperature=ssr_temperature,
+            ssr_epsilon=ssr_epsilon,
+            persona_count=persona_count,
+            persona_template=persona_template,
+            persona_seed=persona_seed,
+            concurrency=concurrency,
+            max_rounds=max_rounds,
+            language=language,
+            stimulus_mode=stimulus_mode,
+            notes=notes,
+            enable_tribe_learning=enable_tribe_learning,
+            utterance_csv=utterance_csv,
+            manual_stimuli_images=manual_stimuli_images,
+            tribe_count=tribe_count,
+            persona_per_tribe=persona_per_tribe,
+            questions_per_persona=questions_per_persona,
         )
-    total_personas = max(1, tribe_count_val * persona_per_tribe_val)
-    if total_personas > 500:
-        total_personas = 500
-    persona_count = total_personas
-    max_rounds_val = questions_per_persona_val
-
-    persona_sheet_url_val = (persona_sheet_url or "").strip()
-    persona_sheet_name_val = (persona_sheet_name or "LLMSetUp").strip() or "LLMSetUp"
-    persona_overview_col_val = (persona_overview_column or "B").strip().upper()
-    if not persona_overview_col_val.isalpha():
-        persona_overview_col_val = "B"
-    persona_prompt_col_val = (persona_prompt_column or "C").strip().upper()
-    if not persona_prompt_col_val.isalpha():
-        persona_prompt_col_val = "C"
-    country_region_val = (country_region or "").strip()
-    if country_region_val:
-        country_region_val = "_".join(country_region_val.split())
-
-    enable_tribe_learning_flag = _to_bool(enable_tribe_learning, default=False)
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=exc.errors()) from exc
 
     checked_spreadsheets: set[str] = set()
     try:
-        if sheet_url_val:
-            stimuli_spreadsheet_id = extract_spreadsheet_id(sheet_url_val)
+        if form.stimuli_sheet_url:
+            stimuli_spreadsheet_id = extract_spreadsheet_id(form.stimuli_sheet_url)
             if stimuli_spreadsheet_id not in checked_spreadsheets:
                 await asyncio.to_thread(ensure_service_account_access, stimuli_spreadsheet_id)
                 checked_spreadsheets.add(stimuli_spreadsheet_id)
@@ -708,8 +648,8 @@ async def create_interview_job(
         raise HTTPException(status_code=400, detail=f"Stimuliシートへのアクセス確認に失敗しました: {exc}") from exc
 
     try:
-        if persona_sheet_url_val:
-            persona_spreadsheet_id = extract_spreadsheet_id(persona_sheet_url_val)
+        if form.persona_sheet_url:
+            persona_spreadsheet_id = extract_spreadsheet_id(form.persona_sheet_url)
             if persona_spreadsheet_id not in checked_spreadsheets:
                 await asyncio.to_thread(ensure_service_account_access, persona_spreadsheet_id)
                 checked_spreadsheets.add(persona_spreadsheet_id)
@@ -723,23 +663,23 @@ async def create_interview_job(
     job_dir.mkdir(parents=True, exist_ok=True)
 
     utterance_csv_rel: Optional[str] = None
-    if enable_tribe_learning_flag:
-        if not utterance_csv or not utterance_csv.filename:
+    if form.enable_tribe_learning:
+        if not form.utterance_csv or not form.utterance_csv.filename:
             raise HTTPException(status_code=400, detail="発話CSVをアップロードしてください。")
         dest = job_dir / "utterances_seed.csv"
         with dest.open("wb") as fout:
-            shutil.copyfileobj(utterance_csv.file, fout)
-        utterance_csv.file.close()
+            shutil.copyfileobj(form.utterance_csv.file, fout)
+        form.utterance_csv.file.close()
         utterance_csv_rel = dest.name
-    elif utterance_csv:
-        utterance_csv.file.close()
+    elif form.utterance_csv:
+        form.utterance_csv.file.close()
 
     manual_image_paths: List[str] = []
-    manual_mode = not sheet_url_val
-    if manual_mode and manual_stimuli_images:
+    manual_mode = form.manual_mode
+    if manual_mode and form.manual_stimuli_images:
         image_dir = job_dir / "stimuli_images"
         image_dir.mkdir(parents=True, exist_ok=True)
-        for idx, upload in enumerate(manual_stimuli_images, start=1):
+        for idx, upload in enumerate(form.manual_stimuli_images, start=1):
             if not upload or not upload.filename:
                 continue
             suffix = Path(upload.filename).suffix or ".png"
@@ -748,13 +688,12 @@ async def create_interview_job(
                 shutil.copyfileobj(upload.file, fout)
             upload.file.close()
             manual_image_paths.append(str(dest.relative_to(job_dir)))
-    elif manual_stimuli_images:
-        for upload in manual_stimuli_images:
+    elif form.manual_stimuli_images:
+        for upload in form.manual_stimuli_images:
             if upload:
                 upload.file.close()
 
-    csv_token_estimate = 0
-    if enable_tribe_learning_flag and utterance_csv_rel:
+    if form.enable_tribe_learning and utterance_csv_rel:
         csv_path = job_dir / utterance_csv_rel
         if csv_path.exists():
             csv_size = csv_path.stat().st_size
@@ -769,36 +708,9 @@ async def create_interview_job(
                     ),
                 )
 
-    cfg = InterviewJobConfig(
-        project_name=project_name,
-        domain=domain,
-        stimuli_source=stimuli_source or None,
-        stimuli_sheet_url=sheet_url_val or None,
-        stimuli_sheet_name=sheet_name_val or None,
-        stimuli_sheet_column=column_val,
-        stimuli_sheet_start_row=start_row_val,
-        persona_sheet_url=persona_sheet_url_val or None,
-        persona_sheet_name=persona_sheet_name_val,
-        persona_overview_column=persona_overview_col_val,
-        persona_prompt_column=persona_prompt_col_val,
-        persona_start_row=persona_start_row_val,
-        country_region=country_region_val or None,
-        persona_count=persona_count,
-        persona_seed=persona_seed,
-        persona_template=persona_template or None,
-        concurrency=concurrency,
-        enable_ssr=False,
-        max_rounds=max_rounds_val,
-        language=lang,
-        stimulus_mode=mode,
-        notes=notes or None,
-        enable_tribe_learning=enable_tribe_learning_flag,
+    cfg = form.to_config(
         utterance_csv_path=utterance_csv_rel,
-        manual_stimuli_images=manual_image_paths,
-        tribe_count=tribe_count_val,
-        persona_per_tribe=persona_per_tribe_val,
-        questions_per_persona=questions_per_persona_val,
-        max_utterance_tokens=InterviewJobConfig.model_fields["max_utterance_tokens"].default,
+        manual_image_paths=manual_image_paths,
     )
     return await interview_manager.create_job(job_id, cfg)
 
@@ -828,39 +740,27 @@ async def create_mass_persona_job(
     max_records: int = Form(2000),
     notes: str = Form(""),
 ) -> MassPersonaJobResponse:
-    lang = (language or "ja").strip().lower()
-    if lang not in ("ja", "en"):
-        lang = "ja"
+    try:
+        form = MassPersonaJobForm(
+            project_name=project_name,
+            domain=domain,
+            language=language,
+            persona_goal=persona_goal,
+            utterance_source=utterance_source,
+            default_region=default_region,
+            sheet_url=sheet_url,
+            sheet_name=sheet_name,
+            sheet_utterance_column=sheet_utterance_column,
+            sheet_region_column=sheet_region_column,
+            sheet_tags_column=sheet_tags_column,
+            sheet_start_row=sheet_start_row,
+            max_records=max_records,
+            notes=notes,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=exc.errors()) from exc
 
-    def _sanitize_column(value: str, fallback: str) -> str:
-        raw = (value or fallback).strip().upper()
-        return raw if raw.isalpha() else fallback.upper()
-
-    def _safe_int(val: int | str, default: int, minimum: int = 1) -> int:
-        try:
-            parsed = int(val)
-        except (TypeError, ValueError):
-            parsed = default
-        if parsed < minimum:
-            return minimum
-        return parsed
-
-    cfg = MassPersonaJobConfig(
-        project_name=project_name.strip(),
-        domain=domain.strip(),
-        language=lang,
-        persona_goal=_safe_int(persona_goal, 200, 1),
-        utterance_source=utterance_source.strip() or None,
-        default_region=default_region.strip() or None,
-        sheet_url=sheet_url.strip() or None,
-        sheet_name=sheet_name.strip() or None,
-        sheet_utterance_column=_sanitize_column(sheet_utterance_column, "A"),
-        sheet_region_column=(sheet_region_column.strip().upper() or None) if sheet_region_column.strip() else None,
-        sheet_tags_column=(sheet_tags_column.strip().upper() or None) if sheet_tags_column.strip() else None,
-        sheet_start_row=_safe_int(sheet_start_row, 2, 1),
-        max_records=_safe_int(max_records, 2000, 1),
-        notes=notes.strip() or None,
-    )
+    cfg = form.to_config()
 
     job_id = uuid.uuid4().hex[:12]
     return await mass_persona_manager.create_job(job_id, cfg)
@@ -892,49 +792,33 @@ async def create_persona_build_job(
     persona_start_row: int = Form(2),
     notes: str = Form(""),
 ) -> PersonaBuildJobResponse:
-    lang = (language or "ja").strip().lower()
-    if lang not in ("ja", "en"):
-        lang = "ja"
-
-    def _sanitize_column(value: str, fallback: str) -> str:
-        raw = (value or fallback).strip().upper()
-        return raw if raw.isalpha() else fallback.upper()
-
-    def _clamp_int(val: int | str, default: int, minimum: int, maximum: int) -> int:
-        try:
-            parsed = int(val)
-        except (TypeError, ValueError):
-            parsed = default
-        return max(minimum, min(maximum, parsed))
-
-    persona_goal_val = _clamp_int(persona_goal, 200, 1, 5000)
-    concurrency_val = _clamp_int(concurrency, 6, 1, 50)
-    persona_seed_offset_val = _clamp_int(persona_seed_offset, 0, 0, 1_000_000)
-    persona_start_row_val = _clamp_int(persona_start_row, 2, 1, 1_000_000)
+    try:
+        form = PersonaBuildJobForm(
+            project_name=project_name,
+            domain=domain,
+            language=language,
+            blueprint_path=blueprint_path,
+            output_dir=output_dir,
+            persona_goal=persona_goal,
+            concurrency=concurrency,
+            persona_seed_offset=persona_seed_offset,
+            openai_model=openai_model,
+            persona_sheet_url=persona_sheet_url,
+            persona_sheet_name=persona_sheet_name,
+            persona_overview_column=persona_overview_column,
+            persona_prompt_column=persona_prompt_column,
+            persona_start_row=persona_start_row,
+            notes=notes,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=exc.errors()) from exc
 
     output_dir_val: Optional[str] = None
-    out_raw = (output_dir or "").strip()
-    if out_raw:
-        subpath = _ensure_runs_subpath(out_raw)
+    if form.output_dir:
+        subpath = _ensure_runs_subpath(form.output_dir)
         output_dir_val = str(subpath.relative_to(BASE_DIR))
 
-    cfg = PersonaBuildJobConfig(
-        project_name=project_name.strip(),
-        domain=domain.strip(),
-        language=lang,
-        blueprint_path=blueprint_path.strip(),
-        output_dir=output_dir_val,
-        persona_goal=persona_goal_val,
-        concurrency=concurrency_val,
-        persona_seed_offset=persona_seed_offset_val,
-        openai_model=(openai_model or "gpt-4.1").strip() or "gpt-4.1",
-        persona_sheet_url=persona_sheet_url.strip() or None,
-        persona_sheet_name=(persona_sheet_name or "PersonaCatalog").strip() or "PersonaCatalog",
-        persona_overview_column=_sanitize_column(persona_overview_column, "B"),
-        persona_prompt_column=_sanitize_column(persona_prompt_column, "C"),
-        persona_start_row=persona_start_row_val,
-        notes=notes.strip() or None,
-    )
+    cfg = form.to_config(output_dir=output_dir_val)
 
     job_id = uuid.uuid4().hex[:12]
     return await persona_builder_manager.create_job(job_id, cfg)
@@ -975,64 +859,42 @@ async def create_persona_response_job(
     ssr_epsilon: float = Form(0.0),
     notes: str = Form(""),
 ) -> PersonaResponseJobResponse:
-    lang = (language or "ja").strip().lower()
-    if lang not in ("ja", "en"):
-        lang = "ja"
-
-    def _sanitize_column(value: str, fallback: str) -> str:
-        raw = (value or fallback).strip().upper()
-        return raw if raw.isalpha() else fallback.upper()
-
-    def _clamp_optional(val: int, minimum: int, maximum: int) -> Optional[int]:
-        if val <= 0:
-            return None
-        return max(minimum, min(maximum, val))
-
-    def _clamp_float(val: float, default: float, minimum: float = 0.0) -> float:
-        try:
-            parsed = float(val)
-        except (TypeError, ValueError):
-            parsed = default
-        return parsed if parsed >= minimum else minimum
-
-    persona_limit_val = _clamp_optional(persona_limit, 1, 5000)
-    stimuli_limit_val = _clamp_optional(stimuli_limit, 1, 500)
-    concurrency_val = max(1, min(int(concurrency or 12), 100))
-    ssr_temp_val = _clamp_float(ssr_temperature, 1.0, 0.0)
-    ssr_eps_val = _clamp_float(ssr_epsilon, 0.0, 0.0)
+    try:
+        form = PersonaResponseJobForm(
+            project_name=project_name,
+            domain=domain,
+            language=language,
+            persona_catalog_path=persona_catalog_path,
+            stimuli_source=stimuli_source,
+            stimuli_sheet_url=stimuli_sheet_url,
+            stimuli_sheet_name=stimuli_sheet_name,
+            stimuli_sheet_column=stimuli_sheet_column,
+            stimuli_sheet_start_row=stimuli_sheet_start_row,
+            output_dir=output_dir,
+            persona_limit=persona_limit,
+            stimuli_limit=stimuli_limit,
+            concurrency=concurrency,
+            gemini_model=gemini_model,
+            response_style=response_style,
+            include_structured_summary=include_structured_summary,
+            ssr_reference_path=ssr_reference_path,
+            ssr_reference_set=ssr_reference_set,
+            ssr_embeddings_column=ssr_embeddings_column,
+            ssr_model_name=ssr_model_name,
+            ssr_device=ssr_device,
+            ssr_temperature=ssr_temperature,
+            ssr_epsilon=ssr_epsilon,
+            notes=notes,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=exc.errors()) from exc
 
     output_dir_val: Optional[str] = None
-    out_raw = (output_dir or "").strip()
-    if out_raw:
-        subpath = _ensure_runs_subpath(out_raw)
+    if form.output_dir:
+        subpath = _ensure_runs_subpath(form.output_dir)
         output_dir_val = str(subpath.relative_to(BASE_DIR))
 
-    cfg = PersonaResponseJobConfig(
-        project_name=project_name.strip(),
-        domain=domain.strip(),
-        language=lang,
-        persona_catalog_path=persona_catalog_path.strip(),
-        stimuli_source=stimuli_source.strip() or None,
-        stimuli_sheet_url=stimuli_sheet_url.strip() or None,
-        stimuli_sheet_name=stimuli_sheet_name.strip() or None,
-        stimuli_sheet_column=_sanitize_column(stimuli_sheet_column, "A"),
-        stimuli_sheet_start_row=max(1, stimuli_sheet_start_row or 2),
-        output_dir=output_dir_val,
-        persona_limit=persona_limit_val,
-        stimuli_limit=stimuli_limit_val,
-        concurrency=concurrency_val,
-        gemini_model=(gemini_model or "gemini-flash-latest").strip() or "gemini-flash-latest",
-        response_style="qa" if response_style == "qa" else "monologue",
-        include_structured_summary=include_structured_summary,
-        ssr_reference_path=ssr_reference_path.strip() or None,
-        ssr_reference_set=ssr_reference_set.strip() or None,
-        ssr_embeddings_column=(ssr_embeddings_column or "embedding").strip() or "embedding",
-        ssr_model_name=(ssr_model_name or "sentence-transformers/all-MiniLM-L6-v2").strip() or "sentence-transformers/all-MiniLM-L6-v2",
-        ssr_device=ssr_device.strip() or None,
-        ssr_temperature=ssr_temp_val,
-        ssr_epsilon=ssr_eps_val,
-        notes=notes.strip() or None,
-    )
+    cfg = form.to_config(output_dir=output_dir_val)
 
     job_id = uuid.uuid4().hex[:12]
     return await persona_response_manager.create_job(job_id, cfg)

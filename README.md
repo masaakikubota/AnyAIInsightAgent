@@ -4,6 +4,7 @@ AnyAIMarketingSolutionAgent — スコアリングAIエージェント
 - 発話 × Nカテゴリを [-1.00, 1.00]（2桁）で採点し、入力CSVのカテゴリ列に上書き出力。
 - 一次: Gemini 2.5 Flash-Lite、失敗時: OpenAI gpt-5-nano に自動フォールバック。
 - レスポンスは構造化JSONを厳格検証。失敗は errors.csv に記録。
+- Googleシートとは最大500行単位でバッチ通信し、CSVの生成が不要な場合はシートへ直接反映。
 
 前提
 - Python 3.10+
@@ -13,7 +14,38 @@ AnyAIMarketingSolutionAgent — スコアリングAIエージェント
   3) ルートの `@Keys.txt` に記載（`.env`未設定時に自動読み込み）
   4) コード埋め込み（ローカルのみ推奨）: `app/settings.py` の `DEFAULT_GEMINI_API_KEY`, `DEFAULT_OPENAI_API_KEY`
 
-セットアップ
+## クイックスタート（推奨）
+
+### 自動セットアップ
+```bash
+# 1. リポジトリをクローン
+git clone https://github.com/your-username/AnyAIMarketingAgentV2.git
+cd AnyAIMarketingAgentV2
+
+# 2. 自動セットアップ（Linux/Mac）
+chmod +x setup.sh
+./setup.sh
+
+# 3. 実行
+python3 run_local.py
+```
+
+### 手動セットアップ
+```bash
+# 1. 依存インストール
+pip install -r requirements.txt
+
+# 2. 環境変数設定（任意）
+# Keys.txtから自動生成されるか、.envファイルを作成
+
+# 3. 起動
+python3 run_local.py
+# または
+uvicorn app.main:app --host 0.0.0.0 --port 25253
+```
+
+## 詳細セットアップ
+
 1) 依存インストール
    pip install -r requirements.txt
 
@@ -22,7 +54,7 @@ AnyAIMarketingSolutionAgent — スコアリングAIエージェント
    # APIキーを設定
 
 3) 起動
-   uvicorn app.main:app --host 0.0.0.0 --port 25252
+   uvicorn app.main:app --host 0.0.0.0 --port 25253
    # または
    python -m app.main
 
@@ -33,7 +65,7 @@ AnyAIMarketingSolutionAgent — スコアリングAIエージェント
 - マッピング（発話列=既定3(C), カテゴリ開始列=既定4(D)、2/3/4行=Name/Definition/Detail、処理開始行=5）を必要に応じて調整。
 - バッチ列数N/同時実行/リトライ/タイムアウトを設定し、実行。
 - 最大実行列数: 1発話あたり処理するカテゴリ列の上限。バッチ列数ごとに分割して独立リクエストで評価します（例: 最大実行列数=100, バッチ=10 → 各発話につき10ブロック）。
-- 完了後に 結果CSV / errors.csv / run_meta.json をダウンロード。
+- 完了後は必要に応じて結果CSV / errors.csv / run_meta.json をダウンロード（シートへ直接反映済み）。
 
 APIキーの指定例
 - `@Keys.txt`（いずれかの形式をサポート）
