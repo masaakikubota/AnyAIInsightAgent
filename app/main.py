@@ -42,6 +42,22 @@ def create_app() -> FastAPI:
     def dashboard_index() -> str:
         return _load_static_page("dashboard.html")
 
+    @app.get("/video-analysis", response_class=HTMLResponse)
+    def video_analysis_page() -> str:
+        return _load_static_page("video-analysis.html")
+
+    @app.get("/comment-enhancer", response_class=HTMLResponse)
+    def comment_enhancer_page() -> str:
+        return _load_static_page("comment-enhancer.html")
+
+    @app.get("/video-comment-review", response_class=HTMLResponse)
+    def video_comment_review_page() -> str:
+        return _load_static_page("video-comment-review.html")
+
+    @app.get("/kol-reviewer", response_class=HTMLResponse)
+    def kol_reviewer_page() -> str:
+        return _load_static_page("kol-reviewer.html")
+
     return app
 
 
