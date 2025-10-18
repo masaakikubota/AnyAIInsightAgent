@@ -76,6 +76,9 @@ async def create_job(
     enable_ssr: bool = Form(True),
     video_download_timeout: int = Form(120),
     video_temp_dir: Optional[str] = Form(None),
+    enable_ssr: bool = Form(True),
+    system_prompt_ssr: Optional[str] = Form(None),
+    system_prompt_numeric: Optional[str] = Form(None),
     system_prompt: Optional[str] = Form(None),
     action: str = Form("queue"),
     manager: JobManager = Depends(get_job_manager),
@@ -117,8 +120,15 @@ async def create_job(
         timeout_sec=timeout_value,
         video_download_timeout=video_download_timeout,
         video_temp_dir=video_temp_dir,
-        system_prompt=system_prompt or RunConfig.model_fields["system_prompt"].default,
         enable_ssr=enable_ssr,
+        ssr_system_prompt=(
+            system_prompt_ssr or RunConfig.model_fields["ssr_system_prompt"].default
+        ),
+        numeric_system_prompt=(
+            system_prompt_numeric
+            or RunConfig.model_fields["numeric_system_prompt"].default
+        ),
+        system_prompt=system_prompt,
     )
 
     job_id = uuid.uuid4().hex[:12]
@@ -230,6 +240,9 @@ async def edit_job(
     timeout_sec: int = Form(60),
     video_download_timeout: int = Form(120),
     video_temp_dir: Optional[str] = Form(None),
+    enable_ssr: bool = Form(True),
+    system_prompt_ssr: Optional[str] = Form(None),
+    system_prompt_numeric: Optional[str] = Form(None),
     system_prompt: Optional[str] = Form(None),
     enable_ssr: bool = Form(True),
     manager: JobManager = Depends(get_job_manager),
@@ -274,8 +287,15 @@ async def edit_job(
         timeout_sec=timeout_value,
         video_download_timeout=video_download_timeout,
         video_temp_dir=video_temp_dir,
-        system_prompt=system_prompt or RunConfig.model_fields["system_prompt"].default,
         enable_ssr=enable_ssr,
+        ssr_system_prompt=(
+            system_prompt_ssr or RunConfig.model_fields["ssr_system_prompt"].default
+        ),
+        numeric_system_prompt=(
+            system_prompt_numeric
+            or RunConfig.model_fields["numeric_system_prompt"].default
+        ),
+        system_prompt=system_prompt,
     )
 
     job_dir = base_dir / job_id

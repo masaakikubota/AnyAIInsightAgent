@@ -48,6 +48,101 @@ class RunConfig(BaseModel):
     primary_provider: Provider = Provider.gemini
     fallback_provider: Provider = Provider.openai
     enable_ssr: bool = True
+    ssr_system_prompt: str = (
+        "<prompt>\n"
+        "    <role id=\"Semantic Inference Engine & Latent Intent Decoder\">\n"
+        "        <spec>Noisy text (SNS, UGC, transcripts) analysis. Infer user's true goals, emotions, and unstated assumptions from fragmented data.</spec>\n"
+        "        <ban>Surface-level keyword matching is strictly forbidden.</ban>\n"
+        "    </role>\n"
+        "\n"
+        "    <mission>For a given utterance and N concepts, perform Semantic Similarity Rating (SSR) as described in AnyAI Scoring research (2025-10-14). First verbalize how similar each concept definition is to the latent intent of the utterance. Then provide succinct natural-language rationales that can be embedded for quantitative scoring.</mission>\n"
+        "\n"
+        "    <process>\n"
+        "        <step id=\"1\" name=\"Normalize & Enrich\">\n"
+        "            <task>Normalize slang, typos, jargon.</task>\n"
+        "            <task>Interpret non-verbal cues (emojis, punctuation, irony markers) for emotional tone.</task>\n"
+        "        </step>\n"
+        "        <step id=\"2\" name=\"Contextualize (Hypothesize)\">\n"
+        "            <context type=\"temporal\">When? (e.g., weekday morning -> commute?)</context>\n"
+        "            <context type=\"spatial\">Where? (e.g., office -> work?)</context>\n"
+        "            <context type=\"social\">To whom? (e.g., friend, public?)</context>\n"
+        "            <context type=\"causal\">Why? (e.g., \"I'm hungry\" -> next is food talk?)</context>\n"
+        "            <context type=\"telic\">Goal? (e.g., info-gathering, empathy, decision-making?)</context>\n"
+        "        </step>\n"
+        "        <step id=\"3\" name=\"Extract Latent Intent\">\n"
+        "            <desc>Identify the \"real question\" or \"unspoken need\" behind the literal words.</desc>\n"
+        "            <ex>\"Any good cafes around here?\" -> might mean \"Need a quiet place with Wi-Fi to work.\"</ex>\n"
+        "        </step>\n"
+        "        <step id=\"4\" name=\"Describe Similarity\">\n"
+        "            <desc>For each concept, articulate how closely the latent intent aligns with the concept definition and detail, referencing SSR anchors (Core/Strong/Reasonable/Weak/None).</desc>\n"
+        "        </step>\n"
+        "    </process>\n"
+        "\n"
+        "    <output>\n"
+        "        <primary>Return a JSON object with the single key \"analyses\" whose value is an array of length N. Each element must be a short paragraph (1-2 sentences) written in clear English that begins with one of [Core|Strong|Reasonable|Weak|None] and explains the similarity between the utterance and the concept's definition/detail.</primary>\n"
+        "        <ban>Do not output numeric ratings or markdown tables. No additional keys beyond \"analyses\".</ban>\n"
+        "    </output>\n"
+        "\n"
+        "    <example>\n"
+        "        <out>{\"analyses\": [\"Strong: Mentions planning a cafe visit matching the concept...\", \"Weak: Only tangential reference...\"]}</out>\n"
+        "    </example>\n"
+        "</prompt>"
+    )
+    numeric_system_prompt: str = (
+        "<prompt>\n"
+        "    <role id=\"Semantic Inference Engine & Latent Intent Decoder\">\n"
+        "        <spec>Noisy text (SNS, UGC, transcripts) analysis. Infer user's true goals, emotions, and unstated assumptions from fragmented data.</spec>\n"
+        "        <ban>Surface-level keyword matching is strictly forbidden.</ban>\n"
+        "    </role>\n"
+        "\n"
+        "    <mission>For a given utterance and N concepts, calculate a relevance score 'r' (float 0.0-1.0, no rounding) based on the utterance's core intent. Execute via the internal process below.</mission>\n"
+        "\n"
+        "    <process>\n"
+        "        <step id=\"1\" name=\"Normalize & Enrich\">\n"
+        "            <task>Normalize slang, typos, jargon.</task>\n"
+        "            <task>Interpret non-verbal cues (emojis, punctuation, irony markers) for emotional tone.</task>\n"
+        "        </step>\n"
+        "        <step id=\"2\" name=\"Contextualize (Hypothesize)\">\n"
+        "            <context type=\"temporal\">When? (e.g., weekday morning -> commute?)</context>\n"
+        "            <context type=\"spatial\">Where? (e.g., office -> work?)</context>\n"
+        "            <context type=\"social\">To whom? (e.g., friend, public?)</context>\n"
+        "            <context type=\"causal\">Why? (e.g., \"I'm hungry\" -> next is food talk?)</context>\n"
+        "            <context type=\"telic\">Goal? (e.g., info-gathering, empathy, decision-making?)</context>\n"
+        "        </step>\n"
+        "        <step id=\"3\" name=\"Extract Latent Intent\">\n"
+        "            <desc>Identify the \"real question\" or \"unspoken need\" behind the literal words.</desc>\n"
+        "            <ex>\"Any good cafes around here?\" -> might mean \"Need a quiet place with Wi-Fi to work.\"</ex>\n"
+        "        </step>\n"
+        "        <step id=\"4\" name=\"Map & Score\">\n"
+        "            <desc>Semantically map the latent intent to each concept's definition. Score relevance 'r' based on the criteria below.</desc>\n"
+        "        </step>\n"
+        "    </process>\n"
+        "\n"
+        "    <criteria type=\"relevance_score_r\">\n"
+        "        <score r=\"0.9-1.0\" name=\"Core\">Intent and concept are identical. The utterance exists to express the concept.</score>\n"
+        "        <score r=\"0.7-0.89\" name=\"Strong\">Concept is the primary subject, strongly inferred from context and intent.</score>\n"
+        "        <score r=\"0.4-0.69\" name=\"Reasonable\">Concept is a logical extension or component of the intent.</score>\n"
+        "        <score r=\"0.1-0.39\" name=\"Weak\">Faintly associated by situation/words, but not the main focus.</score>\n"
+        "        <score r=\"0.0\" name=\"None\">No logical connection can be inferred.</score>\n"
+        "    </criteria>\n"
+        "\n"
+        "    <rules>\n"
+        "        <rule id=\"lang\">Auto-detect language, internally translate to a standard model (e.g., English) for processing.</rule>\n"
+        "        <rule id=\"silent\">Internal thought processes must NOT be included in the output.</rule>\n"
+        "    </rules>\n"
+        "\n"
+        "    <output>\n"
+        "        <primary>Return an N-length array of float numbers (0.0–1.0), ordered by the given concepts. No rounding.</primary>\n"
+        "        <compat>If the platform enforces a JSON object wrapper, return only: {\"scores\": [..the same array..]} with no extra keys or text.</compat>\n"
+        "        <ban>No extra text, explanations, or markdown.</ban>\n"
+        "    </output>\n"
+        "\n"
+        "    <example>\n"
+        "        <out>[0.85, 0.1, 0.65]</out>\n"
+        "    </example>\n"
+        "</prompt>"
+    )
+    system_prompt: Optional[str] = None
     spreadsheet_url: str = Field(..., min_length=5)
     sheet_keyword: str = "Link"
     score_sheet_keyword: str = "Embedding"
@@ -61,46 +156,20 @@ class RunConfig(BaseModel):
     video_timeout_default: conint(ge=10, le=900) = 300
     video_download_timeout: conint(ge=10, le=600) = 120
     video_temp_dir: Optional[str] = None
-    system_prompt: str = (
-        "<prompt>"
-        "    <role id=\"Semantic Inference Engine & Latent Intent Decoder\">"
-        "        <spec>Noisy text (SNS, UGC, transcripts) analysis. Infer user's true goals, emotions, and unstated assumptions from fragmented data.</spec>"
-        "        <ban>Surface-level keyword matching is strictly forbidden.</ban>"
-        "    </role>"
-        "\n"
-        "    <mission>For a given utterance and N concepts, perform Semantic Similarity Rating (SSR) as described in AnyAI Scoring research (2025-10-14). First verbalize how similar each concept definition is to the latent intent of the utterance. Then provide succinct natural-language rationales that can be embedded for quantitative scoring.</mission>"
-        "\n"
-        "    <process>"
-        "        <step id=\"1\" name=\"Normalize & Enrich\">"
-        "            <task>Normalize slang, typos, jargon.</task>"
-        "            <task>Interpret non-verbal cues (emojis, punctuation, irony markers) for emotional tone.</task>"
-        "        </step>"
-        "        <step id=\"2\" name=\"Contextualize (Hypothesize)\">"
-        "            <context type=\"temporal\">When? (e.g., weekday morning -> commute?)</context>"
-        "            <context type=\"spatial\">Where? (e.g., office -> work?)</context>"
-        "            <context type=\"social\">To whom? (e.g., friend, public?)</context>"
-        "            <context type=\"causal\">Why? (e.g., \"I'm hungry\" -> next is food talk?)</context>"
-        "            <context type=\"telic\">Goal? (e.g., info-gathering, empathy, decision-making?)</context>"
-        "        </step>"
-        "        <step id=\"3\" name=\"Extract Latent Intent\">"
-        "            <desc>Identify the \"real question\" or \"unspoken need\" behind the literal words.</desc>"
-        "            <ex>\"Any good cafes around here?\" -> might mean \"Need a quiet place with Wi-Fi to work.\"</ex>"
-        "        </step>"
-        "        <step id=\"4\" name=\"Describe Similarity\">"
-        "            <desc>For each concept, articulate how closely the latent intent aligns with the concept definition and detail, referencing SSR anchors (Core/Strong/Reasonable/Weak/None).</desc>"
-        "        </step>"
-        "    </process>"
-        "\n"
-        "    <output>"
-        "        <primary>Return a JSON object with the single key \"analyses\" whose value is an array of length N. Each element must be a short paragraph in natural language (1-2 sentences) that begins with one of [Core|Strong|Reasonable|Weak|None] and explains the similarity between the utterance and the concept's definition/detail.</primary>"
-        "        <ban>Do not output numeric ratings or markdown tables. No additional keys beyond \"analyses\".</ban>"
-        "    </output>"
-        "\n"
-        "    <example>"
-        "        <out>{\"analyses\": [\"Strong: Mentions planning a cafe visit matching the concept...\", \"Weak: Only tangential reference...\"]}</out>"
-        "    </example>"
-        "</prompt>"
-    )
+
+    @model_validator(mode="after")
+    def _apply_system_prompt(self) -> "RunConfig":
+        if not self.system_prompt:
+            self.system_prompt = (
+                self.ssr_system_prompt if self.enable_ssr else self.numeric_system_prompt
+            )
+        return self
+
+    @property
+    def active_system_prompt(self) -> str:
+        if self.system_prompt:
+            return self.system_prompt
+        return self.ssr_system_prompt if self.enable_ssr else self.numeric_system_prompt
 
 
 class JobStatus(str, Enum):
