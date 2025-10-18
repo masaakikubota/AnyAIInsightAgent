@@ -81,20 +81,15 @@ class InterviewJobForm(_BaseForm):
     persona_overview_column: str = "B"
     persona_prompt_column: str = "C"
     persona_start_row: int = 2
-    ssr_reference_path: Optional[str] = None
-    ssr_reference_set: Optional[str] = None
-    ssr_embeddings_column: str = "embedding"
-    ssr_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
-    ssr_device: Optional[str] = None
-    ssr_temperature: float = 1.0
-    ssr_epsilon: float = 0.0
     persona_count: int = 60
     persona_template: Optional[str] = None
     persona_seed: int = 42
     concurrency: int = 20
-    enable_ssr: bool = False
     max_rounds: int = 3
-    language: str = "ja"
+    language: Optional[str] = None
+    language_label: Optional[str] = None
+    language_source: Optional[str] = None
+    language_reason: Optional[str] = None
     stimulus_mode: str = "text"
     notes: Optional[str] = None
     enable_tribe_learning: bool = False
@@ -125,9 +120,6 @@ class InterviewJobForm(_BaseForm):
         "persona_sheet_url",
         "persona_template",
         "notes",
-        "ssr_reference_path",
-        "ssr_reference_set",
-        "ssr_device",
         mode="before",
     )
     def _strip_optional(cls, value: object | None) -> Optional[str]:
@@ -180,10 +172,6 @@ class InterviewJobForm(_BaseForm):
         minimum = 1 if info.field_name not in {"persona_seed"} else 0
         return _BaseForm._coerce_int(value, default, minimum=minimum, maximum=maximum)
 
-    @field_validator("language", mode="before")
-    def _normalize_language_field(cls, value: object | None) -> str:
-        return _BaseForm._normalize_language(value)
-
     @field_validator("stimulus_mode", mode="before")
     def _normalize_mode(cls, value: object | None) -> str:
         candidate = (_BaseForm._strip_or_none(value) or "text").lower()
@@ -226,20 +214,15 @@ class InterviewJobForm(_BaseForm):
             persona_overview_column=self.persona_overview_column,
             persona_prompt_column=self.persona_prompt_column,
             persona_start_row=self.persona_start_row,
-            ssr_reference_path=self.ssr_reference_path,
-            ssr_reference_set=self.ssr_reference_set,
-            ssr_embeddings_column=self.ssr_embeddings_column,
-            ssr_model_name=self.ssr_model_name,
-            ssr_device=self.ssr_device,
-            ssr_temperature=self.ssr_temperature,
-            ssr_epsilon=self.ssr_epsilon,
             persona_count=persona_count,
             persona_template=self.persona_template,
             persona_seed=self.persona_seed,
             concurrency=self.concurrency,
-            enable_ssr=False,
             max_rounds=self.questions_per_persona,
-            language=self.language,
+            language=self.language or "ja",
+            language_label=self.language_label,
+            language_source=self.language_source,
+            language_reason=self.language_reason,
             stimulus_mode=self.stimulus_mode,
             notes=self.notes,
             enable_tribe_learning=self.enable_tribe_learning,

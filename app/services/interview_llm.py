@@ -27,7 +27,7 @@ ATTITUDE_CLUSTERS = [
 
 GEMINI_DIRECTION_MODEL = "gemini-pro-latest"
 OPENAI_PERSONA_MODEL = "gpt-4.1"
-GEMINI_INTERVIEW_MODEL = "gemini-flash-latest"
+GEMINI_INTERVIEW_MODEL = "gemini-flash-lite-latest"
 
 PersonaProgressCallback = Callable[[int, Dict[str, Any]], Awaitable[None] | None]
 TranscriptProgressCallback = Callable[[int, Dict[str, Any]], Awaitable[None] | None]
@@ -63,13 +63,13 @@ async def generate_direction_brief(cfg: InterviewJobConfig, *, extra_notes: Opti
         """\
         You are a senior marketing insights strategist. Produce concise YAML configuration files
         that orchestrate synthetic consumer interviews. The YAML must be valid, stable, and free of commentary.
-        Always include sections: version, project, domain, stimulus_mode, enable_ssr, target_personas, language,
+        Always include sections: version, project, domain, stimulus_mode, target_personas, language,
         coverage_policy (strategy + mandatory_axes + optional_axes), axes (list of axis name + allowed values),
         ethics (prohibited + style), and guidance (bullet list of interview focal points).
         Use double quotes only when required, prefer lowercase snake_case identifiers, and keep arrays inline when short.
         """
     )
-    language_label = _language_descriptor(cfg.language)
+    language_label = _language_descriptor(cfg)
     user_prompt = textwrap.dedent(
         f"""\
         Project name: {cfg.project_name}
@@ -79,7 +79,7 @@ async def generate_direction_brief(cfg: InterviewJobConfig, *, extra_notes: Opti
         Stimulus mode: {cfg.stimulus_mode}
         Persona template hint: {cfg.persona_template or "not provided"}
         Notes / tone guidance: {notes or "not provided"}
-        Enable SSR mapping: {cfg.enable_ssr}
+        Computed language code: {cfg.language}
 
         Enumerations:
           age_band: {', '.join(AGE_BANDS)}
@@ -331,7 +331,7 @@ async def _generate_persona_with_llm(
     tribe_id: Optional[int] = None,
     persona_seq: Optional[int] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    language_label = _language_descriptor(cfg.language)
+    language_label = _language_descriptor(cfg)
     region_values = _region_choices(cfg)
     system_prompt = textwrap.dedent(
         """\
@@ -393,6 +393,7 @@ async def _generate_persona_with_llm(
         Persona identifier: {persona_id}
         Random seed: {seed}
         Output language: {language_label}
+        Language tag: {cfg.language}
         Template hint: {template_hint or "not provided"}
         Interview notes: {cfg.notes or "not provided"}
         Stimulus mode: {cfg.stimulus_mode}
@@ -450,7 +451,7 @@ async def generate_tribe_categories(
     if not utterances:
         return [], [], {}
 
-    language_label = _language_descriptor(cfg.language)
+    language_label = _language_descriptor(cfg)
     sample_block = "\n".join(f"- {text}" for text in utterances[:120])
     desired_count = max(4, min(max_categories, 8))
     header_list = headers or DEFAULT_TRIBE_HEADERS
@@ -542,7 +543,7 @@ async def generate_tribe_categories(
     user_prompt = textwrap.dedent(
         f"""\
         Domain: {cfg.domain}
-        Language: {language_label}
+        Language: {language_label} (code: {cfg.language})
         Desired number of tribe categories: {desired_count}
         Persona count target: {cfg.persona_count}
         Columns for Tribe_SetUp sheet (B列以降): {header_json}
@@ -598,7 +599,7 @@ async def _generate_interview_with_llm(
     *,
     questions: Optional[List[str]] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    language_label = _language_descriptor(cfg.language)
+    language_label = _language_descriptor(cfg)
     system_prompt = textwrap.dedent(
         """\
         You are conducting qualitative depth interviews. Produce structured JSON transcripts with thoughtful probes.
@@ -655,6 +656,7 @@ async def _generate_interview_with_llm(
         f"""\
         Persona ID: {persona.get("persona_id")}
         Output language: {language_label}
+        Language tag: {cfg.language}
         Domain context: {cfg.domain}
         Stimulus mode: {cfg.stimulus_mode}
         Stimulus description: {stimulus}
@@ -989,7 +991,6 @@ def _fallback_direction_yaml(cfg: InterviewJobConfig, *, notes: str) -> str:
         project: "{cfg.project_name}"
         domain: "{cfg.domain}"
         stimulus_mode: "{cfg.stimulus_mode}"
-        enable_ssr: {str(cfg.enable_ssr).lower()}
         target_personas: {cfg.persona_count}
         language: "{cfg.language}"
         {coverage_policy}
@@ -1164,10 +1165,29 @@ def _sanitize_choice(value: Any, allowed: Sequence[str]) -> Optional[str]:
     return None
 
 
-def _language_descriptor(code: str) -> str:
-    if code.lower() == "ja":
-        return "Japanese"
-    return "English"
+def _language_descriptor(cfg: InterviewJobConfig) -> str:
+    label = getattr(cfg, "language_label", None)
+    if label:
+        return label
+
+    code = (cfg.language or "").lower()
+    mapping = {
+        "ja": "Japanese",
+        "en": "English",
+        "ko": "Korean",
+        "zh": "Chinese",
+        "fr": "French",
+        "de": "German",
+        "es": "Spanish",
+        "pt": "Portuguese",
+        "it": "Italian",
+        "hi": "Hindi",
+        "id": "Indonesian",
+        "th": "Thai",
+    }
+    if code in mapping:
+        return mapping[code]
+    return cfg.language or "English"
 
 
 async def _invoke_callback(

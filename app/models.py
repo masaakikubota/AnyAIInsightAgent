@@ -225,20 +225,15 @@ class InterviewJobConfig(BaseModel):
     persona_overview_column: str = Field("B", min_length=1, max_length=3)
     persona_prompt_column: str = Field("C", min_length=1, max_length=3)
     persona_start_row: conint(ge=1) = 2
-    ssr_reference_path: Optional[str] = None
-    ssr_reference_set: Optional[str] = None
-    ssr_embeddings_column: str = "embedding"
-    ssr_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
-    ssr_device: Optional[str] = None
-    ssr_temperature: confloat(ge=0.0) = 1.0
-    ssr_epsilon: confloat(ge=0.0) = 0.0
     persona_count: conint(ge=1, le=500) = 60
     persona_template: Optional[str] = None
     persona_seed: conint(ge=0, le=1_000_000) = 42
     concurrency: conint(ge=1, le=200) = 20
-    enable_ssr: bool = False
     max_rounds: conint(ge=1, le=1000) = 3
-    language: Literal["ja", "en"] = "ja"
+    language: str = "ja"
+    language_label: Optional[str] = None
+    language_source: Optional[str] = None
+    language_reason: Optional[str] = None
     stimulus_mode: Literal["text", "image", "mixed"] = "text"
     notes: Optional[str] = None
     enable_tribe_learning: bool = False
