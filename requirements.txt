@@ -1,6 +1,6 @@
 fastapi==0.111.0
 uvicorn==0.30.1
-httpx==0.27.0
+httpx==0.28.1
 python-multipart==0.0.9
 jinja2==3.1.4
 python-dotenv==1.0.1
@@ -9,4 +9,10 @@ google-auth-oauthlib==1.2.1
 google-api-python-client==2.148.0
 numpy==1.26.4
 polars==1.6.0
-sentence-transformers==3.0.1
+# Optional ML dependencies are intentionally excluded from the default setup to keep
+# installation lightweight. Install sentence-transformers separately when needed.
+Flask==3.0.3
+gspread==6.2.1
+google-genai==1.45.0
+tenacity==9.1.2
+openai==2.5.0
