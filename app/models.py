@@ -155,11 +155,11 @@ class ScoreRequest(BaseModel):
 
 
 class ScoreResult(BaseModel):
+    provider: Provider
+    model: str
     scores: Optional[List[Optional[confloat(ge=-1.0, le=1.0)]]] = None
     analyses: Optional[List[str]] = None
     likert_pmfs: Optional[List[List[float]]] = None
-    provider: Provider
-    model: str
     raw_text: Optional[str] = None
     request_text: Optional[str] = None
     pre_scores: Optional[List[Optional[float]]] = None
