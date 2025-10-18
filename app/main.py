@@ -50,7 +50,7 @@ def run() -> None:
     import uvicorn
 
     host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "25253"))
+    port = int(os.getenv("PORT", "25259"))
     uvicorn.run("app.main:app", host=host, port=port, reload=False)
 
 
