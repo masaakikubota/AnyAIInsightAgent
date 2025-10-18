@@ -29,7 +29,7 @@ class RunConfig(BaseModel):
     concurrency: conint(ge=1, le=200) = 50
     auto_slowdown: bool = True
     timeout_sec: conint(ge=10, le=600) = 60
-    sheet_chunk_rows: conint(ge=10, le=500) = 30
+    sheet_chunk_rows: conint(ge=10, le=500) = 500
     chunk_row_limit: conint(ge=50, le=5000) = 500
     chunk_retry_limit: conint(ge=0, le=10) = 3
     cache_enabled: bool = True
@@ -47,11 +47,22 @@ class RunConfig(BaseModel):
     # Providers
     primary_provider: Provider = Provider.gemini
     fallback_provider: Provider = Provider.openai
+    enable_ssr: bool = True
+    ssr_reference_path: Optional[str] = None
+    ssr_reference_set: Optional[str] = None
+    ssr_embeddings_column: str = "embedding"
+    ssr_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    ssr_device: Optional[str] = None
+    ssr_temperature: confloat(ge=0.0) = 1.0
+    ssr_epsilon: confloat(ge=0.0) = 0.0
     spreadsheet_url: str = Field(..., min_length=5)
     sheet_keyword: str = "Link"
+    score_sheet_keyword: str = "Embedding"
     spreadsheet_id: Optional[str] = None
     sheet_name: Optional[str] = None
     sheet_gid: Optional[int] = None
+    score_sheet_name: Optional[str] = None
+    score_sheet_gid: Optional[int] = None
     mode: Literal["csv", "video"] = "csv"
     video_concurrency_default: conint(ge=1, le=50) = 7
     video_timeout_default: conint(ge=10, le=900) = 300

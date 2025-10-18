@@ -5,13 +5,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .models import Category, RunConfig, ScoreResult
 from .services.google_sheets import GoogleSheetsError, batch_update_values, column_index_to_a1
 from .services.scoring import SSRSettings, cache_key, clamp_and_round, score_with_fallback
 from .services.clients import GEMINI_MODEL_VIDEO
 from .services.video import download_video_to_path, upload_video_to_gemini
+from .services.sheet_updates import build_batched_value_ranges
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class ValidationPayload:
 class SheetUpdate:
     unit: PipelineUnit
     scores: Sequence[Optional[float]]
+    analyses: Sequence[Optional[str]] = ()
     result: ScoreResult
     cleanup_path: Optional[str] = None
 
@@ -73,6 +75,7 @@ class ScoringPipeline:
         cfg: RunConfig,
         spreadsheet_id: str,
         sheet_name: str,
+        score_sheet_name: Optional[str] = None,
         invoke_concurrency: int,
         rows: List[List[str]],
         utter_col_index: int,
@@ -87,6 +90,7 @@ class ScoringPipeline:
         writer_retry_limit: Optional[int] = None,
         writer_retry_initial_delay: Optional[float] = None,
         writer_retry_backoff_multiplier: Optional[float] = None,
+        sheet_batch_row_size: Optional[int] = None,
         video_mode: bool = False,
         event_logger: Optional[Callable[[str], None]] = None,
     ) -> None:
@@ -95,6 +99,7 @@ class ScoringPipeline:
         self.invoke_concurrency = max(1, invoke_concurrency)
         self.spreadsheet_id = spreadsheet_id
         self.sheet_name = sheet_name
+        self.score_sheet_name = score_sheet_name or sheet_name
         self.utter_col_index = utter_col_index
         self.category_reader = category_reader
         self.score_cache = score_cache
@@ -127,6 +132,12 @@ class ScoringPipeline:
             else float(cfg.writer_retry_backoff_multiplier)
         )
         self.writer_retry_backoff_multiplier = max(1.0, backoff_multiplier)
+        batch_rows_value = sheet_batch_row_size
+        if batch_rows_value is None:
+            batch_rows_value = getattr(cfg, "sheet_chunk_rows", None)
+        if not batch_rows_value or batch_rows_value <= 0:
+            batch_rows_value = 500
+        self.sheet_batch_row_size = max(1, int(batch_rows_value))
         self._cleanup_queue: asyncio.Queue[str] = asyncio.Queue()
 
         self._stats = PipelineStats()
@@ -139,7 +150,11 @@ class ScoringPipeline:
         )
         self._log_callback = event_logger
         self._ssr_settings: Optional[SSRSettings] = None
-        if cfg.ssr_reference_path and cfg.ssr_reference_set:
+        if (
+            getattr(cfg, "enable_ssr", True)
+            and cfg.ssr_reference_path
+            and cfg.ssr_reference_set
+        ):
             reference_path = Path(cfg.ssr_reference_path).expanduser()
             self._ssr_settings = SSRSettings(
                 reference_path=reference_path,
@@ -445,7 +460,28 @@ class ScoringPipeline:
         result.missing_indices = missing_indices or None
         result.partial = bool(missing_indices)
 
-        sheet_update = SheetUpdate(unit=task.unit, scores=list(result.scores), result=result)
+        analysis_payload: List[Optional[str]] = []
+        raw_analyses = list(result.analyses or [])
+        has_analysis = False
+        for idx in range(expected_len):
+            text = raw_analyses[idx] if idx < len(raw_analyses) else None
+            cleaned = text.strip() if isinstance(text, str) else ""
+            if cleaned:
+                analysis_payload.append(cleaned)
+                has_analysis = True
+            else:
+                analysis_payload.append(None)
+        if has_analysis:
+            result.analyses = [item if item is not None else "" for item in analysis_payload]
+        else:
+            result.analyses = None
+
+        sheet_update = SheetUpdate(
+            unit=task.unit,
+            scores=list(result.scores),
+            analyses=analysis_payload,
+            result=result,
+        )
 
         should_cache = self.score_cache is not None and not payload.from_cache
         cache_key_value: Optional[str] = None
@@ -471,30 +507,73 @@ class ScoringPipeline:
         pending_updates: List[SheetUpdate] = []
         pending_units = 0
         last_flush = time.monotonic()
+        buffer_scores: Dict[int, Dict[int, float]] = {}
+        buffer_analyses: Dict[int, Dict[int, str]] = {}
 
         async def flush() -> None:
-            nonlocal buffer, pending_units, last_flush, pending_updates
-            if not buffer:
+            nonlocal buffer_scores, buffer_analyses, pending_units, last_flush, pending_updates
+            if not buffer_scores and not buffer_analyses:
                 return
-            snapshot_buffer = buffer
+            snapshot_score_buffer = buffer_scores
+            snapshot_analysis_buffer = buffer_analyses
             snapshot_updates = list(pending_updates)
-            payload = _convert_updates(self.cfg, self.sheet_name, snapshot_buffer)
+            payload: List[dict] = []
+            if snapshot_analysis_buffer:
+                payload.extend(
+                    _convert_updates(self.cfg, self.sheet_name, snapshot_analysis_buffer)
+                )
+            target_score_sheet = self.score_sheet_name or self.sheet_name
+            if snapshot_score_buffer:
+                payload.extend(
+                    _convert_updates(self.cfg, target_score_sheet, snapshot_score_buffer)
+                )
+            if not payload:
+                last_flush = time.monotonic()
+                self._stats.flush_count += 1
+                buffer_scores = {}
+                buffer_analyses = {}
+                pending_units = 0
+                pending_updates = []
+                for entry in snapshot_updates:
+                    await self.mark_unit_completed(entry.unit, entry.result)
+                self._log(
+                    "Writer flush skipped Sheets update because no values were produced"
+                )
+                return
             attempts = 0
             delay = self.writer_retry_initial_delay
             last_error: Optional[Exception] = None
             while attempts < self.writer_retry_limit:
                 try:
-                    await asyncio.to_thread(batch_update_values, self.spreadsheet_id, payload)
+                    for updates in payload_batches:
+                        if not updates:
+                            continue
+                        await asyncio.to_thread(batch_update_values, self.spreadsheet_id, updates)
                     last_flush = time.monotonic()
                     self._stats.flush_count += 1
-                    buffer = {}
+                    buffer_scores = {}
+                    buffer_analyses = {}
                     pending_units = 0
                     for entry in snapshot_updates:
                         await self.mark_unit_completed(entry.unit, entry.result)
                     pending_updates = []
+                    distinct_rows = set(snapshot_score_buffer.keys()) | set(
+                        snapshot_analysis_buffer.keys()
+                    )
+                    analysis_cells = sum(
+                        len(columns) for columns in snapshot_analysis_buffer.values()
+                    ) if snapshot_analysis_buffer else 0
+                    score_cells = sum(
+                        len(columns) for columns in snapshot_score_buffer.values()
+                    ) if snapshot_score_buffer else 0
                     self._log(
-                        f"Writer flush success: rows={len(snapshot_buffer)} entries={len(snapshot_updates)} "
-                        f"attempts={attempts + 1}"
+                        "Writer flush success: rows={} entries={} attempts={} cells(text={} score={})".format(
+                            len(distinct_rows),
+                            len(snapshot_updates),
+                            attempts + 1,
+                            analysis_cells,
+                            score_cells,
+                        )
                     )
                     return
                 except GoogleSheetsError as exc:
@@ -523,11 +602,17 @@ class ScoringPipeline:
                         break
                     unit = entry.unit
                     row_number = unit.row_index + 1
-                    row_buffer = buffer.setdefault(row_number, {})
+                    row_score_buffer = buffer_scores.setdefault(row_number, {})
                     for index, score in enumerate(entry.scores):
                         if score is None:
                             continue
-                        row_buffer[unit.col_offset + index] = float(score)
+                        row_score_buffer[unit.col_offset + index] = float(score)
+                    if entry.analyses:
+                        row_analysis_buffer = buffer_analyses.setdefault(row_number, {})
+                        for index, analysis in enumerate(entry.analyses):
+                            if not analysis:
+                                continue
+                            row_analysis_buffer[unit.col_offset + index] = analysis
                     pending_units += 1
                     pending_updates.append(entry)
                     now = time.monotonic()
@@ -563,7 +648,9 @@ class ScoringPipeline:
             pass
 
 
-def _convert_updates(cfg: RunConfig, sheet_name: str, update_buffer: Dict[int, Dict[int, float]]) -> List[dict]:
+def _convert_updates(
+    cfg: RunConfig, sheet_name: str, update_buffer: Dict[int, Dict[int, Any]]
+) -> List[dict]:
     if not update_buffer:
         return []
     sorted_rows = sorted(update_buffer.items())

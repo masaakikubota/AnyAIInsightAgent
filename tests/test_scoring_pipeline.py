@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import unittest
 from typing import List, Optional
 from unittest.mock import patch
@@ -15,6 +16,7 @@ from app.scoring_pipeline import (
 )
 from app.services.scoring import cache_key
 from app.services.google_sheets import GoogleSheetsError
+from app.services.sheet_updates import build_batched_value_ranges, build_row_value_ranges
 
 
 async def _noop_mark_unit(unit: PipelineUnit, result: ScoreResult) -> None:
@@ -32,12 +34,15 @@ def _make_pipeline(
     writer_retry_limit: int = 3,
     writer_retry_initial_delay: float = 0.1,
     writer_retry_backoff_multiplier: float = 1.0,
+    sheet_batch_row_size: int = 500,
 ) -> tuple[RunConfig, ScoringPipeline]:
     cfg = RunConfig(spreadsheet_url="https://docs.google.com/spreadsheets/d/test")
+    cfg.sheet_chunk_rows = sheet_batch_row_size
     pipeline = ScoringPipeline(
         cfg=cfg,
         spreadsheet_id="spreadsheet",
         sheet_name="Scores",
+        score_sheet_name="Embeddings",
         invoke_concurrency=1,
         rows=[["utterance"]],
         utter_col_index=0,
@@ -52,6 +57,7 @@ def _make_pipeline(
         writer_retry_limit=writer_retry_limit,
         writer_retry_initial_delay=writer_retry_initial_delay,
         writer_retry_backoff_multiplier=writer_retry_backoff_multiplier,
+        sheet_batch_row_size=sheet_batch_row_size,
         video_mode=False,
     )
     return cfg, pipeline
@@ -205,6 +211,54 @@ class ScoringPipelineWriterTests(unittest.TestCase):
             pipeline._validation_executor.shutdown(wait=True)
 
         self.assertTrue(pipeline._terminate.is_set())
+
+    def test_writer_writes_analyses_and_scores_to_distinct_sheets(self) -> None:
+        _, pipeline = _make_pipeline(
+            score_cache=None,
+            writer_retry_limit=1,
+            writer_retry_initial_delay=0.1,
+            writer_retry_backoff_multiplier=1.0,
+        )
+        updates: list[list[dict]] = []
+
+        def capture_updates(spreadsheet_id: str, payload: list[dict]) -> None:
+            updates.append(payload)
+
+        async def run_writer_with_text() -> None:
+            writer_queue: asyncio.Queue[Optional[SheetUpdate]] = asyncio.Queue()
+            writer = asyncio.create_task(pipeline._writer(writer_queue))
+            unit = PipelineUnit(row_index=0, block_index=0, col_offset=0)
+            await writer_queue.put(
+                SheetUpdate(
+                    unit=unit,
+                    scores=[0.25],
+                    analyses=["Strong alignment"],
+                    result=ScoreResult(
+                        scores=[0.25],
+                        analyses=["Strong alignment"],
+                        provider=Provider.gemini,
+                        model="gemini-test",
+                    ),
+                )
+            )
+            await writer_queue.put(None)
+            await writer
+
+        try:
+            with patch("app.scoring_pipeline.batch_update_values", side_effect=capture_updates):
+                asyncio.run(run_writer_with_text())
+        finally:
+            pipeline._validation_executor.shutdown(wait=True)
+
+        self.assertEqual(len(updates), 1)
+        payload = updates[0]
+        self.assertEqual(len(payload), 2)
+        analysis_update = payload[0]
+        score_update = payload[1]
+        self.assertIn("Scores" , analysis_update["range"])
+        self.assertEqual(analysis_update["values"], [["Strong alignment"]])
+        self.assertIn("Embeddings", score_update["range"])
+        self.assertEqual(score_update["values"], [[0.25]])
 
 
 if __name__ == "__main__":
