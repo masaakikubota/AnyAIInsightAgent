@@ -1,60 +1,17 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import ValidationError
 
+from .dependencies import get_base_dir
 from .routers import cleansing, interview, jobs, persona, settings
-from . import settings as app_settings
-from .cleansing_manager import CleansingJobManager
-from .models import (
-    CleansingJobConfig,
-    CleansingJobProgress,
-    CleansingJobResponse,
-    CreateJobResponse,
-    DashboardFilters,
-    DashboardQueryRequest,
-    DashboardQueryResponse,
-    DashboardRequest,
-    DashboardResponse,
-    DashboardBuildRequest,
-    DashboardRunDetail,
-    DashboardRunSummary,
-    InterviewJobConfig,
-    InterviewJobProgress,
-    InterviewJobResponse,
-    JobStatus,
-    MassPersonaJobProgress,
-    MassPersonaJobResponse,
-    PersonaBuildJobProgress,
-    PersonaBuildJobResponse,
-    PersonaResponseJobProgress,
-    PersonaResponseJobResponse,
-    ProgressResponse,
-    RunConfig,
-)
-from .services.google_sheets import (
-    GoogleSheetsError,
-    ensure_service_account_access,
-    extract_spreadsheet_id,
-    find_sheet,
-)
-from .worker import JobManager
-from .forms import (
-    InterviewJobForm,
-    MassPersonaJobForm,
-    PersonaBuildJobForm,
-    PersonaResponseJobForm,
-)
-from .interview_manager import InterviewJobManager
-from .mass_persona_manager import MassPersonaJobManager
-from .persona_builder_manager import PersonaBuildJobManager
-from .persona_response_manager import PersonaResponseJobManager
-from .services.dashboard import generate_dashboard_html, build_dashboard_file
 
+APP_TITLE = "AnyAIMarketingSolutionAgent - Scoring"
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 load_dotenv()
 app_settings.apply_defaults_if_missing()
@@ -467,34 +424,39 @@ async def edit_job(
         job.cfg = cfg
     return {"ok": True}
 
+def _load_static_page(filename: str) -> str:
+    """Return the HTML content for a static page."""
+    return (STATIC_DIR / filename).read_text(encoding="utf-8")
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="AnyAIMarketingSolutionAgent - Scoring")
-    app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
+    """Create the FastAPI application with all routers and assets."""
+    # Ensure the base directory exists before the application starts handling requests.
+    get_base_dir()
 
-    app.include_router(jobs.router)
+    app = FastAPI(title=APP_TITLE)
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    # Register routers.
     app.include_router(settings.router)
+    app.include_router(jobs.router)
     app.include_router(cleansing.router)
     app.include_router(interview.router)
     app.include_router(persona.router)
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
-        return (Path(__file__).parent / "static" / "index.html").read_text(encoding="utf-8")
+        return _load_static_page("index.html")
 
     @app.get("/dashboard", response_class=HTMLResponse)
     def dashboard_index() -> str:
-        return (Path(__file__).parent / "static" / "dashboard.html").read_text(encoding="utf-8")
+        return _load_static_page("dashboard.html")
 
     return app
 
 
-app = create_app()
-
-
 def run() -> None:
-    import os
+    """Run the application using uvicorn."""
     import uvicorn
 
     host = os.getenv("HOST", "0.0.0.0")
@@ -502,407 +464,6 @@ def run() -> None:
     uvicorn.run("app.main:app", host=host, port=port, reload=False)
 
 
-if __name__ == "__main__":
-    run()
+app = create_app()
 
-
-# Settings endpoints
-@app.get("/settings")
-def get_settings():
-    return {"keys": app_settings.keys_status()}
-
-
-class _SetReq(RunConfig.model_construct().__class__):
-    pass
-
-
-@app.post("/settings")
-async def post_settings(
-    gemini_api_key: str | None = Form(default=None),
-    openai_api_key: str | None = Form(default=None),
-    persist: bool = Form(default=False),
-):
-    status = app_settings.set_keys(gemini=gemini_api_key, openai=openai_api_key, persist=persist)
-    return {"ok": True, "keys": status, "persisted": persist}
-
-
-@app.post("/cleansing/jobs", response_model=CleansingJobResponse)
-async def create_cleansing_job(
-    sheet: str = Form(...),
-    country: str = Form(...),
-    product_category: str = Form(...),
-    sheet_name: str = Form("RawData_Master"),
-    concurrency: int = Form(50),
-):
-    try:
-        spreadsheet_id = extract_spreadsheet_id(sheet)
-        await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
-    except GoogleSheetsError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    cfg = CleansingJobConfig(
-        sheet=sheet,
-        country=country,
-        product_category=product_category,
-        sheet_name=sheet_name,
-        concurrency=concurrency,
-    )
-    return await cleansing_manager.create_job(cfg)
-
-
-@app.get("/cleansing/jobs/{job_id}", response_model=CleansingJobProgress)
-async def get_cleansing_job(job_id: str):
-    try:
-        return cleansing_manager.get_progress(job_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Job not found") from exc
-
-
-@app.post("/interview/jobs", response_model=InterviewJobResponse)
-async def create_interview_job(
-    project_name: str = Form(...),
-    domain: str = Form(...),
-    country_region: str = Form(""),
-    stimuli_source: str = Form(""),
-    stimuli_sheet_url: str = Form(""),
-    stimuli_sheet_name: str = Form(""),
-    stimuli_sheet_column: str = Form("A"),
-    stimuli_sheet_start_row: int = Form(2),
-    persona_sheet_url: str = Form(""),
-    persona_sheet_name: str = Form("LLMSetUp"),
-    persona_overview_column: str = Form("B"),
-    persona_prompt_column: str = Form("C"),
-    persona_start_row: int = Form(2),
-    ssr_reference_path: str = Form(""),
-    ssr_reference_set: str = Form(""),
-    ssr_embeddings_column: str = Form("embedding"),
-    ssr_model_name: str = Form("sentence-transformers/all-MiniLM-L6-v2"),
-    ssr_device: str = Form(""),
-    ssr_temperature: float = Form(1.0),
-    ssr_epsilon: float = Form(0.0),
-    persona_count: int = Form(60),
-    persona_seed: int = Form(42),
-    persona_template: str = Form(""),
-    concurrency: int = Form(20),
-    max_rounds: int = Form(3),
-    language: str = Form("ja"),
-    stimulus_mode: str = Form("text"),
-    notes: str = Form(""),
-    enable_tribe_learning: bool = Form(False),
-    utterance_csv: UploadFile | None = File(None),
-    manual_stimuli_images: Optional[List[UploadFile]] = File(None),
-    tribe_count: int = Form(10),
-    persona_per_tribe: int = Form(3),
-    questions_per_persona: int = Form(5),
-) -> InterviewJobResponse:
-    try:
-        form = InterviewJobForm(
-            project_name=project_name,
-            domain=domain,
-            country_region=country_region,
-            stimuli_source=stimuli_source,
-            stimuli_sheet_url=stimuli_sheet_url,
-            stimuli_sheet_name=stimuli_sheet_name,
-            stimuli_sheet_column=stimuli_sheet_column,
-            stimuli_sheet_start_row=stimuli_sheet_start_row,
-            persona_sheet_url=persona_sheet_url,
-            persona_sheet_name=persona_sheet_name,
-            persona_overview_column=persona_overview_column,
-            persona_prompt_column=persona_prompt_column,
-            persona_start_row=persona_start_row,
-            ssr_reference_path=ssr_reference_path,
-            ssr_reference_set=ssr_reference_set,
-            ssr_embeddings_column=ssr_embeddings_column,
-            ssr_model_name=ssr_model_name,
-            ssr_device=ssr_device,
-            ssr_temperature=ssr_temperature,
-            ssr_epsilon=ssr_epsilon,
-            persona_count=persona_count,
-            persona_template=persona_template,
-            persona_seed=persona_seed,
-            concurrency=concurrency,
-            max_rounds=max_rounds,
-            language=language,
-            stimulus_mode=stimulus_mode,
-            notes=notes,
-            enable_tribe_learning=enable_tribe_learning,
-            utterance_csv=utterance_csv,
-            manual_stimuli_images=manual_stimuli_images,
-            tribe_count=tribe_count,
-            persona_per_tribe=persona_per_tribe,
-            questions_per_persona=questions_per_persona,
-        )
-    except ValidationError as exc:
-        raise HTTPException(status_code=400, detail=exc.errors()) from exc
-
-    checked_spreadsheets: set[str] = set()
-    try:
-        if form.stimuli_sheet_url:
-            stimuli_spreadsheet_id = extract_spreadsheet_id(form.stimuli_sheet_url)
-            if stimuli_spreadsheet_id not in checked_spreadsheets:
-                await asyncio.to_thread(ensure_service_account_access, stimuli_spreadsheet_id)
-                checked_spreadsheets.add(stimuli_spreadsheet_id)
-        else:
-            stimuli_spreadsheet_id = None
-    except GoogleSheetsError as exc:
-        raise HTTPException(status_code=400, detail=f"Stimuliシートへのアクセス確認に失敗しました: {exc}") from exc
-
-    try:
-        if form.persona_sheet_url:
-            persona_spreadsheet_id = extract_spreadsheet_id(form.persona_sheet_url)
-            if persona_spreadsheet_id not in checked_spreadsheets:
-                await asyncio.to_thread(ensure_service_account_access, persona_spreadsheet_id)
-                checked_spreadsheets.add(persona_spreadsheet_id)
-        else:
-            persona_spreadsheet_id = None
-    except GoogleSheetsError as exc:
-        raise HTTPException(status_code=400, detail=f"ペルソナ出力先シートへのアクセス確認に失敗しました: {exc}") from exc
-
-    job_id = uuid.uuid4().hex[:12]
-    job_dir = interview_manager.base_dir / job_id
-    job_dir.mkdir(parents=True, exist_ok=True)
-
-    utterance_csv_rel: Optional[str] = None
-    if form.enable_tribe_learning:
-        if not form.utterance_csv or not form.utterance_csv.filename:
-            raise HTTPException(status_code=400, detail="発話CSVをアップロードしてください。")
-        dest = job_dir / "utterances_seed.csv"
-        with dest.open("wb") as fout:
-            shutil.copyfileobj(form.utterance_csv.file, fout)
-        form.utterance_csv.file.close()
-        utterance_csv_rel = dest.name
-    elif form.utterance_csv:
-        form.utterance_csv.file.close()
-
-    manual_image_paths: List[str] = []
-    manual_mode = form.manual_mode
-    if manual_mode and form.manual_stimuli_images:
-        image_dir = job_dir / "stimuli_images"
-        image_dir.mkdir(parents=True, exist_ok=True)
-        for idx, upload in enumerate(form.manual_stimuli_images, start=1):
-            if not upload or not upload.filename:
-                continue
-            suffix = Path(upload.filename).suffix or ".png"
-            dest = image_dir / f"manual_stimulus_{idx}{suffix}"
-            with dest.open("wb") as fout:
-                shutil.copyfileobj(upload.file, fout)
-            upload.file.close()
-            manual_image_paths.append(str(dest.relative_to(job_dir)))
-    elif form.manual_stimuli_images:
-        for upload in form.manual_stimuli_images:
-            if upload:
-                upload.file.close()
-
-    if form.enable_tribe_learning and utterance_csv_rel:
-        csv_path = job_dir / utterance_csv_rel
-        if csv_path.exists():
-            csv_size = csv_path.stat().st_size
-            csv_token_estimate = int(csv_size * 4 / 3)
-            max_tokens_allowed = int(InterviewJobConfig.model_fields["max_utterance_tokens"].default)
-            if csv_token_estimate > max_tokens_allowed:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        f"発話CSVの推定トークン数が上限({max_tokens_allowed:,} tokens)を超えています。"
-                        "CSVを分割するか、サンプル数を減らしてください。"
-                    ),
-                )
-
-    cfg = form.to_config(
-        utterance_csv_path=utterance_csv_rel,
-        manual_image_paths=manual_image_paths,
-    )
-    return await interview_manager.create_job(job_id, cfg)
-
-
-@app.get("/interview/jobs/{job_id}", response_model=InterviewJobProgress)
-async def get_interview_job(job_id: str) -> InterviewJobProgress:
-    try:
-        return interview_manager.get_progress(job_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Job not found") from exc
-
-
-@app.post("/persona/jobs", response_model=MassPersonaJobResponse)
-async def create_mass_persona_job(
-    project_name: str = Form(...),
-    domain: str = Form(...),
-    language: str = Form("ja"),
-    persona_goal: int = Form(200),
-    utterance_source: str = Form(""),
-    default_region: str = Form(""),
-    sheet_url: str = Form(""),
-    sheet_name: str = Form(""),
-    sheet_utterance_column: str = Form("A"),
-    sheet_region_column: str = Form(""),
-    sheet_tags_column: str = Form(""),
-    sheet_start_row: int = Form(2),
-    max_records: int = Form(2000),
-    notes: str = Form(""),
-) -> MassPersonaJobResponse:
-    try:
-        form = MassPersonaJobForm(
-            project_name=project_name,
-            domain=domain,
-            language=language,
-            persona_goal=persona_goal,
-            utterance_source=utterance_source,
-            default_region=default_region,
-            sheet_url=sheet_url,
-            sheet_name=sheet_name,
-            sheet_utterance_column=sheet_utterance_column,
-            sheet_region_column=sheet_region_column,
-            sheet_tags_column=sheet_tags_column,
-            sheet_start_row=sheet_start_row,
-            max_records=max_records,
-            notes=notes,
-        )
-    except ValidationError as exc:
-        raise HTTPException(status_code=400, detail=exc.errors()) from exc
-
-    cfg = form.to_config()
-
-    job_id = uuid.uuid4().hex[:12]
-    return await mass_persona_manager.create_job(job_id, cfg)
-
-
-@app.get("/persona/jobs/{job_id}", response_model=MassPersonaJobProgress)
-async def get_mass_persona_job(job_id: str) -> MassPersonaJobProgress:
-    try:
-        return mass_persona_manager.get_progress(job_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Job not found") from exc
-
-
-@app.post("/persona/build/jobs", response_model=PersonaBuildJobResponse)
-async def create_persona_build_job(
-    project_name: str = Form(...),
-    domain: str = Form(...),
-    language: str = Form("ja"),
-    blueprint_path: str = Form(...),
-    output_dir: str = Form(""),
-    persona_goal: int = Form(200),
-    concurrency: int = Form(6),
-    persona_seed_offset: int = Form(0),
-    openai_model: str = Form("gpt-4.1"),
-    persona_sheet_url: str = Form(""),
-    persona_sheet_name: str = Form("PersonaCatalog"),
-    persona_overview_column: str = Form("B"),
-    persona_prompt_column: str = Form("C"),
-    persona_start_row: int = Form(2),
-    notes: str = Form(""),
-) -> PersonaBuildJobResponse:
-    try:
-        form = PersonaBuildJobForm(
-            project_name=project_name,
-            domain=domain,
-            language=language,
-            blueprint_path=blueprint_path,
-            output_dir=output_dir,
-            persona_goal=persona_goal,
-            concurrency=concurrency,
-            persona_seed_offset=persona_seed_offset,
-            openai_model=openai_model,
-            persona_sheet_url=persona_sheet_url,
-            persona_sheet_name=persona_sheet_name,
-            persona_overview_column=persona_overview_column,
-            persona_prompt_column=persona_prompt_column,
-            persona_start_row=persona_start_row,
-            notes=notes,
-        )
-    except ValidationError as exc:
-        raise HTTPException(status_code=400, detail=exc.errors()) from exc
-
-    output_dir_val: Optional[str] = None
-    if form.output_dir:
-        subpath = _ensure_runs_subpath(form.output_dir)
-        output_dir_val = str(subpath.relative_to(BASE_DIR))
-
-    cfg = form.to_config(output_dir=output_dir_val)
-
-    job_id = uuid.uuid4().hex[:12]
-    return await persona_builder_manager.create_job(job_id, cfg)
-
-
-@app.get("/persona/build/jobs/{job_id}", response_model=PersonaBuildJobProgress)
-async def get_persona_build_job(job_id: str) -> PersonaBuildJobProgress:
-    try:
-        return persona_builder_manager.get_progress(job_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Job not found") from exc
-
-
-@app.post("/persona/respond/jobs", response_model=PersonaResponseJobResponse)
-async def create_persona_response_job(
-    project_name: str = Form(...),
-    domain: str = Form(...),
-    language: str = Form("ja"),
-    persona_catalog_path: str = Form(...),
-    stimuli_source: str = Form(""),
-    stimuli_sheet_url: str = Form(""),
-    stimuli_sheet_name: str = Form(""),
-    stimuli_sheet_column: str = Form("A"),
-    stimuli_sheet_start_row: int = Form(2),
-    output_dir: str = Form(""),
-    persona_limit: int = Form(0),
-    stimuli_limit: int = Form(0),
-    concurrency: int = Form(12),
-    gemini_model: str = Form("gemini-flash-latest"),
-    response_style: str = Form("monologue"),
-    include_structured_summary: bool = Form(True),
-    ssr_reference_path: str = Form(""),
-    ssr_reference_set: str = Form(""),
-    ssr_embeddings_column: str = Form("embedding"),
-    ssr_model_name: str = Form("sentence-transformers/all-MiniLM-L6-v2"),
-    ssr_device: str = Form(""),
-    ssr_temperature: float = Form(1.0),
-    ssr_epsilon: float = Form(0.0),
-    notes: str = Form(""),
-) -> PersonaResponseJobResponse:
-    try:
-        form = PersonaResponseJobForm(
-            project_name=project_name,
-            domain=domain,
-            language=language,
-            persona_catalog_path=persona_catalog_path,
-            stimuli_source=stimuli_source,
-            stimuli_sheet_url=stimuli_sheet_url,
-            stimuli_sheet_name=stimuli_sheet_name,
-            stimuli_sheet_column=stimuli_sheet_column,
-            stimuli_sheet_start_row=stimuli_sheet_start_row,
-            output_dir=output_dir,
-            persona_limit=persona_limit,
-            stimuli_limit=stimuli_limit,
-            concurrency=concurrency,
-            gemini_model=gemini_model,
-            response_style=response_style,
-            include_structured_summary=include_structured_summary,
-            ssr_reference_path=ssr_reference_path,
-            ssr_reference_set=ssr_reference_set,
-            ssr_embeddings_column=ssr_embeddings_column,
-            ssr_model_name=ssr_model_name,
-            ssr_device=ssr_device,
-            ssr_temperature=ssr_temperature,
-            ssr_epsilon=ssr_epsilon,
-            notes=notes,
-        )
-    except ValidationError as exc:
-        raise HTTPException(status_code=400, detail=exc.errors()) from exc
-
-    output_dir_val: Optional[str] = None
-    if form.output_dir:
-        subpath = _ensure_runs_subpath(form.output_dir)
-        output_dir_val = str(subpath.relative_to(BASE_DIR))
-
-    cfg = form.to_config(output_dir=output_dir_val)
-
-    job_id = uuid.uuid4().hex[:12]
-    return await persona_response_manager.create_job(job_id, cfg)
-
-
-@app.get("/persona/respond/jobs/{job_id}", response_model=PersonaResponseJobProgress)
-async def get_persona_response_job(job_id: str) -> PersonaResponseJobProgress:
-    try:
-        return persona_response_manager.get_progress(job_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Job not found") from exc
+__all__ = ["app", "create_app", "run"]
