@@ -1,10 +1,9 @@
 AnyAIMarketingSolutionAgent — スコアリングAIエージェント
 
 概要
-- 発話 × Nカテゴリを [-1.00, 1.00]（2桁）で採点し、入力CSVのカテゴリ列に上書き出力。
+- 発話 × Nカテゴリについて LLM が返す自然言語分析（`analyses`）を SSR/埋め込み推論で 0.00〜1.00（小数第2位）へ射影し、入力シートのカテゴリ列へ上書きします。
 - 一次: Gemini 2.5 Flash-Lite、失敗時: OpenAI gpt-5-nano に自動フォールバック。
-- レスポンスは構造化JSONを厳格検証。失敗は errors.csv に記録。
-- Googleシートとは最大500行単位でバッチ通信し、CSVの生成が不要な場合はシートへ直接反映。
+- LLM 応答は `{"analyses": string[N]}` のみを許可し、検証後に 0.00〜1.00 へ正規化して書き戻します（失敗セルは空白＋chunk_meta/checkpoint に記録）。
 
 前提
 - Python 3.10+
@@ -65,7 +64,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 25253
 - マッピング（発話列=既定3(C), カテゴリ開始列=既定4(D)、2/3/4行=Name/Definition/Detail、処理開始行=5）を必要に応じて調整。
 - バッチ列数N/同時実行/リトライ/タイムアウトを設定し、実行。
 - 最大実行列数: 1発話あたり処理するカテゴリ列の上限。バッチ列数ごとに分割して独立リクエストで評価します（例: 最大実行列数=100, バッチ=10 → 各発話につき10ブロック）。
-- 完了後は必要に応じて結果CSV / errors.csv / run_meta.json をダウンロード（シートへ直接反映済み）。
+- 完了後はシートに直接書き戻され、`runs/<job_id>/` 配下から `run_meta.json` / `chunk_meta.json` / `checkpoint.json` をダウンロードできます（UI では run_meta.json のショートカットを表示）。
 
 APIキーの指定例
 - `@Keys.txt`（いずれかの形式をサポート）
@@ -81,10 +80,12 @@ APIキーのコード埋め込み（任意）
 - 優先順により、GUI/.envで設定がある場合はそちらが使われ、未設定時のみデフォルトが適用されます。
 
 仕様メモ
-- 出力値は round(x,2) → [-1,1] でクランプ。
-- Gemini: responseSchema で配列長を固定、OpenAI: json_schema strict。
-- 失敗/検証不一致は最大3回再試行。429は指数バックオフ。最終失敗セルは空白。
-- 100MB超の出力は zip を併せて生成。
+- 既定 System Prompt は SSR アンカー（Core/Strong/...）付き `analyses` を要求し、`score_with_fallback` が SSR リファレンス（設定時）または埋め込み類似度で 0.00〜1.00 に変換（round→clamp）します。
+- Gemini は `{"analyses": string[N]}` responseSchema、OpenAI は `json_schema` strict で同一構造を強制。
+- LLM 呼び出しは初回＋最大10回の指数バックオフリトライを行い、別プロバイダへフォールバック。チャンク単位の再実行は 3 回まで。
+- Text モードは 300 行単位でチャンク化し、429 発生時は並列度を 0.7 倍へ自動降速（安定後に段階回復）。
+- スコアキャッシュ（24h TTL / 10,000 エントリ上限）で同一ペイロードの LLM 呼び出しを省略します。
+- 100MB 超の出力は zip を併せて生成。
 
 自動降速・途中再開
 - 429 が発生したバッチは並列度を約 30% ダウン（下限 1）。クリーンなバッチが 3 回続けば 1 ずつ回復（上限 初期値）。履歴は `run_meta.json.slowdown_history` に記録。
@@ -93,7 +94,6 @@ APIキーのコード埋め込み（任意）
 
 未実装/次ステップ（PR歓迎）
 - レイテンシ集計や高粒度の監査ログ（生レスポンス、丸め前数値）
-- キャッシュ（キー: hash(utterance, cat_block, prompt_ver, provider, model)）
 
 ## Interview パイプライン（2025-10-14アップデート）
 
