@@ -14,6 +14,13 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from app.services.video_suite import queue as queue_service
 from app.services.video_suite import workers
 
+
+def _ensure_video_suite_ready() -> None:
+    try:
+        workers.ensure_dependencies()
+    except workers.LegacyDependencyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
 router = APIRouter()
 
 
@@ -51,6 +58,7 @@ async def kol_reviewer_page() -> HTMLResponse:
 async def run_analysis(request: Request) -> JSONResponse:
     base_log_queue = queue_service.get_shared_log_queue()
     data = await _get_request_json(request)
+    _ensure_video_suite_ready()
 
     raw_sheet_ref = data.get("sheet_url")
     sheet_url = workers.normalise_sheet_reference(raw_sheet_ref)
@@ -139,6 +147,7 @@ async def run_analysis(request: Request) -> JSONResponse:
 async def run_comment_enhancer(request: Request) -> JSONResponse:
     base_log_queue = queue_service.get_shared_log_queue()
     data = await _get_request_json(request)
+    _ensure_video_suite_ready()
 
     sheet_url = data.get("sheet_url")
     try:
@@ -201,6 +210,7 @@ async def run_comment_enhancer(request: Request) -> JSONResponse:
 async def run_video_comment_review(request: Request) -> JSONResponse:
     base_log_queue = queue_service.get_shared_log_queue()
     data = await _get_request_json(request)
+    _ensure_video_suite_ready()
 
     sheet_url = data.get("sheet_url")
     if not sheet_url:
@@ -301,6 +311,7 @@ async def run_video_comment_review(request: Request) -> JSONResponse:
 async def run_kol_reviewer(request: Request) -> JSONResponse:
     base_log_queue = queue_service.get_shared_log_queue()
     data = await _get_request_json(request)
+    _ensure_video_suite_ready()
 
     sheet_url = data.get("sheet_url")
     if not sheet_url:
