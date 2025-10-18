@@ -1,4 +1,4 @@
-from . import cleansing, interview, jobs, persona, settings
+from . import cleansing, interview, jobs, persona, settings, video_suite
 
 __all__ = [
     "cleansing",
@@ -6,4 +6,5 @@ __all__ = [
     "jobs",
     "persona",
     "settings",
+    "video_suite",
 ]

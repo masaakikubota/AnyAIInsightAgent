@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .dependencies import get_base_dir
-from .routers import cleansing, interview, jobs, persona, settings
+from .routers import cleansing, interview, jobs, persona, settings, video_suite
 
 APP_TITLE = "AnyAIMarketingSolutionAgent - Scoring"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(cleansing.router)
     app.include_router(interview.router)
     app.include_router(persona.router)
+    app.include_router(video_suite.router)
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
