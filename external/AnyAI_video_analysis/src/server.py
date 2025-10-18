@@ -124,7 +124,7 @@ current_job_id: Optional[str] = None
 job_counter = 0
 
 # --- Gemini Model Constants ---
-DEFAULT_GEMINI_MODEL = "gemini-pro-latest"
+DEFAULT_GEMINI_MODEL = "gemini-flash-latest"
 GEMINI_MODEL_ALIASES = {
     "gemini-2.5-pro": "gemini-pro-latest",
     "gemini-pro": "gemini-pro-latest",
@@ -132,7 +132,8 @@ GEMINI_MODEL_ALIASES = {
     "gemini-2.5-flash": "gemini-flash-latest",
     "gemini-1.5-flash": "gemini-flash-latest",
     "gemini-flash": "gemini-flash-latest",
-    "gemini-2.5-flash-lite": "gemini-flash-lite-latest",
+    "gemini-2.5-flash-lite": "gemini-flash-latest",
+    "gemini-flash-lite-latest": "gemini-flash-latest",
 }
 
 

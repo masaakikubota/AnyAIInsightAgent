@@ -1002,7 +1002,7 @@ function batchRangesForColumn(colIndex0, sheetName, rowNumbers) {
     },
     {
       "parameters": {
-        "modelName": "models/gemini-flash-lite-latest",
+        "modelName": "models/gemini-flash-latest",
         "options": {}
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",

@@ -27,7 +27,7 @@ ATTITUDE_CLUSTERS = [
 
 GEMINI_DIRECTION_MODEL = "gemini-pro-latest"
 OPENAI_PERSONA_MODEL = "gpt-4.1"
-GEMINI_INTERVIEW_MODEL = "gemini-flash-lite-latest"
+GEMINI_INTERVIEW_MODEL = "gemini-flash-latest"
 
 PersonaProgressCallback = Callable[[int, Dict[str, Any]], Awaitable[None] | None]
 TranscriptProgressCallback = Callable[[int, Dict[str, Any]], Awaitable[None] | None]

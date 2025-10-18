@@ -10,7 +10,7 @@ import httpx
 
 PROMPT_GENERATOR_MODEL = "gemini-pro-latest"
 JUDGE_MODEL = "gpt-4.1"
-FALLBACK_MODEL = "gemini-flash-lite-latest"
+FALLBACK_MODEL = "gemini-flash-latest"
 
 
 META_PROMPT = """<MetaPrompt>
