@@ -58,6 +58,27 @@
       .caret.right { margin-left: auto; }
       .queue-running { font-weight: 700; }
       .ssr-disabled { opacity: 0.6; }
+      .validation-banner {
+        display: none;
+        margin-top: 8px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        font-size: var(--anyai-fs-2);
+        font-weight: 600;
+      }
+      .validation-banner.info {
+        background: rgba(59, 130, 246, 0.12);
+        border-color: rgba(59, 130, 246, 0.35);
+      }
+      .validation-banner.success {
+        background: rgba(34, 197, 94, 0.12);
+        border-color: rgba(34, 197, 94, 0.35);
+      }
+      .validation-banner.error {
+        background: rgba(248, 113, 113, 0.15);
+        border-color: rgba(248, 113, 113, 0.4);
+      }
     </style>
   </head>
   <body>
@@ -104,6 +125,10 @@
                 <input type="text" id="score_sheet_keyword" name="score_sheet_keyword" value="Embedding" placeholder="Embedding" />
                 <div class="muted" id="score-sheet-keyword-help">Linkシートで得た分析テキストを数値化した結果を保存するシート名に含まれるキーワード。</div>
               </div>
+              <div class="actions-row">
+                <button type="button" class="btn btn-outline" id="btn-check-status">CheckTheStatus</button>
+              </div>
+              <div id="validation-banner" class="validation-banner" role="status" aria-live="polite"></div>
             </div>
 
             <div class="card">
@@ -305,6 +330,9 @@
       const sheetKeywordHelp = document.getElementById('sheet-keyword-help');
       const scoreSheetKeywordHelp = document.getElementById('score-sheet-keyword-help');
       const utteranceLabel = document.getElementById('utterance-label');
+      const spreadsheetUrlInput = document.getElementById('spreadsheet_url');
+      const sheetKeywordInput = document.getElementById('sheet_keyword');
+      const scoreSheetKeywordInput = document.getElementById('score_sheet_keyword');
       const modeRadios = modeForm.querySelectorAll('input[name="mode"]');
       const enableSSR = document.getElementById('enable_ssr');
       const ssrFieldIds = [
@@ -319,8 +347,115 @@
       const queueStatus = document.getElementById('queue-status');
       const cancelButton = document.getElementById('btn-cancel-job');
       const resultSection = document.getElementById('result');
+      const checkStatusBtn = document.getElementById('btn-check-status');
+      const validationBanner = document.getElementById('validation-banner');
+      const queueActionButtons = [
+        document.getElementById('btn-queue-add'),
+        document.getElementById('btn-queue-add-start')
+      ].filter(Boolean);
       let currentJobId = null;
       let pollTimer = null;
+      const validationState = { ok: false, payload: null };
+
+      function getValidationPayload(){
+        return {
+          spreadsheet_url: spreadsheetUrlInput ? spreadsheetUrlInput.value.trim() : '',
+          sheet_keyword: sheetKeywordInput ? sheetKeywordInput.value.trim() : ''
+        };
+      }
+
+      function hideValidationBanner(){
+        if(!validationBanner) return;
+        validationBanner.textContent = '';
+        validationBanner.className = 'validation-banner';
+        validationBanner.style.display = 'none';
+      }
+
+      function showValidationBanner(status, text){
+        if(!validationBanner) return;
+        validationBanner.className = `validation-banner ${status}`;
+        validationBanner.textContent = text;
+        validationBanner.style.display = 'block';
+      }
+
+      function isValidationCurrent(){
+        if(!validationState.ok) return false;
+        return validationState.payload === JSON.stringify(getValidationPayload());
+      }
+
+      function updateQueueActionState(){
+        const ready = isValidationCurrent();
+        queueActionButtons.forEach(btn => {
+          btn.disabled = !ready;
+        });
+      }
+
+      const watchedInputs = [spreadsheetUrlInput, sheetKeywordInput, scoreSheetKeywordInput];
+      watchedInputs.forEach(input => {
+        if(!input) return;
+        input.addEventListener('input', () => {
+          const hadValidation = validationState.ok;
+          validationState.ok = false;
+          validationState.payload = null;
+          if(hadValidation){
+            showValidationBanner('info', 'シート設定が変更されました。CheckTheStatus を押して再検証してください。');
+          } else {
+            hideValidationBanner();
+          }
+          updateQueueActionState();
+        });
+      });
+
+      if(checkStatusBtn){
+        checkStatusBtn.addEventListener('click', async () => {
+          const payload = getValidationPayload();
+          if(!payload.spreadsheet_url){
+            showValidationBanner('error', 'スプレッドシートURLを入力してください。');
+            return;
+          }
+          checkStatusBtn.disabled = true;
+          showValidationBanner('info', 'スプレッドシートを確認しています…');
+          try {
+            const res = await fetch('/jobs/check', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            let data = null;
+            try {
+              data = await res.json();
+            } catch (err) {
+              data = null;
+            }
+            if(!res.ok){
+              const message = data && data.message ? data.message : '検証リクエストに失敗しました。';
+              throw new Error(message);
+            }
+            if(!data || !data.ok){
+              const message = data && data.message ? data.message : '検証に失敗しました。';
+              validationState.ok = false;
+              validationState.payload = null;
+              showValidationBanner('error', message);
+              return;
+            }
+            validationState.ok = true;
+            validationState.payload = JSON.stringify(payload);
+            const detail = data.sheet_name ? `シート: ${data.sheet_name}` : '';
+            const successMessage = data.message ? data.message : '検証に成功しました。';
+            showValidationBanner('success', detail ? `${successMessage} (${detail})` : successMessage);
+          } catch (err) {
+            validationState.ok = false;
+            validationState.payload = null;
+            const message = err && err.message ? err.message : '検証に失敗しました。';
+            showValidationBanner('error', message);
+          } finally {
+            checkStatusBtn.disabled = false;
+            updateQueueActionState();
+          }
+        });
+      }
+
+      updateQueueActionState();
 
       function stopPolling(){
         if (pollTimer) {
@@ -447,9 +582,13 @@
         alert('APIキーを反映しました');
       });
 
-      const form = document.getElementById('job-form');
+      const form = jobForm;
       document.getElementById('btn-queue-add').addEventListener('click', async (e) => {
         e.preventDefault();
+        if(!isValidationCurrent()){
+          showValidationBanner('error', 'スプレッドシート設定の検証を完了してください (CheckTheStatus)。');
+          return;
+        }
         const fd = new FormData(form);
         fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
         const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
@@ -464,6 +603,10 @@
 
       document.getElementById('btn-queue-add-start').addEventListener('click', async (e) => {
         e.preventDefault();
+        if(!isValidationCurrent()){
+          showValidationBanner('error', 'スプレッドシート設定の検証を完了してください (CheckTheStatus)。');
+          return;
+        }
         const fd = new FormData(form);
         fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
         const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
@@ -567,6 +710,10 @@
                 updateSSREnabled();
                 form.dataset.editing = it.job_id;
                 alert('フォームに読み込みました。下の「編集を保存」で反映できます。');
+                validationState.ok = false;
+                validationState.payload = null;
+                showValidationBanner('info', '読み込んだ設定です。CheckTheStatus を押して検証してください。');
+                updateQueueActionState();
               }catch{}
             };
             const save = document.createElement('button'); save.className='btn btn-primary'; save.textContent='編集を保存';

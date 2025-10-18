@@ -7,6 +7,7 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
 
 from ..dependencies import get_base_dir, get_job_manager
 from ..models import CreateJobResponse, JobStatus, ProgressResponse, RunConfig
@@ -19,6 +20,39 @@ from ..services.google_sheets import (
 from ..worker import JobManager
 
 router = APIRouter()
+
+
+class JobCheckRequest(BaseModel):
+    spreadsheet_url: str
+    sheet_keyword: str
+
+
+class JobCheckResponse(BaseModel):
+    ok: bool
+    message: str
+    spreadsheet_id: Optional[str] = None
+    sheet_id: Optional[int] = None
+    sheet_name: Optional[str] = None
+
+
+@router.post("/jobs/check", response_model=JobCheckResponse)
+async def check_job(payload: JobCheckRequest) -> JobCheckResponse:
+    try:
+        spreadsheet_id = extract_spreadsheet_id(payload.spreadsheet_url)
+        await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
+        sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, payload.sheet_keyword)
+    except GoogleSheetsError as exc:
+        return JobCheckResponse(ok=False, message=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        return JobCheckResponse(ok=False, message=f"不明なエラーが発生しました: {exc}")
+
+    return JobCheckResponse(
+        ok=True,
+        message="スプレッドシートを確認しました。",
+        spreadsheet_id=sheet_match.spreadsheet_id,
+        sheet_id=sheet_match.sheet_id,
+        sheet_name=sheet_match.sheet_name,
+    )
 
 
 @router.post("/jobs", response_model=CreateJobResponse)
