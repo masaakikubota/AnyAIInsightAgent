@@ -57,7 +57,8 @@
       details[open] .caret::before { content: '▾'; }
       .caret.right { margin-left: auto; }
       .queue-running { font-weight: 700; }
-      .ssr-disabled { opacity: 0.6; }
+      .mode-options { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+      .mode-options .spacer { flex:1 1 auto; }
     </style>
   </head>
   <body>
@@ -80,9 +81,14 @@
           <form id="mode-form" class="card" style="padding:var(--anyai-space-4);">
             <div class="field">
               <label>実行モード</label>
-              <div style="display:flex; gap:12px;">
+              <div class="mode-options">
                 <label><input type="radio" name="mode" value="csv" checked /> Textモード</label>
                 <label><input type="radio" name="mode" value="video" /> Videoモード</label>
+                <span class="spacer"></span>
+                <label class="ssr-toggle" style="display:flex; align-items:center; gap:8px;">
+                  <input type="checkbox" id="enable_ssr" name="enable_ssr" checked />
+                  <span>SSRモードを有効化（推奨）</span>
+                </label>
               </div>
             </div>
           </form>
@@ -121,7 +127,7 @@
             <div class="card">
               <h3 class="mt-0">実行設定</h3>
               <div class="grid-2">
-                <div class="field"><label>カテゴリ同梱数 N</label><input type="number" name="batch_size" value="1" min="1" max="50" /></div>
+                <div class="field"><label>カテゴリ同梱数 N</label><input type="number" name="batch_size" value="10" min="1" max="50" /></div>
                 <div class="field"><label>最大カテゴリ列数</label><input type="number" name="max_category_cols" value="200" min="1" max="10000" /></div>
                 <div class="field"><label>同時実行数</label><input type="number" name="concurrency" value="50" min="1" max="200" id="concurrency-input" /></div>
                 <div class="field"><label>最大リトライ回数</label><input type="number" name="max_retries" value="10" min="0" max="50" /></div>
@@ -131,50 +137,6 @@
                   <label for="auto_slowdown" style="margin:0;">429自動降速</label>
                 </div>
               </div>
-            </div>
-
-            <div class="card">
-              <h3 class="mt-0">SSR設定</h3>
-              <div class="field" style="flex-direction:row; align-items:center; gap:8px;">
-                <input type="checkbox" id="enable_ssr" name="enable_ssr" checked />
-                <label for="enable_ssr" style="margin:0;">SSRモードを有効化（推奨）</label>
-              </div>
-              <details id="ssr-settings-details" open>
-                <summary class="row" style="cursor:pointer;">
-                  <span>SSR参照設定</span>
-                  <span class="caret right" aria-hidden="true"></span>
-                </summary>
-                <div id="ssr-settings-body" class="grid-2" style="margin-top:12px; gap:12px;">
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_reference_path">参照文データパス</label>
-                    <input type="text" id="ssr_reference_path" name="ssr_reference_path" placeholder="例: references/purchase_intent.json" />
-                  </div>
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_reference_set">参照セットID</label>
-                    <input type="text" id="ssr_reference_set" name="ssr_reference_set" placeholder="例: purchase_intent_v1" />
-                  </div>
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_embeddings_column">埋め込み列名</label>
-                    <input type="text" id="ssr_embeddings_column" name="ssr_embeddings_column" value="embedding" />
-                  </div>
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_model_name">Sentence-Transformer</label>
-                    <input type="text" id="ssr_model_name" name="ssr_model_name" value="sentence-transformers/all-MiniLM-L6-v2" />
-                  </div>
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_device">デバイス</label>
-                    <input type="text" id="ssr_device" name="ssr_device" placeholder="例: cuda" />
-                  </div>
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_temperature">温度 (>=0)</label>
-                    <input type="number" step="0.01" id="ssr_temperature" name="ssr_temperature" value="1.0" min="0" />
-                  </div>
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_epsilon">イプシロン (>=0)</label>
-                    <input type="number" step="0.01" id="ssr_epsilon" name="ssr_epsilon" value="0.0" min="0" />
-                  </div>
-                </div>
-              </details>
             </div>
 
             <div class="card">
@@ -300,6 +262,7 @@
     <script>
       const modeForm = document.getElementById('mode-form');
       const jobForm = document.getElementById('job-form');
+      const batchSizeInput = jobForm.querySelector('input[name="batch_size"]');
       const concurrencyInput = document.getElementById('concurrency-input');
       const timeoutInput = document.getElementById('timeout-input');
       const sheetKeywordHelp = document.getElementById('sheet-keyword-help');
@@ -307,20 +270,27 @@
       const utteranceLabel = document.getElementById('utterance-label');
       const modeRadios = modeForm.querySelectorAll('input[name="mode"]');
       const enableSSR = document.getElementById('enable_ssr');
-      const ssrFieldIds = [
-        'ssr_reference_path',
-        'ssr_reference_set',
-        'ssr_embeddings_column',
-        'ssr_model_name',
-        'ssr_device',
-        'ssr_temperature',
-        'ssr_epsilon'
-      ];
+      const batchSizeField = batchSizeInput.closest('.field');
+      const concurrencyField = concurrencyInput.closest('.field');
+      const MODE_DEFAULTS = {
+        csv: { batchSize: '10', concurrency: '50', timeout: '60' },
+        video: { batchSize: '10', concurrency: '15', timeout: '300' }
+      };
       const queueStatus = document.getElementById('queue-status');
       const cancelButton = document.getElementById('btn-cancel-job');
       const resultSection = document.getElementById('result');
+      let currentMode = modeForm.querySelector('input[name="mode"]:checked').value;
       let currentJobId = null;
       let pollTimer = null;
+      const nonSSRState = {
+        csv: { ...MODE_DEFAULTS.csv },
+        video: { ...MODE_DEFAULTS.video }
+      };
+      nonSSRState.csv = {
+        batchSize: batchSizeInput.value || MODE_DEFAULTS.csv.batchSize,
+        concurrency: concurrencyInput.value || MODE_DEFAULTS.csv.concurrency,
+        timeout: timeoutInput.value || MODE_DEFAULTS.csv.timeout
+      };
 
       function stopPolling(){
         if (pollTimer) {
@@ -365,18 +335,32 @@
         }
       }
 
-      function applyModeDefaults(mode) {
+      function storeCurrentNonSSRValues(mode) {
+        if (!mode || !nonSSRState[mode]) return;
+        nonSSRState[mode] = {
+          batchSize: batchSizeInput.value || MODE_DEFAULTS[mode].batchSize,
+          concurrency: concurrencyInput.value || MODE_DEFAULTS[mode].concurrency,
+          timeout: timeoutInput.value || MODE_DEFAULTS[mode].timeout
+        };
+      }
+
+      function restoreNonSSRValues(mode) {
+        if (!mode) return;
+        const defaults = MODE_DEFAULTS[mode] || MODE_DEFAULTS.csv;
+        const stored = nonSSRState[mode] || defaults;
+        batchSizeInput.value = stored.batchSize || defaults.batchSize;
+        concurrencyInput.value = stored.concurrency || defaults.concurrency;
+        timeoutInput.value = stored.timeout || defaults.timeout;
+      }
+
+      function applyModeContent(mode) {
         if (mode === 'video') {
-          concurrencyInput.value = 15;
-          timeoutInput.value = 300;
           sheetKeywordHelp.textContent = 'Videoモードでは動画リンク列を指定してください。Google Drive共有リンクを想定。';
           if (scoreSheetKeywordHelp) {
             scoreSheetKeywordHelp.textContent = '動画モードで数値化したスコアを書き込むシート名に含まれるキーワード。';
           }
           utteranceLabel.textContent = '動画リンク列番号';
         } else {
-          concurrencyInput.value = 50;
-          timeoutInput.value = 60;
           sheetKeywordHelp.textContent = '自然言語の分析結果を書き込むシート名に含まれるキーワード。該当シートが1つのみである必要があります。';
           if (scoreSheetKeywordHelp) {
             scoreSheetKeywordHelp.textContent = '分析テキストと同じ位置にスコアを書き込むシート名に含まれるキーワード。';
@@ -385,43 +369,70 @@
         }
       }
 
-      function updateSSREnabled() {
-        const enabled = enableSSR.checked;
-        const container = document.getElementById('ssr-settings-body');
-        if (container) {
-          container.classList.toggle('ssr-disabled', !enabled);
-        }
-        ssrFieldIds.forEach(id => {
-          const el = document.getElementById(id);
-          if (el) {
-            el.disabled = !enabled;
-          }
-        });
+      function enforceSSRState() {
+        batchSizeField.style.display = 'none';
+        concurrencyField.style.display = 'none';
+        batchSizeInput.value = '1';
+        concurrencyInput.value = '1';
       }
 
-      function appendSSRFields(fd) {
-        fd.set('enable_ssr', enableSSR.checked ? 'true' : 'false');
-        fd.set('ssr_reference_path', document.getElementById('ssr_reference_path').value || '');
-        fd.set('ssr_reference_set', document.getElementById('ssr_reference_set').value || '');
-        fd.set('ssr_embeddings_column', document.getElementById('ssr_embeddings_column').value || '');
-        fd.set('ssr_model_name', document.getElementById('ssr_model_name').value || '');
-        fd.set('ssr_device', document.getElementById('ssr_device').value || '');
-        fd.set('ssr_temperature', document.getElementById('ssr_temperature').value || '');
-        fd.set('ssr_epsilon', document.getElementById('ssr_epsilon').value || '');
+      function releaseSSRState() {
+        batchSizeField.style.display = '';
+        concurrencyField.style.display = '';
+      }
+
+      function applyMode(mode) {
+        applyModeContent(mode);
+        if (enableSSR.checked) {
+          enforceSSRState();
+        } else {
+          releaseSSRState();
+          restoreNonSSRValues(mode);
+        }
+      }
+
+      function handleSSRChange() {
+        if (enableSSR.checked) {
+          storeCurrentNonSSRValues(currentMode);
+          enforceSSRState();
+        } else {
+          releaseSSRState();
+          restoreNonSSRValues(currentMode);
+        }
       }
 
       enableSSR.addEventListener('change', () => {
-        updateSSREnabled();
+        handleSSRChange();
       });
 
       modeRadios.forEach(radio => {
         radio.addEventListener('change', () => {
-          applyModeDefaults(radio.value);
+          if (!radio.checked) return;
+          if (!enableSSR.checked) {
+            storeCurrentNonSSRValues(currentMode);
+          }
+          currentMode = radio.value;
+          applyMode(currentMode);
         });
       });
 
-      applyModeDefaults('csv');
-      updateSSREnabled();
+      batchSizeInput.addEventListener('change', () => {
+        if (enableSSR.checked) return;
+        nonSSRState[currentMode].batchSize = batchSizeInput.value;
+      });
+      concurrencyInput.addEventListener('change', () => {
+        if (enableSSR.checked) return;
+        nonSSRState[currentMode].concurrency = concurrencyInput.value;
+      });
+      timeoutInput.addEventListener('change', () => {
+        if (enableSSR.checked) return;
+        nonSSRState[currentMode].timeout = timeoutInput.value;
+      });
+
+      if (enableSSR.checked) {
+        storeCurrentNonSSRValues(currentMode);
+      }
+      applyMode(currentMode);
 
       // Settings status
       async function refreshKeysStatus(){
@@ -454,7 +465,7 @@
         fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
         const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
         fd.append('mode', selectedMode);
-        appendSSRFields(fd);
+        fd.set('enable_ssr', enableSSR.checked ? 'true' : 'false');
         fd.append('action', 'queue');
         const res = await fetch('/jobs', { method: 'POST', body: fd });
         if (!res.ok) { alert('キュー追加に失敗'); return; }
@@ -468,7 +479,7 @@
         fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
         const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
         fd.set('mode', selectedMode);
-        appendSSRFields(fd);
+        fd.set('enable_ssr', enableSSR.checked ? 'true' : 'false');
         fd.set('action', 'start');
         const res = await fetch('/jobs', { method: 'POST', body: fd });
           if (!res.ok) { alert('開始に失敗'); return; }
@@ -554,17 +565,25 @@
                 form.max_retries.value = cfg.max_retries;
                 document.getElementById('auto_slowdown').checked = !!cfg.auto_slowdown;
                 form.timeout_sec.value = cfg.timeout_sec;
-                document.querySelector(`#mode-form input[name="mode"][value="${cfg.mode}"]`).checked = true;
+                const modeValue = cfg.mode === 'video' ? 'video' : 'csv';
+                document.querySelector(`#mode-form input[name="mode"][value="${modeValue}"]`).checked = true;
+                currentMode = modeValue;
                 form.system_prompt.value = cfg.system_prompt || '';
-                enableSSR.checked = cfg.enable_ssr !== false;
-                form.ssr_reference_path.value = cfg.ssr_reference_path || '';
-                form.ssr_reference_set.value = cfg.ssr_reference_set || '';
-                form.ssr_embeddings_column.value = cfg.ssr_embeddings_column || 'embedding';
-                form.ssr_model_name.value = cfg.ssr_model_name || 'sentence-transformers/all-MiniLM-L6-v2';
-                form.ssr_device.value = cfg.ssr_device || '';
-                form.ssr_temperature.value = typeof cfg.ssr_temperature === 'number' ? cfg.ssr_temperature : 1.0;
-                form.ssr_epsilon.value = typeof cfg.ssr_epsilon === 'number' ? cfg.ssr_epsilon : 0.0;
-                updateSSREnabled();
+                enableSSR.checked = cfg.enable_ssr === true;
+                const defaults = MODE_DEFAULTS[modeValue] || MODE_DEFAULTS.csv;
+                if (enableSSR.checked) {
+                  nonSSRState[modeValue] = { ...defaults };
+                } else {
+                  nonSSRState[modeValue] = {
+                    batchSize: String(cfg.batch_size ?? defaults.batchSize),
+                    concurrency: String(cfg.concurrency ?? defaults.concurrency),
+                    timeout: String(cfg.timeout_sec ?? defaults.timeout)
+                  };
+                }
+                applyMode(modeValue);
+                if (!enableSSR.checked) {
+                  restoreNonSSRValues(modeValue);
+                }
                 form.dataset.editing = it.job_id;
                 alert('フォームに読み込みました。下の「編集を保存」で反映できます。');
               }catch{}
@@ -577,7 +596,7 @@
               fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
               const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
               fd.set('mode', selectedMode);
-              appendSSRFields(fd);
+              fd.set('enable_ssr', enableSSR.checked ? 'true' : 'false');
               const r = await fetch(`/queue/${ej}/edit`, { method:'POST', body: fd });
               if(!r.ok){ alert('保存に失敗'); return; }
               alert('保存しました'); form.dataset.editing='';

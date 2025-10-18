@@ -81,13 +81,6 @@ class InterviewJobForm(_BaseForm):
     persona_overview_column: str = "B"
     persona_prompt_column: str = "C"
     persona_start_row: int = 2
-    ssr_reference_path: Optional[str] = None
-    ssr_reference_set: Optional[str] = None
-    ssr_embeddings_column: str = "embedding"
-    ssr_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
-    ssr_device: Optional[str] = None
-    ssr_temperature: float = 1.0
-    ssr_epsilon: float = 0.0
     persona_count: int = 60
     persona_template: Optional[str] = None
     persona_seed: int = 42
@@ -125,9 +118,6 @@ class InterviewJobForm(_BaseForm):
         "persona_sheet_url",
         "persona_template",
         "notes",
-        "ssr_reference_path",
-        "ssr_reference_set",
-        "ssr_device",
         mode="before",
     )
     def _strip_optional(cls, value: object | None) -> Optional[str]:
@@ -226,13 +216,6 @@ class InterviewJobForm(_BaseForm):
             persona_overview_column=self.persona_overview_column,
             persona_prompt_column=self.persona_prompt_column,
             persona_start_row=self.persona_start_row,
-            ssr_reference_path=self.ssr_reference_path,
-            ssr_reference_set=self.ssr_reference_set,
-            ssr_embeddings_column=self.ssr_embeddings_column,
-            ssr_model_name=self.ssr_model_name,
-            ssr_device=self.ssr_device,
-            ssr_temperature=self.ssr_temperature,
-            ssr_epsilon=self.ssr_epsilon,
             persona_count=persona_count,
             persona_template=self.persona_template,
             persona_seed=self.persona_seed,

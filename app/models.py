@@ -48,13 +48,6 @@ class RunConfig(BaseModel):
     primary_provider: Provider = Provider.gemini
     fallback_provider: Provider = Provider.openai
     enable_ssr: bool = True
-    ssr_reference_path: Optional[str] = None
-    ssr_reference_set: Optional[str] = None
-    ssr_embeddings_column: str = "embedding"
-    ssr_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
-    ssr_device: Optional[str] = None
-    ssr_temperature: confloat(ge=0.0) = 1.0
-    ssr_epsilon: confloat(ge=0.0) = 0.0
     spreadsheet_url: str = Field(..., min_length=5)
     sheet_keyword: str = "Link"
     score_sheet_keyword: str = "Embedding"
@@ -225,13 +218,6 @@ class InterviewJobConfig(BaseModel):
     persona_overview_column: str = Field("B", min_length=1, max_length=3)
     persona_prompt_column: str = Field("C", min_length=1, max_length=3)
     persona_start_row: conint(ge=1) = 2
-    ssr_reference_path: Optional[str] = None
-    ssr_reference_set: Optional[str] = None
-    ssr_embeddings_column: str = "embedding"
-    ssr_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
-    ssr_device: Optional[str] = None
-    ssr_temperature: confloat(ge=0.0) = 1.0
-    ssr_epsilon: confloat(ge=0.0) = 0.0
     persona_count: conint(ge=1, le=500) = 60
     persona_template: Optional[str] = None
     persona_seed: conint(ge=0, le=1_000_000) = 42
