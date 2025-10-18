@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="{{ url_for('static', filename='assets/AnyAI_icon.png') }}">
+<title>AnyAI Control Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='anyai/anyai.tokens.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='anyai/anyai.components.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='anyai/anyai.utilities.css') }}">
+<script defer src="{{ url_for('static', filename='anyai/anyai.js') }}"></script>
+<style>
+  .page { padding: var(--anyai-space-08) 0 var(--anyai-space-10); }
+  .nav a.is-active { font-weight: 700; }
+  .grid-actions { display: grid; gap: var(--anyai-space-05); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .card-action { display: flex; flex-direction: column; gap: var(--anyai-space-04); }
+  .card-action footer { margin-top: auto; }
+</style>
+</head>
+<body>
+<header class="anyai-header">
+  <a class="brand" href="{{ url_for('main_page') }}" aria-label="AnyAI ホーム">
+    <img src="{{ url_for('static', filename='assets/AnyAI_logo.png') }}" alt="AnyAI ロゴ" style="height:32px; width:auto;">
+    <span>AnyAI</span>
+  </a>
+  <nav class="nav">
+    <a href="{{ url_for('main_page') }}" class="{{ 'is-active' if active_page == 'home' else '' }}">Main</a>
+    <a href="{{ url_for('video_analysis_page') }}" class="{{ 'is-active' if active_page == 'video-analysis' else '' }}">AnyAIVideoAnalysis</a>
+    <a href="{{ url_for('comment_enhancer_page') }}" class="{{ 'is-active' if active_page == 'comment-enhancer' else '' }}">AnyAICommentEnhancer</a>
+    <a href="{{ url_for('video_summarizer_page') }}" class="{{ 'is-active' if active_page == 'video-summarizer' else '' }}">AnyAIVideoSummarizer</a>
+    <a href="{{ url_for('kol_reviewer_page') }}" class="{{ 'is-active' if active_page == 'kol-reviewer' else '' }}">AnyAIKOLReviewer</a>
+  </nav>
+</header>
+
+<main class="page container">
+  <section class="hero card">
+    <div class="card-body">
+      <h1 class="mb-2">AnyAI Control Center</h1>
+      <p class="text-subtle">動画とコメントを横断して分析・要約する AnyAI スイートのエントリーポイントです。</p>
+    </div>
+  </section>
+
+  <section class="mt-6">
+    <div class="grid-actions">
+      <div class="card card-action">
+        <div class="card-body">
+          <h2 class="mb-1">AnyAIVideoAnalysis</h2>
+          <p class="text-subtle">Google Drive 動画の言語化を Gemini で自動化します。</p>
+        </div>
+        <footer class="card-footer">
+          <a class="btn btn-primary" href="{{ url_for('video_analysis_page') }}">開く</a>
+        </footer>
+      </div>
+      <div class="card card-action">
+        <div class="card-body">
+          <h2 class="mb-1">AnyAICommentEnhancer</h2>
+          <p class="text-subtle">コメントを文脈補完して高品質な引用に再構成します。</p>
+        </div>
+        <footer class="card-footer">
+          <a class="btn btn-primary" href="{{ url_for('comment_enhancer_page') }}">開く</a>
+        </footer>
+      </div>
+      <div class="card card-action">
+        <div class="card-body">
+          <h2 class="mb-1">AnyAIVideoSummarizer</h2>
+          <p class="text-subtle">動画要約とコメント傾向を 1 セルに凝縮してレポート化します。</p>
+        </div>
+        <footer class="card-footer">
+          <a class="btn btn-primary" href="{{ url_for('video_summarizer_page') }}">開く</a>
+        </footer>
+      </div>
+      <div class="card card-action">
+        <div class="card-body">
+          <h2 class="mb-1">AnyAIKOLReviewer</h2>
+          <p class="text-subtle">KOLの調査メモと視聴者反応からプロフィール・リスク・コンテンツ傾向を詳細分析します。</p>
+        </div>
+        <footer class="card-footer">
+          <a class="btn btn-primary" href="{{ url_for('kol_reviewer_page') }}">開く</a>
+        </footer>
+      </div>
+    </div>
+  </section>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="{{ url_for('static', filename='assets/AnyAI_icon.png') }}">
+<title>AnyAIVideoAnalysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='anyai/anyai.tokens.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='anyai/anyai.components.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='anyai/anyai.utilities.css') }}">
+<script defer src="{{ url_for('static', filename='anyai/anyai.js') }}"></script>
+<style>
+  .page { padding: var(--anyai-space-08) 0 var(--anyai-space-10); }
+  .nav a.is-active { font-weight: 700; }
+  #log-container { height: 320px; overflow-y: auto; font-family: var(--anyai-font-mono); font-size: 0.9rem; white-space: pre-wrap; background: var(--anyai-surface-alt); padding: var(--anyai-space-04); border-radius: var(--anyai-radius-md); border: 1px solid var(--anyai-border); }
+  form .grid-2 { display: grid; gap: var(--anyai-space-04); grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+</style>
+</head>
+<body>
+<header class="anyai-header">
+  <a class="brand" href="{{ url_for('main_page') }}" aria-label="AnyAI ホーム">
+    <img src="{{ url_for('static', filename='assets/AnyAI_logo.png') }}" alt="AnyAI ロゴ" style="height:32px; width:auto;">
+    <span>AnyAI</span>
+  </a>
+  <nav class="nav">
+    <a href="{{ url_for('main_page') }}" class="{{ 'is-active' if active_page == 'home' else '' }}">Main</a>
+    <a href="{{ url_for('video_analysis_page') }}" class="{{ 'is-active' if active_page == 'video-analysis' else '' }}">AnyAIVideoAnalysis</a>
+    <a href="{{ url_for('comment_enhancer_page') }}" class="{{ 'is-active' if active_page == 'comment-enhancer' else '' }}">AnyAICommentEnhancer</a>
+    <a href="{{ url_for('video_summarizer_page') }}" class="{{ 'is-active' if active_page == 'video-summarizer' else '' }}">AnyAIVideoSummarizer</a>
+  </nav>
+</header>
+
+<main class="page container">
+  <h1 class="mb-4">AnyAIVideoAnalysis</h1>
+  <div class="card">
+    <div class="card-body">
+      <form id="runner-form" class="column gap-4">
+        <div class="field">
+          <label for="sheet-url">Google Spreadsheet URL</label>
+          <input class="input" type="url" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..." required>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="source-sheet-name">Source Sheet Name</label>
+            <input class="input" type="text" id="source-sheet-name" value="Sheet1">
+          </div>
+          <div class="field">
+            <label for="video-col-letter">Video URL Column</label>
+            <input class="input" type="text" id="video-col-letter" value="B">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="output-sheet-name">Output Sheet Name</label>
+            <input class="input" type="text" id="output-sheet-name" placeholder="未指定: Source Sheet">
+          </div>
+          <div class="field">
+            <label for="output-col-letter">Output Column</label>
+            <input class="input" type="text" id="output-col-letter" value="G">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="start-row">Start Row</label>
+            <input class="input" type="number" id="start-row" value="2" min="2">
+          </div>
+          <div class="field">
+            <label for="end-row">End Row (任意)</label>
+            <input class="input" type="number" id="end-row" placeholder="最後まで">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Gemini Model</label>
+            <div class="radio-group">
+              <label class="radio"><input type="radio" name="model-name" value="gemini-flash-latest" checked><span>Gemini Flash (latest)</span></label>
+              <label class="radio"><input type="radio" name="model-name" value="gemini-pro-latest"><span>Gemini Pro (latest)</span></label>
+            </div>
+          </div>
+          <div class="field">
+            <label for="workers">Batch</label>
+            <input class="input" type="number" id="workers" value="5" min="1" max="50">
+          </div>
+        </div>
+        <div class="field">
+          <label class="checkbox">
+            <input type="checkbox" id="debug-mode">
+            <span>デバッグモード（逐次処理＆エラー自動再実行ログ）</span>
+          </label>
+        </div>
+        <div class="row right">
+          <button type="button" class="btn btn-outline" id="stop-button" disabled>停止</button>
+          <button type="submit" class="btn btn-primary" id="run-button">実行</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <section class="mt-6">
+    <div class="card">
+      <div class="card-header">
+        <strong>Execution Log</strong>
+      </div>
+      <div class="card-body">
+        <div id="log-container"><span class="text-subtle">Awaiting configuration...</span></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+
+<script>
+  const form = document.getElementById('runner-form');
+  const logContainer = document.getElementById('log-container');
+  const runButton = document.getElementById('run-button');
+  const stopButton = document.getElementById('stop-button');
+  let currentProcessId = null;
+  let eventSource = null;
+
+  function appendLog(message, isError = false) {
+    const timestamp = new Date().toLocaleTimeString();
+    const line = document.createElement('div');
+    line.innerHTML = `<span class="text-subtle">[${timestamp}]</span> <span style="color:${isError ? 'var(--anyai-color-danger-700)' : 'inherit'};">${message}</span>`;
+    logContainer.appendChild(line);
+    logContainer.scrollTop = logContainer.scrollHeight;
+  }
+
+  function resetUI() {
+    runButton.disabled = false;
+    runButton.textContent = '実行';
+    stopButton.disabled = true;
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+    currentProcessId = null;
+  }
+
+  stopButton.addEventListener('click', async () => {
+    if (!currentProcessId) {
+      appendLog('-> 停止対象のジョブがありません。', true);
+      return;
+    }
+    stopButton.disabled = true;
+    appendLog('-> 停止信号を送信します...');
+    try {
+      await fetch('/stop-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ process_id: currentProcessId }),
+      });
+      appendLog('-> 停止信号を送信しました。');
+    } catch (error) {
+      appendLog(`-> 停止リクエストでエラー: ${error}`, true);
+    }
+  });
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+
+    const payload = {
+      sheet_url: document.getElementById('sheet-url').value,
+      source_sheet_name: document.getElementById('source-sheet-name').value,
+      video_col_letter: document.getElementById('video-col-letter').value,
+      output_sheet_name: document.getElementById('output-sheet-name').value,
+      output_col_letter: document.getElementById('output-col-letter').value,
+      start_row: document.getElementById('start-row').value,
+      end_row: document.getElementById('end-row').value,
+      model_name: document.querySelector('input[name="model-name"]:checked').value,
+      workers: document.getElementById('workers').value,
+      debug_mode: document.getElementById('debug-mode').checked,
+    };
+
+    logContainer.innerHTML = '';
+    appendLog('-> ジョブを起動しました。ログ待機中...');
+    runButton.disabled = true;
+    runButton.textContent = '実行中...';
+    stopButton.disabled = false;
+
+    try {
+      const response = await fetch('/run-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        appendLog(`Error: ${result.error || 'Unknown error'}`, true);
+        resetUI();
+        return;
+      }
+      currentProcessId = result.process_id;
+      appendLog(`-> Process ID: ${currentProcessId}`);
+
+      eventSource = new EventSource(`/stream-logs?process_id=${currentProcessId}`);
+      eventSource.onmessage = (evt) => appendLog(evt.data);
+      eventSource.addEventListener('error', (evt) => {
+        if (evt.data) {
+          appendLog(`-> ${evt.data}`, true);
+        } else {
+          appendLog('-> ログストリームが切断されました。', true);
+        }
+        resetUI();
+      });
+      eventSource.addEventListener('complete', (evt) => {
+        appendLog(`-> ${evt.data}`);
+        resetUI();
+      });
+    } catch (error) {
+      appendLog(`Network or server error: ${error}`, true);
+      resetUI();
+    }
+  });
+</script>
+</body>
+</html>

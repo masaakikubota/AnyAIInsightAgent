@@ -1,0 +1,717 @@
+```
+{
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -4816,
+        2128
+      ],
+      "id": "34c0e61e-8235-4e22-af24-aa7acc22eee0",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "89d56b32-6d4c-48f0-9d3e-6a91ad79444a",
+              "name": "SHEET_ID",
+              "value": "1VB45Aqd7pB9-Z2ATSqJD9DtVAmlJQfuLLY6Q9AK8ktk",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -4608,
+        2128
+      ],
+      "id": "96dfb95f-7e9c-479c-83a9-ddfbb451383d",
+      "name": "SetSheetID"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2145103347,
+          "mode": "list",
+          "cachedResultName": "RawData_Video",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1VB45Aqd7pB9-Z2ATSqJD9DtVAmlJQfuLLY6Q9AK8ktk/edit#gid=2145103347"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "C1:E"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -4400,
+        2128
+      ],
+      "id": "cc588af4-86e9-4f0d-9976-f95aebe8947c",
+      "name": "GetUniversalInfo",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "yY9gAPDfH8DfP9ZJ",
+          "name": "OAuthAPI_Kubotin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -3776,
+        2224
+      ],
+      "id": "1f99eb8f-a3dd-41ad-b41b-74dba941cc40",
+      "name": "1stLoop"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "961ee943-f910-463d-8de6-d402ad428901",
+              "leftValue": "={{ $json.Content }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -4192,
+        2128
+      ],
+      "id": "5ed2efa9-95f9-45ac-86e3-029569c71d80",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -3984,
+        2224
+      ],
+      "id": "d40acbb8-f181-4a61-80f0-35c914790eab",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3d173382-f4e6-41d4-93aa-a8a15106a28b",
+              "name": "row_number",
+              "value": "={{ $json.row_number }}",
+              "type": "number"
+            },
+            {
+              "id": "3430fa89-c989-4b81-98d9-af7b4aa27e57",
+              "name": "ID",
+              "value": "={{ $json.VideoID }}",
+              "type": "string"
+            },
+            {
+              "id": "4341bba4-364b-404f-bc7f-a2397514db17",
+              "name": "Content",
+              "value": "={{ $json.Content }}",
+              "type": "string"
+            },
+            {
+              "id": "72354958-893c-429f-9a5c-1e28c373aff7",
+              "name": "SHEET_ID",
+              "value": "={{ $json.SHEET_ID }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -3584,
+        2432
+      ],
+      "id": "22e2d5d3-076a-40d2-abf3-9b2d5ff9141d",
+      "name": "SetContent/Comment"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2145103347,
+          "mode": "list",
+          "cachedResultName": "RawData_Video",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1VB45Aqd7pB9-Z2ATSqJD9DtVAmlJQfuLLY6Q9AK8ktk/edit#gid=2145103347"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "VideoID",
+              "lookupValue": "={{ $json.ID }}"
+            }
+          ]
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRange"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -3376,
+        2432
+      ],
+      "id": "c061cef4-9e93-4d73-94c8-ff33317de0b2",
+      "name": "GetComment",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "yY9gAPDfH8DfP9ZJ",
+          "name": "OAuthAPI_Kubotin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code ノード用（JavaScript）\n// そのまま貼って使ってください。\n\n// 入力アイテムを取得\nconst items = $input.all(); // n8n v2 の場合。v1 環境なら this.getInputData() を使う場合あり\n\n// 設定：'Comment' の大文字小文字を区別するか\nconst caseSensitive = true;\n\n// 空判定ヘルパー\nfunction isBlank(value) {\n  if (value === undefined || value === null) return true;\n  if (typeof value === 'string') return value.trim() === '';\n  if (Array.isArray(value)) return value.length === 0;\n  if (typeof value === 'object') return Object.keys(value).length === 0;\n  // number, boolean などは空でないとみなす\n  return false;\n}\n\nconst output = [];\n\nfor (let i = 0; i < items.length; i++) {\n  const json = items[i].json || {};\n\n  for (const key of Object.keys(json)) {\n    const matches = caseSensitive\n      ? key.includes('Comment')\n      : key.toLowerCase().includes('comment');\n\n    if (!matches) continue;\n\n    const val = json[key];\n    if (isBlank(val)) continue;\n\n    // 出力アイテムを作成（必要な情報を調整してください）\n    output.push({\n      json: {\n        propertyName: key,     // 元のプロパティ名（例: \"UserComment\"）\n        propertyValue: val,    // その値\n        originalItemIndex: i,  // 元の input の index（必要なら）\n        // originalItem: json, // 元の JSON を丸ごと残したい場合はこの行のコメントを外す\n      },\n    });\n  }\n}\n\n// return で次ノードに渡す\nreturn output;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3184,
+        2432
+      ],
+      "id": "2a8034d0-0723-4743-b592-8d70e216aa31",
+      "name": "ArrayInfo"
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -2768,
+        2528
+      ],
+      "id": "07570982-dc32-45c4-a5fd-137132009720",
+      "name": "2ndLoop",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// PrepareRanges (Function) - expects input items from Loop\n// 出力: { json: { body: { valueInputOption, data } } }\n// data: [{ range: \"RawData_VideoComment!E2\", majorDimension:\"ROWS\", values:[[\"text\"]]}, ... ]\n\n// utility: number -> column letter (1 -> A, 27 -> AA)\nfunction numToCol(n){\n  let s = '';\n  while(n > 0){\n    const rem = (n - 1) % 26;\n    s = String.fromCharCode(65 + rem) + s;\n    n = Math.floor((n - 1) / 26);\n  }\n  return s;\n}\n\nconst items = $input.all(); // Loop からの全アイテム\nconst data = [];\n\nfor (const it of items) {\n  const json = it.json;\n  const row = Number(json.row_number);\n  const colName = String(json.ColName || '');\n  const output = json.output == null ? '' : String(json.output);\n\n  // ColName から数字を抽出 (例: \"Comment_3\" -> 3)\n  const m = colName.match(/Comment_(\\d+)/i);\n  if (!m) {\n    // マッチしない場合はスキップする（必要ならログ出力）\n    continue;\n  }\n  const n = parseInt(m[1], 10);\n  const colIndex = n + 4; // 指定ルール: {Number} + 4\n  const colLetter = numToCol(colIndex);\n\n  const range = `RawData_VideoComment!${colLetter}${row}`;\n\n  data.push({\n    range,\n    majorDimension: \"ROWS\",\n    values: [[ output ]]\n  });\n}\n\n// batchUpdate の body を返す\nconst body = {\n  valueInputOption: \"RAW\",\n  data\n};\n\nreturn [{ json: { body } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2496,
+        2320
+      ],
+      "id": "6ec63571-6f44-45cd-b22f-d121fba872c9",
+      "name": "ArrayOutput",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $json.SHEET_ID }}/values:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { valueInputOption: 'RAW', data: $json.body.data } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2128,
+        2384
+      ],
+      "id": "65c61c04-d4b5-4e10-9a21-1c553c1d3437",
+      "name": "SendRequest",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "FfnWG4QA4xGQvjnx",
+          "name": "Google account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -2992,
+        2528
+      ],
+      "id": "b632e72e-0b7d-4611-9e91-e4ede490df72",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -2320,
+        2384
+      ],
+      "id": "871aa8ed-3e8a-47ac-a535-6c20f98cc002",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b0d39356-4271-476c-850b-333e2dc12c99",
+              "name": "SHEET_ID",
+              "value": "={{ $json.SHEET_ID }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2496,
+        2464
+      ],
+      "id": "9f7a71cc-569f-47a1-96ff-288ddb9a4fb3",
+      "name": "ReSetSheetID",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7012da75-f73b-45c8-b14f-63270ecbb83c",
+              "name": "row_number",
+              "value": "={{ $json.row_number }}",
+              "type": "number"
+            },
+            {
+              "id": "fe82d7b3-d898-480a-916a-d9c9785d1daa",
+              "name": "ColName",
+              "value": "={{ $json.propertyName }}",
+              "type": "string"
+            },
+            {
+              "id": "1ea25d2e-5832-446d-87d6-cf44e49ddd08",
+              "name": "Content",
+              "value": "={{ $json.Content }}",
+              "type": "string"
+            },
+            {
+              "id": "3f98bd7f-d70a-414d-8e48-d1f55c7845da",
+              "name": "Comment",
+              "value": "={{ $json.propertyValue }}",
+              "type": "string"
+            },
+            {
+              "id": "c3f6f597-abbf-414b-ba8e-009eef34b015",
+              "name": "SHEET_ID",
+              "value": "={{ $json.SHEET_ID }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2496,
+        2656
+      ],
+      "id": "1c8677c3-81d2-4060-91f1-a2e16db68a6d",
+      "name": "SetData"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=[VIDEO_CONTEXT]\n- {{ $json.Content }}\n---\n[ORIGINAL_COMMENT]\n-  {{ $json.Comment }}",
+        "options": {
+          "systemMessage": "role: |\n  あなたはSNSの動画とコメントを分析し、その背後にある豊かな文脈を復元する言語文化エキスパートです。\nobjective: |\n  与えられた[VIDEO_CONTEXT]と[ORIGINAL_COMMENT]から、投稿者の意図・感情・文化的背景を深く読み解き、それらを統合した一つの流れるような「コンテクスト保管済みコメント」を生成します。最終出力は元コメントと同じ「トンマナ（語調・文体・長さ感）」を保持して書くこと。解説調にはしないこと。\ninputs:\n  VIDEO_CONTEXT: \"動画の説明文、台詞、特定の映像表現、登場人物、製品名、発言のタイムスタンプ等を含むテキスト\"\n  ORIGINAL_COMMENT: \"投稿者の元コメント（任意言語）。短文・長文・スラング・方言を含む可能性あり。\"\nbehavior_rules:\n  - Language preservation:\n      description: \"最終アウトプットは必ず[ORIGINAL_COMMENT]と同じ言語で書く。\"\n  - Tone & register matching:\n      description: |\n        \"文体・語調（カジュアル／フォーマル／皮肉／熱狂など）、句読点や文の短さ・冗長さの程度、語彙レベルを元コメントに合わせる。だが、SNS特有の過度なハッシュタグや顔文字・絵文字は使用しない。絵文字が元コメントの感情を担っている場合は、その感情を同じトンマナで言葉に置き換えて表現する。\"\n  - Emoji/意味不明文字専用ルール:\n      description: |\n        \"もし[ORIGINAL_COMMENT]が『空白を除いて絵文字のみ、あるいは意味のある言語文字（アルファベット、漢字・仮名、ハングル、キリル文字等）を全く含まない記号列・無意味な文字列』である場合、最終出力は**空文字列**（長さ0の文字列）を返すこと。\"\n      detection_hint: |\n        \"具体的には、トリミングした後の文字列に対して「英字（A–Z, a–z）」「数字」「漢字」「ひらがな」「カタカナ」「ハングル」「キリル」等の『言語的文字』が一つも含まれていなければ空返しと判定する。\"\n  - No process traces:\n      description: \"最終出力に分析手順・ステップ記述・メタ発言（例：「STEP 1で〜」）を含めない。\"\n  - Specificity:\n      description: \"可能な限り[VIDEO_CONTEXT]で言及される固有名詞（製品名、人物名、発言、機能、場面）を本文中に盛り込む。\"\nsteps:\n  - STEP_1_Cultural_and_Linguistic_Context_Analysis:\n      tasks:\n        - \"与えられたテキストから言語を特定する（出力言語決定）。\"\n        - \"動画の内容から該当する国・文化・社会規範・コミュニティ特有のトレンドやミームを推察し、その洞察を以後の解釈の根拠とする。\"\n  - STEP_2_Deconstruct_the_Comment:\n      tasks:\n        - \"語彙・語調・表現（スラング、敬語、方言等）を分析する。\"\n        - \"コメントに込められた主要感情（例：称賛／驚き／皮肉／共感／批判）と強度を特定する。\"\n        - \"コメント投稿者の立場（長年のファン／専門家／初見者等）を仮説する。\"\n  - STEP_3_Identify_Trigger_in_Video:\n      tasks:\n        - \"動画のどの要素（発言・製品の特徴・編集・BGM・構成）が元コメントを誘発したかを特定する。\"\n        - \"視聴者の期待と現実の間に生まれたギャップや驚き、共感のポイントに着目する。\"\n  - STEP_4_Synthesize_Motivation:\n      tasks:\n        - \"STEP1〜3の洞察を統合し、投稿者がなぜそれをコメントとして残したか（動機）を推察する。\"\n  - STEP_5_Generate_Enriched_Comment:\n      tasks:\n        - \"投稿者の「心の声」を代弁する一つの流れるような文章を生成する。\"\n        - \"必ず元コメントと同じトンマナ（語調・長さ感）で書く。\"\n        - \"SNS的な絵文字は使わない。元コメントが絵文字で感情を示していた場合は、その感情を語彙で補う。\"\noutput:\n  format: \"単一の文章（パラグラフ）。改行や箇条書きを含めない。余分な前書き・後書き・ラベルを一切含めない。\"\n  language: \"元コメントと同じ言語\"\n  empty_case: \"元コメントが絵文字のみ・意味不明文字列の場合は厳密に空文字（何も含まない）を返す。\"\nexamples:\n  - input:\n      VIDEO_CONTEXT: \"新作スマホ『ZetaPhone X』の開封レビュー。カメラ性能を強調した短いカットと、最後に『これは革命だ』と語るKOLの一言あり。\"\n      ORIGINAL_COMMENT: \"マジで画質やべえ…これ買うしかないわ\"\n    expected_output: \"長年スマホを追ってきた視点から見ても、ZetaPhone Xのカメラは明らかに一段上。あの色再現と夜景のノイズ処理は衝撃的で、“革命だ”という言い回しも大袈裟じゃない。今の自分なら即買い検討レベルだ。\"\n  - input:\n      VIDEO_CONTEXT: \"料理チャンネルの短い動画。家庭の味の再現を目指す。\"\n      ORIGINAL_COMMENT: \"😂😂\"\n    expected_output: \"\"  # 空文字（絵文字のみのため）\nnotes: |\n  - 最終生成物はユーザー（プラットフォーム）にそのまま投稿可能な「コンテクスト保管済みコメント」であること。\n  - このYAML自体はプロンプトとしてそのままLLMに渡せる構造を意図しています。実行時はinputsを埋めて処理してください。"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -2288,
+        2656
+      ],
+      "id": "1b63cbff-e28a-4f88-9c01-765ff671d58d",
+      "name": "AnalyzeAI"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "665ea50c-ce70-45a7-975d-73c0b694f1a2",
+              "name": "row_number",
+              "value": "={{ $('SetData').item.json.row_number }}",
+              "type": "number"
+            },
+            {
+              "id": "b4091537-6e54-4863-b5fa-2ada4ca5e33b",
+              "name": "ColName",
+              "value": "={{ $('SetData').item.json.ColName }}",
+              "type": "string"
+            },
+            {
+              "id": "5c127db9-a7ea-4216-af2c-41107bcac483",
+              "name": "output",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            },
+            {
+              "id": "73baf865-0198-48f0-8020-13b515348395",
+              "name": "SHEET_ID",
+              "value": "={{ $('SetData').item.json.SHEET_ID }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1936,
+        2656
+      ],
+      "id": "c0c6112d-3523-43e2-b031-9348e5cf3b14",
+      "name": "SetOutPut"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -2288,
+        2848
+      ],
+      "id": "97b841e5-adfd-45a9-86a0-191e3ab75b24",
+      "name": "OpenAI Chat Model2",
+      "credentials": {
+        "openAiApi": {
+          "id": "55cxIp330aHWpDLB",
+          "name": "OpenAi account 2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "SetSheetID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SetSheetID": {
+      "main": [
+        [
+          {
+            "node": "GetUniversalInfo",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "GetUniversalInfo": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1stLoop": {
+      "main": [
+        [],
+        [
+          {
+            "node": "SetContent/Comment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "1stLoop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SetContent/Comment": {
+      "main": [
+        [
+          {
+            "node": "GetComment",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "GetComment": {
+      "main": [
+        [
+          {
+            "node": "ArrayInfo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ArrayInfo": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2ndLoop": {
+      "main": [
+        [
+          {
+            "node": "ArrayOutput",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ReSetSheetID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SetData",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ArrayOutput": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SendRequest": {
+      "main": [
+        [
+          {
+            "node": "1stLoop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "2ndLoop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "SendRequest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ReSetSheetID": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "SetData": {
+      "main": [
+        [
+          {
+            "node": "AnalyzeAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AnalyzeAI": {
+      "main": [
+        [
+          {
+            "node": "SetOutPut",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SetOutPut": {
+      "main": [
+        [
+          {
+            "node": "2ndLoop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AnalyzeAI",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "04c05cd68d7972a0fe3714ed1b6aef2d69771939595e7577fc26025436d4f918"
+  }
+}
+```

@@ -1,0 +1,18 @@
+# Ignore environment variables file
+.env
+
+# Ignore Google OAuth token file
+token.json
+
+# Ignore Python virtual environment
+.venv/
+
+# Ignore macOS specific files
+.DS_Store
+AnyAgent_OAuth_1.json
+video_analyzer/token.json
+credentials/*
+!credentials/*.example.json
+!credentials/*.example.txt
+!credentials/token.example.json
+!credentials/README.md
