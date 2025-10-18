@@ -137,14 +137,14 @@ def _prompt_for_keys() -> dict[str, str]:
 def run_application(python_exec: str, env_overrides: dict[str, str]):
     """アプリケーションを実行"""
     print("🚀 アプリケーションを起動中...")
-    print("📍 アクセス先: http://localhost:25254")
+    print("📍 アクセス先: http://localhost:25259")
     print("🛑 停止するには Ctrl+C を押してください")
     print("-" * 50)
 
     try:
         # 環境変数でポートを指定してアプリケーションを実行
         env = os.environ.copy()
-        env['PORT'] = '25254'
+        env['PORT'] = '25259'
         env.update(env_overrides)
         subprocess.run([
             python_exec, "-m", "app.main"
