@@ -55,27 +55,101 @@ def setup_environment():
     print("✅ 環境設定完了")
 
 def create_env_from_keys():
-    """Keys.txtから.envファイルを作成"""
+    """Keys.txtを解析し、.envファイルを生成する."""
+    keys_path = Path("Keys.txt")
+
     try:
-        with open("Keys.txt", "r") as f:
-            content = f.read().strip()
-        
-        # Keys.txtの内容を.env形式に変換
-        lines = content.split('\n')
-        gemini_key = lines[0] if len(lines) > 0 else content
-        openai_key = lines[1] if len(lines) > 1 else ''
-        
-        env_content = f"""# 環境変数設定
-GEMINI_API_KEY={gemini_key}
-OPENAI_API_KEY={openai_key}
-"""
-        
-        with open(".env", "w") as f:
-            f.write(env_content)
-        
+        values = _load_keys_file(keys_path)
+        if not values:
+            print("⚠️  Keys.txtから有効なAPIキーを取得できませんでした。")
+            values = _prompt_for_keys()
+
+        Path(".env").write_text(_format_env(values), encoding="utf-8")
         print("✅ .envファイルを作成しました")
-    except Exception as e:
+    except KeyboardInterrupt:
+        print("\n❌ .envファイルの作成をユーザーが中断しました")
+    except Exception as e:  # noqa: BLE001
         print(f"❌ .envファイルの作成に失敗: {e}")
+
+
+def _prompt_for_keys() -> dict[str, str]:
+    """対話的にAPIキーを入力させる."""
+    print("⚠️  Keys.txtが見つからないか、解析できませんでした。APIキーを直接入力してください。")
+    gemini_key = input("   GEMINI_API_KEY (未設定の場合は空のままEnter): ").strip()
+    openai_key = input("   OPENAI_API_KEY (未設定の場合は空のままEnter): ").strip()
+    return {"GEMINI_API_KEY": gemini_key, "OPENAI_API_KEY": openai_key}
+
+
+def _format_env(values: dict[str, str]) -> str:
+    """辞書から.envファイルの内容を生成する."""
+    lines = ["# 環境変数設定"]
+    for key in ("GEMINI_API_KEY", "OPENAI_API_KEY"):
+        lines.append(f"{key}={values.get(key, '')}")
+
+    extra_keys = {k: v for k, v in values.items() if k not in {"GEMINI_API_KEY", "OPENAI_API_KEY"}}
+    for key, value in extra_keys.items():
+        lines.append(f"{key}={value}")
+
+    return "\n".join(lines) + "\n"
+
+
+def _load_keys_file(path: Path) -> dict[str, str]:
+    """Keys.txtの内容を解析して辞書にする."""
+    if not path.exists():
+        return {}
+
+    content = path.read_text(encoding="utf-8")
+    values: dict[str, str] = {}
+    sequential: list[str] = []
+
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        parsed = _parse_key_line(line)
+        if parsed is None:
+            sequential.append(_strip_quotes(_remove_inline_comment(line)))
+            continue
+
+        key, value = parsed
+        key_upper = key.upper()
+        value = _strip_quotes(_remove_inline_comment(value))
+
+        if "GEMINI" in key_upper and "API_KEY" in key_upper:
+            values.setdefault("GEMINI_API_KEY", value)
+        elif "OPENAI" in key_upper and "API_KEY" in key_upper:
+            values.setdefault("OPENAI_API_KEY", value)
+        else:
+            values.setdefault(key_upper, value)
+
+    if sequential:
+        if sequential[0]:
+            values.setdefault("GEMINI_API_KEY", sequential[0])
+        if len(sequential) > 1 and sequential[1]:
+            values.setdefault("OPENAI_API_KEY", sequential[1])
+
+    return values
+
+
+def _parse_key_line(line: str):
+    """"KEY=VALUE"/"KEY: VALUE"形式の行を解析する."""
+    for sep in ("=", ":"):
+        if sep in line:
+            left, right = line.split(sep, 1)
+            return left.strip(), right.strip()
+    return None
+
+
+def _strip_quotes(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1]
+    return value
+
+
+def _remove_inline_comment(value: str) -> str:
+    return value.split('#', 1)[0].strip()
 
 def run_application():
     """アプリケーションを実行"""
