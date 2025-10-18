@@ -9,8 +9,7 @@ from typing import Any, AsyncGenerator, Dict
 
 import anyio
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
-from starlette.responses import EventSourceResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 from app.services.video_suite import queue as queue_service
 from app.services.video_suite import workers
@@ -418,11 +417,41 @@ async def _log_event_stream(process_id: str) -> AsyncGenerator[Any, None]:
             yield {"data": message}
 
 
+def _serialize_sse_event(event: Any) -> bytes:
+    """Convert an event payload into Server-Sent Event bytes."""
+
+    if isinstance(event, str):
+        text = event if event.endswith("\n\n") else event.rstrip("\n") + "\n\n"
+        return text.encode("utf-8")
+
+    if isinstance(event, dict):
+        lines: list[str] = []
+        event_name = event.get("event")
+        if isinstance(event_name, str) and event_name:
+            lines.append(f"event: {event_name}")
+
+        data = event.get("data")
+        if data is not None:
+            if not isinstance(data, str):
+                data = json.dumps(data)
+            for line in data.splitlines() or [""]:
+                lines.append(f"data: {line}")
+
+        return ("\n".join(lines) + "\n\n").encode("utf-8")
+
+    return (f"data: {event}\n\n").encode("utf-8")
+
+
 @router.get("/stream-logs")
-async def stream_logs(process_id: str) -> EventSourceResponse:
+async def stream_logs(process_id: str) -> StreamingResponse:
     if not process_id:
         raise HTTPException(status_code=400, detail="process_id is required.")
-    return EventSourceResponse(_log_event_stream(process_id))
+
+    async def event_generator() -> AsyncGenerator[bytes, None]:
+        async for event in _log_event_stream(process_id):
+            yield _serialize_sse_event(event)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post("/stop-analysis")
