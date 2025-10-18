@@ -139,51 +139,67 @@
                 <input type="checkbox" id="enable_ssr" name="enable_ssr" checked />
                 <label for="enable_ssr" style="margin:0;">SSRモードを有効化（推奨）</label>
               </div>
-              <details id="ssr-settings-details" open>
-                <summary class="row" style="cursor:pointer;">
-                  <span>SSR参照設定</span>
-                  <span class="caret right" aria-hidden="true"></span>
-                </summary>
-                <div id="ssr-settings-body" class="grid-2" style="margin-top:12px; gap:12px;">
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_reference_path">参照文データパス</label>
-                    <input type="text" id="ssr_reference_path" name="ssr_reference_path" placeholder="例: references/purchase_intent.json" />
-                  </div>
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_reference_set">参照セットID</label>
-                    <input type="text" id="ssr_reference_set" name="ssr_reference_set" placeholder="例: purchase_intent_v1" />
-                  </div>
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_embeddings_column">埋め込み列名</label>
-                    <input type="text" id="ssr_embeddings_column" name="ssr_embeddings_column" value="embedding" />
-                  </div>
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_model_name">Sentence-Transformer</label>
-                    <input type="text" id="ssr_model_name" name="ssr_model_name" value="sentence-transformers/all-MiniLM-L6-v2" />
-                  </div>
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_device">デバイス</label>
-                    <input type="text" id="ssr_device" name="ssr_device" placeholder="例: cuda" />
-                  </div>
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_temperature">温度 (>=0)</label>
-                    <input type="number" step="0.01" id="ssr_temperature" name="ssr_temperature" value="1.0" min="0" />
-                  </div>
-                  <div class="field" data-ssr-config>
-                    <label for="ssr_epsilon">イプシロン (>=0)</label>
-                    <input type="number" step="0.01" id="ssr_epsilon" name="ssr_epsilon" value="0.0" min="0" />
-                  </div>
+              <div id="ssr-settings-body" class="stack" style="margin-top:12px; gap:12px;">
+                <div class="callout" data-ssr-mode="on">
+                  <strong>SSRオン:</strong> カテゴリごとに短い英語の根拠文を生成し、内部でベクトル化してスコアします。
                 </div>
-              </details>
+                <div class="callout" data-ssr-mode="off" style="display:none;">
+                  <strong>SSRオフ:</strong> LLMに直接 0.0〜1.0 の数値配列を出力させます（根拠文は省略されます）。
+                </div>
+              </div>
             </div>
 
             <div class="card">
               <details id="sys-section">
                 <summary class="row" style="cursor:pointer;">
-                  <h3 class="mt-0" style="margin:0;">System Prompt</h3>
+                  <h3 class="mt-0" style="margin:0;">System Prompts</h3>
                   <span class="caret right" aria-hidden="true"></span>
                 </summary>
-                <textarea name="system_prompt" rows="12" placeholder="System Prompt を入力"><prompt>
+                <div class="stack" style="gap:12px;">
+                  <div>
+                    <label for="system_prompt_ssr" class="muted">SSRオン時（定性根拠を英語で生成）</label>
+                    <textarea name="system_prompt_ssr" id="system_prompt_ssr" rows="12"><prompt>
+    <role id="Semantic Inference Engine & Latent Intent Decoder">
+        <spec>Noisy text (SNS, UGC, transcripts) analysis. Infer user's true goals, emotions, and unstated assumptions from fragmented data.</spec>
+        <ban>Surface-level keyword matching is strictly forbidden.</ban>
+    </role>
+
+    <mission>For a given utterance and N concepts, perform Semantic Similarity Rating (SSR) as described in AnyAI Scoring research (2025-10-14). First verbalize how similar each concept definition is to the latent intent of the utterance. Then provide succinct natural-language rationales that can be embedded for quantitative scoring.</mission>
+
+    <process>
+        <step id="1" name="Normalize & Enrich">
+            <task>Normalize slang, typos, jargon.</task>
+            <task>Interpret non-verbal cues (emojis, punctuation, irony markers) for emotional tone.</task>
+        </step>
+        <step id="2" name="Contextualize (Hypothesize)">
+            <context type="temporal">When? (e.g., weekday morning -> commute?)</context>
+            <context type="spatial">Where? (e.g., office -> work?)</context>
+            <context type="social">To whom? (e.g., friend, public?)</context>
+            <context type="causal">Why? (e.g., "I'm hungry" -> next is food talk?)</context>
+            <context type="telic">Goal? (e.g., info-gathering, empathy, decision-making?)</context>
+        </step>
+        <step id="3" name="Extract Latent Intent">
+            <desc>Identify the "real question" or "unspoken need" behind the literal words.</desc>
+            <ex>"Any good cafes around here?" -> might mean "Need a quiet place with Wi-Fi to work."</ex>
+        </step>
+        <step id="4" name="Describe Similarity">
+            <desc>For each concept, articulate how closely the latent intent aligns with the concept definition and detail, referencing SSR anchors (Core/Strong/Reasonable/Weak/None).</desc>
+        </step>
+    </process>
+
+    <output>
+        <primary>Return a JSON object with the single key "analyses" whose value is an array of length N. Each element must be a short paragraph (1-2 sentences) written in clear English that begins with one of [Core|Strong|Reasonable|Weak|None] and explains the similarity between the utterance and the concept's definition/detail.</primary>
+        <ban>Do not output numeric ratings or markdown tables. No additional keys beyond "analyses".</ban>
+    </output>
+
+    <example>
+        <out>{"analyses": ["Strong: Mentions planning a cafe visit matching the concept...", "Weak: Only tangential reference..."]}</out>
+    </example>
+</prompt></textarea>
+                  </div>
+                  <div>
+                    <label for="system_prompt_numeric" class="muted">SSRオフ時（直接スコアを算出）</label>
+                    <textarea name="system_prompt_numeric" id="system_prompt_numeric" rows="12"><prompt>
     <role id="Semantic Inference Engine & Latent Intent Decoder">
         <spec>Noisy text (SNS, UGC, transcripts) analysis. Infer user's true goals, emotions, and unstated assumptions from fragmented data.</spec>
         <ban>Surface-level keyword matching is strictly forbidden.</ban>
@@ -218,8 +234,7 @@
         <score r="0.4-0.69" name="Reasonable">Concept is a logical extension or component of the intent.</score>
         <score r="0.1-0.39" name="Weak">Faintly associated by situation/words, but not the main focus.</score>
         <score r="0.0" name="None">No logical connection can be inferred.</score>
-    </criteria>
-    
+
     <rules>
         <rule id="lang">Auto-detect language, internally translate to a standard model (e.g., English) for processing.</rule>
         <rule id="silent">Internal thought processes must NOT be included in the output.</rule>
@@ -235,9 +250,10 @@
         <out>[0.85, 0.1, 0.65]</out>
     </example>
 </prompt></textarea>
+                  </div>
+                </div>
               </details>
             </div>
-
             <div class="actions-row" style="justify-content:flex-end;">
               <button class="btn btn-outline" id="btn-queue-add" type="button">キューに追加</button>
               <button class="btn btn-primary" id="btn-queue-add-start" type="button">今すぐ追加して即開始</button>
@@ -307,15 +323,6 @@
       const utteranceLabel = document.getElementById('utterance-label');
       const modeRadios = modeForm.querySelectorAll('input[name="mode"]');
       const enableSSR = document.getElementById('enable_ssr');
-      const ssrFieldIds = [
-        'ssr_reference_path',
-        'ssr_reference_set',
-        'ssr_embeddings_column',
-        'ssr_model_name',
-        'ssr_device',
-        'ssr_temperature',
-        'ssr_epsilon'
-      ];
       const queueStatus = document.getElementById('queue-status');
       const cancelButton = document.getElementById('btn-cancel-job');
       const resultSection = document.getElementById('result');
@@ -387,27 +394,19 @@
 
       function updateSSREnabled() {
         const enabled = enableSSR.checked;
-        const container = document.getElementById('ssr-settings-body');
-        if (container) {
-          container.classList.toggle('ssr-disabled', !enabled);
-        }
-        ssrFieldIds.forEach(id => {
-          const el = document.getElementById(id);
-          if (el) {
-            el.disabled = !enabled;
-          }
+        document.querySelectorAll('[data-ssr-mode]').forEach((el) => {
+          const mode = el.getAttribute('data-ssr-mode');
+          const show = mode === 'on' ? enabled : !enabled;
+          el.style.display = show ? '' : 'none';
         });
       }
 
-      function appendSSRFields(fd) {
+      function appendPromptFields(fd) {
         fd.set('enable_ssr', enableSSR.checked ? 'true' : 'false');
-        fd.set('ssr_reference_path', document.getElementById('ssr_reference_path').value || '');
-        fd.set('ssr_reference_set', document.getElementById('ssr_reference_set').value || '');
-        fd.set('ssr_embeddings_column', document.getElementById('ssr_embeddings_column').value || '');
-        fd.set('ssr_model_name', document.getElementById('ssr_model_name').value || '');
-        fd.set('ssr_device', document.getElementById('ssr_device').value || '');
-        fd.set('ssr_temperature', document.getElementById('ssr_temperature').value || '');
-        fd.set('ssr_epsilon', document.getElementById('ssr_epsilon').value || '');
+        fd.set('system_prompt_ssr', form.system_prompt_ssr.value || '');
+        fd.set('system_prompt_numeric', form.system_prompt_numeric.value || '');
+        const activePrompt = enableSSR.checked ? form.system_prompt_ssr.value : form.system_prompt_numeric.value;
+        fd.set('system_prompt', activePrompt || '');
       }
 
       enableSSR.addEventListener('change', () => {
@@ -454,7 +453,7 @@
         fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
         const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
         fd.append('mode', selectedMode);
-        appendSSRFields(fd);
+        appendPromptFields(fd);
         fd.append('action', 'queue');
         const res = await fetch('/jobs', { method: 'POST', body: fd });
         if (!res.ok) { alert('キュー追加に失敗'); return; }
@@ -468,7 +467,7 @@
         fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
         const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
         fd.set('mode', selectedMode);
-        appendSSRFields(fd);
+        appendPromptFields(fd);
         fd.set('action', 'start');
         const res = await fetch('/jobs', { method: 'POST', body: fd });
           if (!res.ok) { alert('開始に失敗'); return; }
@@ -555,15 +554,9 @@
                 document.getElementById('auto_slowdown').checked = !!cfg.auto_slowdown;
                 form.timeout_sec.value = cfg.timeout_sec;
                 document.querySelector(`#mode-form input[name="mode"][value="${cfg.mode}"]`).checked = true;
-                form.system_prompt.value = cfg.system_prompt || '';
                 enableSSR.checked = cfg.enable_ssr !== false;
-                form.ssr_reference_path.value = cfg.ssr_reference_path || '';
-                form.ssr_reference_set.value = cfg.ssr_reference_set || '';
-                form.ssr_embeddings_column.value = cfg.ssr_embeddings_column || 'embedding';
-                form.ssr_model_name.value = cfg.ssr_model_name || 'sentence-transformers/all-MiniLM-L6-v2';
-                form.ssr_device.value = cfg.ssr_device || '';
-                form.ssr_temperature.value = typeof cfg.ssr_temperature === 'number' ? cfg.ssr_temperature : 1.0;
-                form.ssr_epsilon.value = typeof cfg.ssr_epsilon === 'number' ? cfg.ssr_epsilon : 0.0;
+                form.system_prompt_ssr.value = cfg.ssr_system_prompt || '';
+                form.system_prompt_numeric.value = cfg.numeric_system_prompt || '';
                 updateSSREnabled();
                 form.dataset.editing = it.job_id;
                 alert('フォームに読み込みました。下の「編集を保存」で反映できます。');
@@ -577,7 +570,7 @@
               fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
               const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
               fd.set('mode', selectedMode);
-              appendSSRFields(fd);
+              appendPromptFields(fd);
               const r = await fetch(`/queue/${ej}/edit`, { method:'POST', body: fd });
               if(!r.ok){ alert('保存に失敗'); return; }
               alert('保存しました'); form.dataset.editing='';

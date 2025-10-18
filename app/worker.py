@@ -668,7 +668,7 @@ class JobManager:
 
             import hashlib
 
-            sp_hash = hashlib.sha256(job.cfg.system_prompt.encode("utf-8")).hexdigest()[:12]
+            sp_hash = hashlib.sha256(job.cfg.active_system_prompt.encode("utf-8")).hexdigest()[:12]
 
             def _gemini_model_for_mode(mode: str) -> str:
                 return GEMINI_MODEL_VIDEO if mode == "video" else GEMINI_MODEL

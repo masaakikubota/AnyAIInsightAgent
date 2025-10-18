@@ -9,7 +9,7 @@ from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Seq
 
 from .models import Category, RunConfig, ScoreResult
 from .services.google_sheets import GoogleSheetsError, batch_update_values, column_index_to_a1
-from .services.scoring import SSRSettings, cache_key, clamp_and_round, score_with_fallback
+from .services.scoring import cache_key, clamp_and_round, score_with_fallback
 from .services.clients import GEMINI_MODEL_VIDEO
 from .services.video import download_video_to_path, upload_video_to_gemini
 from .services.sheet_updates import build_batched_value_ranges
@@ -149,22 +149,6 @@ class ScoringPipeline:
             thread_name_prefix="scoring-validation",
         )
         self._log_callback = event_logger
-        self._ssr_settings: Optional[SSRSettings] = None
-        if (
-            getattr(cfg, "enable_ssr", True)
-            and cfg.ssr_reference_path
-            and cfg.ssr_reference_set
-        ):
-            reference_path = Path(cfg.ssr_reference_path).expanduser()
-            self._ssr_settings = SSRSettings(
-                reference_path=reference_path,
-                reference_set=cfg.ssr_reference_set,
-                embeddings_column=cfg.ssr_embeddings_column,
-                model_name=cfg.ssr_model_name,
-                device=cfg.ssr_device,
-                temperature=float(cfg.ssr_temperature),
-                epsilon=float(cfg.ssr_epsilon),
-            )
 
     def _log(self, message: str) -> None:
         if not self._log_callback:
@@ -330,7 +314,7 @@ class ScoringPipeline:
                         result, error_trail, from_cache = await score_with_fallback(
                             utterance=task.utterance,
                             categories=list(task.categories),
-                            system_prompt=self.cfg.system_prompt,
+                            system_prompt=self.cfg.active_system_prompt,
                             timeout_sec=self.cfg.timeout_sec,
                             max_retries=self.cfg.max_retries,
                             prefer=self.cfg.primary_provider,
@@ -338,7 +322,6 @@ class ScoringPipeline:
                             model_override=task.model_override,
                             cache=self.score_cache,
                             cache_write=False,
-                            ssr_settings=self._ssr_settings,
                         )
                     except Exception as exc:
                         error_trail = getattr(exc, "_trail", []) or []
@@ -489,7 +472,7 @@ class ScoringPipeline:
             cache_key_value = cache_key(
                 utterance=task.utterance,
                 categories=categories,
-                system_prompt=self.cfg.system_prompt,
+                system_prompt=self.cfg.active_system_prompt,
                 provider=result.provider,
                 model=result.model,
             )
