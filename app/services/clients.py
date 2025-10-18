@@ -11,8 +11,8 @@ import httpx
 from ..models import Provider, ScoreRequest, ScoreResult
 
 
-GEMINI_MODEL = "gemini-flash-lite-latest"
-GEMINI_MODEL_VIDEO = "gemini-flash-latest"
+GEMINI_MODEL = "gemini-flash-latest"
+GEMINI_MODEL_VIDEO = "gemini-pro-latest"
 OPENAI_MODEL = "gpt-5-nano"
 OPENAI_DASHBOARD_PLAN_MODEL = "gpt-5-high"
 OPENAI_DASHBOARD_IMPLEMENT_MODEL = "gpt-5-codex"

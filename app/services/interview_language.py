@@ -118,7 +118,7 @@ def _deterministic_language(country_region: str) -> Optional[tuple[str, str]]:
 
 
 async def _call_gemini_language(api_key: str, country_region: str) -> Optional[ResolvedInterviewLanguage]:
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
     system_prompt = textwrap.dedent(
         """\
         You detect the primary interview language for consumer research projects.

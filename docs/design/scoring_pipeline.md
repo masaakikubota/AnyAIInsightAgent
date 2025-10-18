@@ -168,7 +168,7 @@ ValidationResult = TypedDict({
   "value": {
     "scores": [0.85, 0.1, 0.65],
     "provider": "gemini",
-    "model": "gemini-flash-lite-latest",
+    "model": "gemini-flash-latest",
     "timestamp": "2025-10-14T09:00:00Z"
   },
   "ts": 1697274000.0

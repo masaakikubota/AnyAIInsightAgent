@@ -46,9 +46,9 @@
 
 ## 3) モデル/エンドポイント
 
-### Primary：Gemini 2.5 Flash-Lite
+### Primary：Gemini Flash
 
-- **HTTP**：`POST https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=$GEMINI_API_KEY`
+- **HTTP**：`POST https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=$GEMINI_API_KEY`
 - **リクエスト**
   - `systemInstruction`: System Prompt（GUI で編集可）
   - `generationConfig`: `responseMimeType="application/json"`。ファイルを扱わない Text モードでは `responseSchema` で `analyses` 配列（長さ N、要素 string/最小4文字）を強制。
@@ -122,7 +122,7 @@ N) 名前: {name_N}
 
 - **CSV マッピング**：発話列（既定 C）、カテゴリ開始列（既定 D）、2/3/4 行の役割（Name/Definition/Detail）、処理開始行（既定 5）。
 - **LLM 設定**：
-  - Primary: Gemini API Key、モデル ID 固定 `gemini-flash-lite-latest`（Video モードは `gemini-flash-latest`）。
+  - Primary: Gemini API Key、モデル ID 固定 `gemini-flash-latest`（Video モードは `gemini-pro-latest`）。
   - Fallback: OpenAI API Key、モデル `gpt-5-nano`。
 - **実行設定**：同時実行回数（既定 50）、同時実行列数（N=既定 10）、最大リトライ（既定 10）、429 時の自動降速 ON/OFF、キャッシュ利用 ON/OFF。
 - **プロンプト**：System を GUI で編集可（テンプレ保存/バージョン管理）。
