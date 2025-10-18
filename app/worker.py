@@ -255,12 +255,22 @@ class JobManager:
         # Fetch sheet data
         try:
             spreadsheet_id = job.cfg.spreadsheet_id or extract_spreadsheet_id(job.cfg.spreadsheet_url)
+            primary_keyword = job.cfg.sheet_keyword or "Link"
             sheet_name = job.cfg.sheet_name
             if not sheet_name:
-                match = find_sheet(spreadsheet_id, job.cfg.sheet_keyword)
+                match = find_sheet(spreadsheet_id, primary_keyword)
                 sheet_name = match.sheet_name
+                job.cfg.sheet_name = sheet_name
+            score_sheet_keyword = job.cfg.score_sheet_keyword or primary_keyword
+            score_sheet_name = job.cfg.score_sheet_name
+            if not score_sheet_name:
+                score_match = find_sheet(spreadsheet_id, score_sheet_keyword)
+                score_sheet_name = score_match.sheet_name
+                job.cfg.score_sheet_name = score_sheet_name
             rows = fetch_sheet_values(spreadsheet_id, sheet_name)
-            job_log(f"Fetched sheet '{sheet_name}' rows={len(rows)}")
+            job_log(
+                f"Fetched sheet '{sheet_name}' rows={len(rows)} (scores -> '{score_sheet_name}')"
+            )
         except GoogleSheetsError as exc:
             job.status = JobStatus.failed
             job_log(f"Failed to fetch sheet: {exc}")
@@ -470,6 +480,7 @@ class JobManager:
                         cfg=job.cfg,
                         spreadsheet_id=spreadsheet_id,
                         sheet_name=sheet_name,
+                        score_sheet_name=score_sheet_name,
                         invoke_concurrency=min(current_conc, max(1, len(pipeline_units))),
                         rows=rows,
                         utter_col_index=utter_col,
@@ -603,6 +614,7 @@ class JobManager:
                         cfg=job.cfg,
                         spreadsheet_id=spreadsheet_id,
                         sheet_name=sheet_name,
+                        score_sheet_name=score_sheet_name,
                         invoke_concurrency=min(current_conc, max(1, len(pipeline_units))),
                         rows=rows,
                         utter_col_index=utter_col,

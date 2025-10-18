@@ -42,6 +42,7 @@ def _make_pipeline(
         cfg=cfg,
         spreadsheet_id="spreadsheet",
         sheet_name="Scores",
+        score_sheet_name="Embeddings",
         invoke_concurrency=1,
         rows=[["utterance"]],
         utter_col_index=0,
@@ -211,104 +212,54 @@ class ScoringPipelineWriterTests(unittest.TestCase):
 
         self.assertTrue(pipeline._terminate.is_set())
 
-    def test_writer_chunks_large_batches_to_500_rows(self) -> None:
+    def test_writer_writes_analyses_and_scores_to_distinct_sheets(self) -> None:
         _, pipeline = _make_pipeline(
             score_cache=None,
-            flush_interval=10.0,
-            flush_unit_threshold=10_000,
-            sheet_batch_row_size=500,
+            writer_retry_limit=1,
+            writer_retry_initial_delay=0.1,
+            writer_retry_backoff_multiplier=1.0,
         )
-        calls: list[list[dict]] = []
+        updates: list[list[dict]] = []
 
-        def record_batch(_spreadsheet_id: str, updates: list[dict]) -> None:
-            calls.append(updates)
+        def capture_updates(spreadsheet_id: str, payload: list[dict]) -> None:
+            updates.append(payload)
 
-        async def run_writer_many_rows() -> None:
+        async def run_writer_with_text() -> None:
             writer_queue: asyncio.Queue[Optional[SheetUpdate]] = asyncio.Queue()
             writer = asyncio.create_task(pipeline._writer(writer_queue))
-            for idx in range(501):
-                unit = PipelineUnit(row_index=idx, block_index=0, col_offset=0)
-                await writer_queue.put(
-                    SheetUpdate(
-                        unit=unit,
-                        scores=[float(idx)],
-                        result=ScoreResult(scores=[float(idx)], provider=Provider.gemini, model="gemini-test"),
-                    )
+            unit = PipelineUnit(row_index=0, block_index=0, col_offset=0)
+            await writer_queue.put(
+                SheetUpdate(
+                    unit=unit,
+                    scores=[0.25],
+                    analyses=["Strong alignment"],
+                    result=ScoreResult(
+                        scores=[0.25],
+                        analyses=["Strong alignment"],
+                        provider=Provider.gemini,
+                        model="gemini-test",
+                    ),
                 )
+            )
             await writer_queue.put(None)
             await writer
 
         try:
-            with patch("app.scoring_pipeline.batch_update_values", side_effect=record_batch):
-                asyncio.run(run_writer_many_rows())
+            with patch("app.scoring_pipeline.batch_update_values", side_effect=capture_updates):
+                asyncio.run(run_writer_with_text())
         finally:
             pipeline._validation_executor.shutdown(wait=True)
 
-        self.assertEqual(len(calls), 2)
-        per_call_rows = []
-        for batch in calls:
-            rows = set()
-            for entry in batch:
-                rng = entry.get("range", "")
-                for match in re.findall(r"(\d+)", rng):
-                    rows.add(int(match))
-            per_call_rows.append(rows)
-        for rows in per_call_rows:
-            self.assertLessEqual(len(rows), 500)
-        combined_rows: set[int] = set()
-        for rows in per_call_rows:
-            combined_rows.update(rows)
-        self.assertEqual(len(combined_rows), 501)
+        self.assertEqual(len(updates), 1)
+        payload = updates[0]
+        self.assertEqual(len(payload), 2)
+        analysis_update = payload[0]
+        score_update = payload[1]
+        self.assertIn("Scores" , analysis_update["range"])
+        self.assertEqual(analysis_update["values"], [["Strong alignment"]])
+        self.assertIn("Embeddings", score_update["range"])
+        self.assertEqual(score_update["values"], [[0.25]])
 
-
-class SheetUpdateHelperTests(unittest.TestCase):
-    def test_build_row_value_ranges_groups_contiguous_offsets(self) -> None:
-        buffer = {
-            1: {0: 0.1, 1: 0.2, 3: 0.4},
-            3: {0: 0.9},
-        }
-
-        entries = build_row_value_ranges(
-            category_start_col=4,
-            sheet_name="Score's",
-            update_buffer=buffer,
-        )
-
-        self.assertEqual(len(entries), 3)
-        ranges = [entry[1]["range"] for entry in entries]
-        self.assertEqual(ranges[0], "'Score''s'!D1:E1")
-        self.assertEqual(ranges[1], "'Score''s'!G1:G1")
-        self.assertEqual(ranges[2], "'Score''s'!D3:D3")
-        values = [entry[1]["values"][0] for entry in entries]
-        self.assertEqual(values[0], [0.1, 0.2])
-        self.assertEqual(values[1], [0.4])
-        self.assertEqual(values[2], [0.9])
-
-    def test_build_batched_value_ranges_limits_rows(self) -> None:
-        buffer = {idx: {0: float(idx)} for idx in range(1, 1002)}
-
-        batches = build_batched_value_ranges(
-            category_start_col=2,
-            sheet_name="Scores",
-            update_buffer=buffer,
-            max_rows_per_batch=500,
-        )
-
-        self.assertEqual(len(batches), 3)
-
-        def _extract_row(range_str: str) -> int:
-            body = range_str.split("!")[1]
-            start_label = body.split(":")[0]
-            digits = "".join(ch for ch in start_label if ch.isdigit())
-            return int(digits)
-
-        for batch in batches[:2]:
-            rows = {_extract_row(entry["range"]) for entry in batch}
-            self.assertEqual(len(rows), 500)
-
-        final_rows = {_extract_row(entry["range"]) for entry in batches[-1]}
-        self.assertEqual(len(final_rows), 1)
-        self.assertIn(1001, final_rows)
 
 if __name__ == "__main__":
     unittest.main()
