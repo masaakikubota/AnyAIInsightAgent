@@ -26,19 +26,83 @@ def check_requirements():
     print("✅ 依存関係チェック完了")
     return True
 
-def install_dependencies():
-    """依存関係をインストール"""
+def install_dependencies() -> str | None:
+    """依存関係をインストールし、利用するPython実行パスを返す."""
     print("📦 依存関係をインストール中...")
-    
-    try:
-        subprocess.run([
-            sys.executable, "-m", "pip", "install", "-r", "requirements.txt"
-        ], check=True)
+
+    pip_command = [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "-r",
+        "requirements.txt",
+    ]
+
+    result = subprocess.run(
+        pip_command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    if result.stdout:
+        sys.stdout.write(result.stdout)
+    if result.stderr:
+        sys.stderr.write(result.stderr)
+
+    if result.returncode == 0:
         print("✅ 依存関係のインストール完了")
-        return True
-    except subprocess.CalledProcessError:
-        print("❌ 依存関係のインストールに失敗しました")
-        return False
+        return sys.executable
+
+    if "externally-managed-environment" in result.stderr:
+        return _install_with_virtualenv()
+
+    print("❌ 依存関係のインストールに失敗しました")
+    return None
+
+
+def _install_with_virtualenv() -> str | None:
+    """PEP 668環境向けに仮想環境を作成して依存関係をインストールする."""
+    print("⚠️  システム管理下のPython環境が検出されました。仮想環境(.venv)を作成します。")
+
+    venv_dir = Path(".venv")
+    if not venv_dir.exists():
+        try:
+            subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
+        except subprocess.CalledProcessError as exc:
+            print(f"❌ 仮想環境の作成に失敗しました: {exc}")
+            return None
+
+    venv_python = _resolve_venv_python(venv_dir)
+
+    try:
+        subprocess.run(
+            [
+                venv_python,
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                "requirements.txt",
+            ],
+            check=True,
+        )
+        print("✅ 仮想環境で依存関係をインストールしました (.venv)")
+        print("   次回以降は .venv/bin/activate (またはScripts\\activate) を利用すると便利です。")
+        return venv_python
+    except subprocess.CalledProcessError as exc:
+        print(f"❌ 仮想環境への依存関係インストールに失敗しました: {exc}")
+        return None
+
+
+def _resolve_venv_python(venv_dir: Path) -> str:
+    """仮想環境内のPython実行ファイルパスを取得する."""
+    if os.name == "nt":
+        python_path = venv_dir / "Scripts" / "python.exe"
+    else:
+        python_path = venv_dir / "bin" / "python"
+    return str(python_path)
 
 def setup_environment():
     """環境変数を設定"""
@@ -151,7 +215,7 @@ def _strip_quotes(value: str) -> str:
 def _remove_inline_comment(value: str) -> str:
     return value.split('#', 1)[0].strip()
 
-def run_application():
+def run_application(python_exec: str):
     """アプリケーションを実行"""
     print("🚀 アプリケーションを起動中...")
     print("📍 アクセス先: http://localhost:25254")
@@ -163,7 +227,7 @@ def run_application():
         env = os.environ.copy()
         env['PORT'] = '25254'
         subprocess.run([
-            sys.executable, "-m", "app.main"
+            python_exec, "-m", "app.main"
         ], check=True, env=env)
     except KeyboardInterrupt:
         print("\\n👋 アプリケーションを停止しました")
@@ -180,14 +244,15 @@ def main():
         sys.exit(1)
     
     # 依存関係インストール
-    if not install_dependencies():
+    python_exec = install_dependencies()
+    if not python_exec:
         sys.exit(1)
     
     # 環境設定
     setup_environment()
     
     # アプリケーション実行
-    run_application()
+    run_application(python_exec)
 
 if __name__ == "__main__":
     main()
