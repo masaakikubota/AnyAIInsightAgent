@@ -7,6 +7,7 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
 
 from ..dependencies import get_base_dir, get_job_manager
 from ..models import CreateJobResponse, JobStatus, ProgressResponse, RunConfig
@@ -21,6 +22,39 @@ from ..worker import JobManager
 router = APIRouter()
 
 
+class JobCheckRequest(BaseModel):
+    spreadsheet_url: str
+    sheet_keyword: str
+
+
+class JobCheckResponse(BaseModel):
+    ok: bool
+    message: str
+    spreadsheet_id: Optional[str] = None
+    sheet_id: Optional[int] = None
+    sheet_name: Optional[str] = None
+
+
+@router.post("/jobs/check", response_model=JobCheckResponse)
+async def check_job(payload: JobCheckRequest) -> JobCheckResponse:
+    try:
+        spreadsheet_id = extract_spreadsheet_id(payload.spreadsheet_url)
+        await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
+        sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, payload.sheet_keyword)
+    except GoogleSheetsError as exc:
+        return JobCheckResponse(ok=False, message=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        return JobCheckResponse(ok=False, message=f"不明なエラーが発生しました: {exc}")
+
+    return JobCheckResponse(
+        ok=True,
+        message="スプレッドシートを確認しました。",
+        spreadsheet_id=sheet_match.spreadsheet_id,
+        sheet_id=sheet_match.sheet_id,
+        sheet_name=sheet_match.sheet_name,
+    )
+
+
 @router.post("/jobs", response_model=CreateJobResponse)
 async def create_job(
     _background: BackgroundTasks,
@@ -32,13 +66,14 @@ async def create_job(
     def_row: int = Form(3),
     detail_row: int = Form(4),
     start_row: int = Form(5),
-    batch_size: int = Form(1),
+    batch_size: int = Form(10),
     max_category_cols: int = Form(200),
     mode: str = Form("csv"),
     concurrency: int = Form(50),
     max_retries: int = Form(10),
     auto_slowdown: bool = Form(True),
     timeout_sec: int = Form(60),
+    enable_ssr: bool = Form(True),
     video_download_timeout: int = Form(120),
     video_temp_dir: Optional[str] = Form(None),
     enable_ssr: bool = Form(True),
@@ -55,6 +90,15 @@ async def create_job(
     except GoogleSheetsError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    batch_size_value = 1 if enable_ssr else batch_size
+    concurrency_value = 1 if enable_ssr else concurrency
+    timeout_value = timeout_sec
+    if not enable_ssr and mode == "video":
+        default_concurrency = RunConfig.model_fields["video_concurrency_default"].default
+        default_timeout = RunConfig.model_fields["video_timeout_default"].default
+        concurrency_value = concurrency or default_concurrency
+        timeout_value = timeout_sec or default_timeout
+
     cfg = RunConfig(
         spreadsheet_url=spreadsheet_url,
         sheet_keyword=sheet_keyword,
@@ -68,12 +112,12 @@ async def create_job(
         def_row=def_row,
         detail_row=detail_row,
         start_row=start_row,
-        batch_size=batch_size,
+        batch_size=batch_size_value,
         max_category_cols=max_category_cols,
-        concurrency=concurrency,
+        concurrency=concurrency_value,
         max_retries=max_retries,
         auto_slowdown=auto_slowdown,
-        timeout_sec=timeout_sec,
+        timeout_sec=timeout_value,
         video_download_timeout=video_download_timeout,
         video_temp_dir=video_temp_dir,
         enable_ssr=enable_ssr,
@@ -86,10 +130,6 @@ async def create_job(
         ),
         system_prompt=system_prompt,
     )
-
-    if cfg.mode == "video":
-        cfg.concurrency = concurrency or cfg.video_concurrency_default
-        cfg.timeout_sec = timeout_sec or cfg.video_timeout_default
 
     job_id = uuid.uuid4().hex[:12]
     job = await manager.create_job(job_id, cfg)
@@ -204,6 +244,7 @@ async def edit_job(
     system_prompt_ssr: Optional[str] = Form(None),
     system_prompt_numeric: Optional[str] = Form(None),
     system_prompt: Optional[str] = Form(None),
+    enable_ssr: bool = Form(True),
     manager: JobManager = Depends(get_job_manager),
     base_dir: Path = Depends(get_base_dir),
 ):
@@ -215,6 +256,15 @@ async def edit_job(
         sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, sheet_keyword)
     except GoogleSheetsError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    batch_size_value = 1 if enable_ssr else batch_size
+    concurrency_value = 1 if enable_ssr else concurrency
+    timeout_value = timeout_sec
+    if not enable_ssr and mode == "video":
+        default_concurrency = RunConfig.model_fields["video_concurrency_default"].default
+        default_timeout = RunConfig.model_fields["video_timeout_default"].default
+        concurrency_value = concurrency or default_concurrency
+        timeout_value = timeout_sec or default_timeout
 
     cfg = RunConfig(
         spreadsheet_url=spreadsheet_url,
@@ -229,12 +279,12 @@ async def edit_job(
         def_row=def_row,
         detail_row=detail_row,
         start_row=start_row,
-        batch_size=batch_size,
+        batch_size=batch_size_value,
         max_category_cols=max_category_cols,
-        concurrency=concurrency,
+        concurrency=concurrency_value,
         max_retries=max_retries,
         auto_slowdown=auto_slowdown,
-        timeout_sec=timeout_sec,
+        timeout_sec=timeout_value,
         video_download_timeout=video_download_timeout,
         video_temp_dir=video_temp_dir,
         enable_ssr=enable_ssr,

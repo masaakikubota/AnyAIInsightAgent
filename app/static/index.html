@@ -57,7 +57,8 @@
       details[open] .caret::before { content: '▾'; }
       .caret.right { margin-left: auto; }
       .queue-running { font-weight: 700; }
-      .ssr-disabled { opacity: 0.6; }
+      .mode-options { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+      .mode-options .spacer { flex:1 1 auto; }
     </style>
   </head>
   <body>
@@ -80,9 +81,14 @@
           <form id="mode-form" class="card" style="padding:var(--anyai-space-4);">
             <div class="field">
               <label>実行モード</label>
-              <div style="display:flex; gap:12px;">
+              <div class="mode-options">
                 <label><input type="radio" name="mode" value="csv" checked /> Textモード</label>
                 <label><input type="radio" name="mode" value="video" /> Videoモード</label>
+                <span class="spacer"></span>
+                <label class="ssr-toggle" style="display:flex; align-items:center; gap:8px;">
+                  <input type="checkbox" id="enable_ssr" name="enable_ssr" checked />
+                  <span>SSRモードを有効化（推奨）</span>
+                </label>
               </div>
             </div>
           </form>
@@ -104,6 +110,10 @@
                 <input type="text" id="score_sheet_keyword" name="score_sheet_keyword" value="Embedding" placeholder="Embedding" />
                 <div class="muted" id="score-sheet-keyword-help">Linkシートで得た分析テキストを数値化した結果を保存するシート名に含まれるキーワード。</div>
               </div>
+              <div class="actions-row">
+                <button type="button" class="btn btn-outline" id="btn-check-status">CheckTheStatus</button>
+              </div>
+              <div id="validation-banner" class="validation-banner" role="status" aria-live="polite"></div>
             </div>
 
             <div class="card">
@@ -121,7 +131,7 @@
             <div class="card">
               <h3 class="mt-0">実行設定</h3>
               <div class="grid-2">
-                <div class="field"><label>カテゴリ同梱数 N</label><input type="number" name="batch_size" value="1" min="1" max="50" /></div>
+                <div class="field"><label>カテゴリ同梱数 N</label><input type="number" name="batch_size" value="10" min="1" max="50" /></div>
                 <div class="field"><label>最大カテゴリ列数</label><input type="number" name="max_category_cols" value="200" min="1" max="10000" /></div>
                 <div class="field"><label>同時実行数</label><input type="number" name="concurrency" value="50" min="1" max="200" id="concurrency-input" /></div>
                 <div class="field"><label>最大リトライ回数</label><input type="number" name="max_retries" value="10" min="0" max="50" /></div>
@@ -316,18 +326,32 @@
     <script>
       const modeForm = document.getElementById('mode-form');
       const jobForm = document.getElementById('job-form');
+      const batchSizeInput = jobForm.querySelector('input[name="batch_size"]');
       const concurrencyInput = document.getElementById('concurrency-input');
       const timeoutInput = document.getElementById('timeout-input');
       const sheetKeywordHelp = document.getElementById('sheet-keyword-help');
       const scoreSheetKeywordHelp = document.getElementById('score-sheet-keyword-help');
       const utteranceLabel = document.getElementById('utterance-label');
+      const spreadsheetUrlInput = document.getElementById('spreadsheet_url');
+      const sheetKeywordInput = document.getElementById('sheet_keyword');
+      const scoreSheetKeywordInput = document.getElementById('score_sheet_keyword');
       const modeRadios = modeForm.querySelectorAll('input[name="mode"]');
       const enableSSR = document.getElementById('enable_ssr');
       const queueStatus = document.getElementById('queue-status');
       const cancelButton = document.getElementById('btn-cancel-job');
       const resultSection = document.getElementById('result');
+      let currentMode = modeForm.querySelector('input[name="mode"]:checked').value;
       let currentJobId = null;
       let pollTimer = null;
+      const nonSSRState = {
+        csv: { ...MODE_DEFAULTS.csv },
+        video: { ...MODE_DEFAULTS.video }
+      };
+      nonSSRState.csv = {
+        batchSize: batchSizeInput.value || MODE_DEFAULTS.csv.batchSize,
+        concurrency: concurrencyInput.value || MODE_DEFAULTS.csv.concurrency,
+        timeout: timeoutInput.value || MODE_DEFAULTS.csv.timeout
+      };
 
       function stopPolling(){
         if (pollTimer) {
@@ -372,18 +396,32 @@
         }
       }
 
-      function applyModeDefaults(mode) {
+      function storeCurrentNonSSRValues(mode) {
+        if (!mode || !nonSSRState[mode]) return;
+        nonSSRState[mode] = {
+          batchSize: batchSizeInput.value || MODE_DEFAULTS[mode].batchSize,
+          concurrency: concurrencyInput.value || MODE_DEFAULTS[mode].concurrency,
+          timeout: timeoutInput.value || MODE_DEFAULTS[mode].timeout
+        };
+      }
+
+      function restoreNonSSRValues(mode) {
+        if (!mode) return;
+        const defaults = MODE_DEFAULTS[mode] || MODE_DEFAULTS.csv;
+        const stored = nonSSRState[mode] || defaults;
+        batchSizeInput.value = stored.batchSize || defaults.batchSize;
+        concurrencyInput.value = stored.concurrency || defaults.concurrency;
+        timeoutInput.value = stored.timeout || defaults.timeout;
+      }
+
+      function applyModeContent(mode) {
         if (mode === 'video') {
-          concurrencyInput.value = 15;
-          timeoutInput.value = 300;
           sheetKeywordHelp.textContent = 'Videoモードでは動画リンク列を指定してください。Google Drive共有リンクを想定。';
           if (scoreSheetKeywordHelp) {
             scoreSheetKeywordHelp.textContent = '動画モードで数値化したスコアを書き込むシート名に含まれるキーワード。';
           }
           utteranceLabel.textContent = '動画リンク列番号';
         } else {
-          concurrencyInput.value = 50;
-          timeoutInput.value = 60;
           sheetKeywordHelp.textContent = '自然言語の分析結果を書き込むシート名に含まれるキーワード。該当シートが1つのみである必要があります。';
           if (scoreSheetKeywordHelp) {
             scoreSheetKeywordHelp.textContent = '分析テキストと同じ位置にスコアを書き込むシート名に含まれるキーワード。';
@@ -410,17 +448,37 @@
       }
 
       enableSSR.addEventListener('change', () => {
-        updateSSREnabled();
+        handleSSRChange();
       });
 
       modeRadios.forEach(radio => {
         radio.addEventListener('change', () => {
-          applyModeDefaults(radio.value);
+          if (!radio.checked) return;
+          if (!enableSSR.checked) {
+            storeCurrentNonSSRValues(currentMode);
+          }
+          currentMode = radio.value;
+          applyMode(currentMode);
         });
       });
 
-      applyModeDefaults('csv');
-      updateSSREnabled();
+      batchSizeInput.addEventListener('change', () => {
+        if (enableSSR.checked) return;
+        nonSSRState[currentMode].batchSize = batchSizeInput.value;
+      });
+      concurrencyInput.addEventListener('change', () => {
+        if (enableSSR.checked) return;
+        nonSSRState[currentMode].concurrency = concurrencyInput.value;
+      });
+      timeoutInput.addEventListener('change', () => {
+        if (enableSSR.checked) return;
+        nonSSRState[currentMode].timeout = timeoutInput.value;
+      });
+
+      if (enableSSR.checked) {
+        storeCurrentNonSSRValues(currentMode);
+      }
+      applyMode(currentMode);
 
       // Settings status
       async function refreshKeysStatus(){
@@ -446,9 +504,13 @@
         alert('APIキーを反映しました');
       });
 
-      const form = document.getElementById('job-form');
+      const form = jobForm;
       document.getElementById('btn-queue-add').addEventListener('click', async (e) => {
         e.preventDefault();
+        if(!isValidationCurrent()){
+          showValidationBanner('error', 'スプレッドシート設定の検証を完了してください (CheckTheStatus)。');
+          return;
+        }
         const fd = new FormData(form);
         fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
         const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
@@ -463,6 +525,10 @@
 
       document.getElementById('btn-queue-add-start').addEventListener('click', async (e) => {
         e.preventDefault();
+        if(!isValidationCurrent()){
+          showValidationBanner('error', 'スプレッドシート設定の検証を完了してください (CheckTheStatus)。');
+          return;
+        }
         const fd = new FormData(form);
         fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
         const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
@@ -560,6 +626,10 @@
                 updateSSREnabled();
                 form.dataset.editing = it.job_id;
                 alert('フォームに読み込みました。下の「編集を保存」で反映できます。');
+                validationState.ok = false;
+                validationState.payload = null;
+                showValidationBanner('info', '読み込んだ設定です。CheckTheStatus を押して検証してください。');
+                updateQueueActionState();
               }catch{}
             };
             const save = document.createElement('button'); save.className='btn btn-primary'; save.textContent='編集を保存';
