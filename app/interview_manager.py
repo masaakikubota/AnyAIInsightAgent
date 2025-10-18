@@ -27,7 +27,7 @@ from .services.google_sheets import (
     fetch_sheet_values,
     find_sheet,
 )
-from .services.ssr_mapper import ReferenceConfig, SSRMappingError, map_responses_to_pmfs
+from .services.embeddings import DEFAULT_EMBEDDING_MODEL, embed_texts
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -625,7 +625,7 @@ class InterviewJobManager:
             )
         else:
             job.message = f"インタビュー生成完了 (LLM {llm_count}, fallback {fallback_count})."
-        await self._generate_ssr_outputs(job, transcripts)
+        await self._generate_response_embeddings(job, transcripts)
         await self._write_qa_to_sheet(job, transcripts, personas, stimuli)
 
     async def _extract_stimuli(self, job: InterviewJob) -> List[str]:
@@ -699,23 +699,17 @@ class InterviewJobManager:
             stimuli.extend([part.strip() for part in item.split(",") if part.strip()])
         return stimuli
 
-    async def _generate_ssr_outputs(self, job: InterviewJob, transcripts: List[dict]) -> None:
+    async def _generate_response_embeddings(self, job: InterviewJob, transcripts: List[dict]) -> None:
         cfg = job.config
-        if not cfg.ssr_reference_path or not cfg.ssr_reference_set:
-            return
-
-        ref_path = Path(cfg.ssr_reference_path).expanduser()
-        config = ReferenceConfig(
-            reference_path=ref_path,
-            embeddings_column=cfg.ssr_embeddings_column,
-            model_name=cfg.ssr_model_name,
-            device=cfg.ssr_device,
-        )
 
         persona_entries: List[dict] = []
         response_texts: List[str] = []
         for transcript in transcripts:
-            persona_turns = [turn.get("text", "") for turn in transcript.get("turns", []) if turn.get("role") == "persona"]
+            persona_turns = [
+                turn.get("text", "")
+                for turn in transcript.get("turns", [])
+                if turn.get("role") == "persona"
+            ]
             combined = "\n".join(filter(None, (text.strip() for text in persona_turns))).strip()
             if not combined:
                 continue
@@ -724,36 +718,32 @@ class InterviewJobManager:
                     "persona_id": transcript.get("persona_id"),
                     "stimulus": transcript.get("stimulus"),
                     "response": combined,
+                    "language": cfg.language,
+                    "language_label": cfg.language_label,
                 }
             )
             response_texts.append(combined)
 
         if not response_texts:
-            summary = "SSR: persona応答が見つかりません"
+            summary = "Embeddings: persona応答が見つかりません"
             job.message = f"{job.message} | {summary}" if job.message else summary
             return
 
         try:
-            pmfs = await asyncio.to_thread(
-                map_responses_to_pmfs,
-                response_texts,
-                reference_set=cfg.ssr_reference_set,
-                config=config,
-                temperature=cfg.ssr_temperature,
-                epsilon=cfg.ssr_epsilon,
-            )
-        except SSRMappingError as exc:
-            summary = f"SSR変換に失敗: {exc}"
+            embeddings = await embed_texts(response_texts, model=DEFAULT_EMBEDDING_MODEL)
+        except Exception as exc:  # noqa: BLE001
+            summary = f"Embeddings変換に失敗: {exc}"
             job.message = f"{job.message} | {summary}" if job.message else summary
             return
 
-        for entry, pmf in zip(persona_entries, pmfs):
-            entry["pmf"] = pmf
+        for entry, vector in zip(persona_entries, embeddings):
+            entry["embedding_model"] = DEFAULT_EMBEDDING_MODEL
+            entry["embedding"] = vector
 
-        out_path = self._job_dir(job.job_id) / "ssr_pmfs.json"
+        out_path = self._job_dir(job.job_id) / "response_embeddings.json"
         out_path.write_text(json.dumps(persona_entries, ensure_ascii=False, indent=2), encoding="utf-8")
-        job.artifacts["ssr_pmfs"] = str(out_path.relative_to(self.base_dir))
-        summary = f"SSR: {len(persona_entries)}件を変換しました"
+        job.artifacts["response_embeddings"] = str(out_path.relative_to(self.base_dir))
+        summary = f"Embeddings: {len(persona_entries)}件を変換しました"
         job.message = f"{job.message} | {summary}" if job.message else summary
 
     def _build_persona_sheet_rows(self, job: InterviewJob, personas: List[dict], tribes: List[dict]) -> List[List[str]]:
@@ -892,38 +882,6 @@ class InterviewJobManager:
                     break
                 answers[slot] = text
                 slot += 1
-
-        if cfg.enable_ssr and cfg.ssr_reference_path and cfg.ssr_reference_set:
-            all_responses: List[str] = []
-            mapping: List[Tuple[int, int]] = []
-            for idx, answers in answers_matrix.items():
-                for round_idx, text in enumerate(answers):
-                    if text:
-                        all_responses.append(text)
-                        mapping.append((idx, round_idx))
-            if all_responses:
-                ref_config = ReferenceConfig(
-                    reference_path=Path(cfg.ssr_reference_path).expanduser(),
-                    embeddings_column=cfg.ssr_embeddings_column,
-                    model_name=cfg.ssr_model_name,
-                    device=cfg.ssr_device,
-                )
-                try:
-                    pmfs = await asyncio.to_thread(
-                        map_responses_to_pmfs,
-                        all_responses,
-                        reference_set=cfg.ssr_reference_set,
-                        config=ref_config,
-                        temperature=cfg.ssr_temperature,
-                        epsilon=cfg.ssr_epsilon,
-                    )
-                    for (idx, round_idx), pmf in zip(mapping, pmfs):
-                        expected = 0.0
-                        for score_index, prob in enumerate(pmf, start=1):
-                            expected += score_index * float(prob)
-                        embedded_matrix[idx][round_idx] = round(expected, 2)
-                except SSRMappingError as exc:
-                    job.message = f"QA埋め込み計算に失敗しました: {exc}"
 
         persona_count = len(persona_order)
         if persona_count == 0:

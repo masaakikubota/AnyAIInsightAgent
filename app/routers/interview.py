@@ -21,6 +21,7 @@ from ..services.google_sheets import (
     ensure_service_account_access,
     extract_spreadsheet_id,
 )
+from ..services.interview_language import resolve_interview_language
 
 router = APIRouter(prefix="/interview")
 
@@ -46,19 +47,11 @@ async def create_interview_job(
     persona_overview_column: str = Form("B"),
     persona_prompt_column: str = Form("C"),
     persona_start_row: int = Form(2),
-    ssr_reference_path: str = Form(""),
-    ssr_reference_set: str = Form(""),
-    ssr_embeddings_column: str = Form("embedding"),
-    ssr_model_name: str = Form("sentence-transformers/all-MiniLM-L6-v2"),
-    ssr_device: str = Form(""),
-    ssr_temperature: float = Form(1.0),
-    ssr_epsilon: float = Form(0.0),
     persona_count: int = Form(60),
     persona_seed: int = Form(42),
     persona_template: str = Form(""),
     concurrency: int = Form(20),
     max_rounds: int = Form(3),
-    language: str = Form("ja"),
     stimulus_mode: str = Form("text"),
     notes: str = Form(""),
     enable_tribe_learning: bool = Form(False),
@@ -76,9 +69,6 @@ async def create_interview_job(
             return default
         return str(value).lower() in {"1", "true", "on", "yes"}
 
-    lang = (language or "ja").lower()
-    if lang not in ("ja", "en"):
-        lang = "ja"
     mode = (stimulus_mode or "text").lower()
     if mode not in ("text", "image", "mixed"):
         mode = "text"
@@ -126,6 +116,12 @@ async def create_interview_job(
     country_region_val = (country_region or "").strip()
     if country_region_val:
         country_region_val = "_".join(country_region_val.split())
+
+    resolved_language = await resolve_interview_language(country_region_val or None)
+    language_code = (resolved_language.code or "en").strip() or "en"
+    language_code = language_code.lower()
+    language_label = (resolved_language.name or "").strip() or None
+    language_reason = (resolved_language.reason or "").strip() or None
 
     enable_tribe_learning_flag = _to_bool(enable_tribe_learning, default=False)
 
@@ -221,9 +217,11 @@ async def create_interview_job(
         persona_seed=persona_seed,
         persona_template=persona_template or None,
         concurrency=concurrency,
-        enable_ssr=False,
         max_rounds=max_rounds_val,
-        language=lang,
+        language=language_code,
+        language_label=language_label,
+        language_source=resolved_language.source,
+        language_reason=language_reason,
         stimulus_mode=mode,
         notes=notes or None,
         enable_tribe_learning=enable_tribe_learning_flag,
