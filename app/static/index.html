@@ -110,6 +110,10 @@
                 <input type="text" id="score_sheet_keyword" name="score_sheet_keyword" value="Embedding" placeholder="Embedding" />
                 <div class="muted" id="score-sheet-keyword-help">Linkシートで得た分析テキストを数値化した結果を保存するシート名に含まれるキーワード。</div>
               </div>
+              <div class="actions-row">
+                <button type="button" class="btn btn-outline" id="btn-check-status">CheckTheStatus</button>
+              </div>
+              <div id="validation-banner" class="validation-banner" role="status" aria-live="polite"></div>
             </div>
 
             <div class="card">
@@ -268,6 +272,9 @@
       const sheetKeywordHelp = document.getElementById('sheet-keyword-help');
       const scoreSheetKeywordHelp = document.getElementById('score-sheet-keyword-help');
       const utteranceLabel = document.getElementById('utterance-label');
+      const spreadsheetUrlInput = document.getElementById('spreadsheet_url');
+      const sheetKeywordInput = document.getElementById('sheet_keyword');
+      const scoreSheetKeywordInput = document.getElementById('score_sheet_keyword');
       const modeRadios = modeForm.querySelectorAll('input[name="mode"]');
       const enableSSR = document.getElementById('enable_ssr');
       const batchSizeField = batchSizeInput.closest('.field');
@@ -458,9 +465,13 @@
         alert('APIキーを反映しました');
       });
 
-      const form = document.getElementById('job-form');
+      const form = jobForm;
       document.getElementById('btn-queue-add').addEventListener('click', async (e) => {
         e.preventDefault();
+        if(!isValidationCurrent()){
+          showValidationBanner('error', 'スプレッドシート設定の検証を完了してください (CheckTheStatus)。');
+          return;
+        }
         const fd = new FormData(form);
         fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
         const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
@@ -475,6 +486,10 @@
 
       document.getElementById('btn-queue-add-start').addEventListener('click', async (e) => {
         e.preventDefault();
+        if(!isValidationCurrent()){
+          showValidationBanner('error', 'スプレッドシート設定の検証を完了してください (CheckTheStatus)。');
+          return;
+        }
         const fd = new FormData(form);
         fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
         const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
@@ -586,6 +601,10 @@
                 }
                 form.dataset.editing = it.job_id;
                 alert('フォームに読み込みました。下の「編集を保存」で反映できます。');
+                validationState.ok = false;
+                validationState.payload = null;
+                showValidationBanner('info', '読み込んだ設定です。CheckTheStatus を押して検証してください。');
+                updateQueueActionState();
               }catch{}
             };
             const save = document.createElement('button'); save.className='btn btn-primary'; save.textContent='編集を保存';

@@ -43,9 +43,9 @@ class ValidationPayload:
 @dataclass(frozen=True)
 class SheetUpdate:
     unit: PipelineUnit
+    result: ScoreResult
     scores: Sequence[Optional[float]]
     analyses: Sequence[Optional[str]] = ()
-    result: ScoreResult
     cleanup_path: Optional[str] = None
 
 
@@ -476,9 +476,9 @@ class ScoringPipeline:
 
         sheet_update = SheetUpdate(
             unit=task.unit,
+            result=result,
             scores=list(result.scores),
             analyses=analysis_payload,
-            result=result,
         )
 
         should_cache = self.score_cache is not None and not payload.from_cache

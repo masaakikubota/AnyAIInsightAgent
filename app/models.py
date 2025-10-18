@@ -222,9 +222,11 @@ class InterviewJobConfig(BaseModel):
     persona_template: Optional[str] = None
     persona_seed: conint(ge=0, le=1_000_000) = 42
     concurrency: conint(ge=1, le=200) = 20
-    enable_ssr: bool = False
     max_rounds: conint(ge=1, le=1000) = 3
-    language: Literal["ja", "en"] = "ja"
+    language: str = "ja"
+    language_label: Optional[str] = None
+    language_source: Optional[str] = None
+    language_reason: Optional[str] = None
     stimulus_mode: Literal["text", "image", "mixed"] = "text"
     notes: Optional[str] = None
     enable_tribe_learning: bool = False
