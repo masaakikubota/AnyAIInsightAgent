@@ -14,7 +14,14 @@ by comparing their text against reference sentence text using semantic embedding
 
 import numpy as np
 import polars as po
-from sentence_transformers import SentenceTransformer
+
+_sentence_transformers_import_error: Exception | None = None
+
+try:  # pragma: no cover - optional dependency
+    from sentence_transformers import SentenceTransformer
+except ImportError as exc:  # pragma: no cover - optional dependency
+    SentenceTransformer = None  # type: ignore[assignment]
+    _sentence_transformers_import_error = exc
 
 from . import compute
 
@@ -139,6 +146,11 @@ class ResponseRater:
         # Initialize sentence transformer model only in text mode
         self.model = None
         if not self.embedding_mode:
+            if SentenceTransformer is None:
+                raise ImportError(
+                    "sentence-transformers is required for text mode. "
+                    "Install it separately, e.g. `pip install sentence-transformers`."
+                ) from _sentence_transformers_import_error
             self.model = SentenceTransformer(model_name, device=device)
 
         # Initialize storage for reference matrices and sentences

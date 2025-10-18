@@ -76,7 +76,6 @@ async def create_job(
     enable_ssr: bool = Form(True),
     video_download_timeout: int = Form(120),
     video_temp_dir: Optional[str] = Form(None),
-    enable_ssr: bool = Form(True),
     system_prompt_ssr: Optional[str] = Form(None),
     system_prompt_numeric: Optional[str] = Form(None),
     system_prompt: Optional[str] = Form(None),
@@ -244,7 +243,6 @@ async def edit_job(
     system_prompt_ssr: Optional[str] = Form(None),
     system_prompt_numeric: Optional[str] = Form(None),
     system_prompt: Optional[str] = Form(None),
-    enable_ssr: bool = Form(True),
     manager: JobManager = Depends(get_job_manager),
     base_dir: Path = Depends(get_base_dir),
 ):
