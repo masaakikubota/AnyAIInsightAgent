@@ -1,6 +1,10 @@
 #!/bin/bash
 # セットアップスクリプト
 
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
 echo "🎯 AnyAI Marketing Agent - セットアップ"
 echo "========================================"
 
@@ -17,7 +21,11 @@ echo "✅ Python バージョン: $python_version"
 
 # 仮想環境の作成
 echo "📦 仮想環境を作成中..."
-python3 -m venv .venv
+if [ ! -d .venv ]; then
+    python3 -m venv .venv
+else
+    echo "ℹ️  既存の仮想環境を再利用します (.venv)"
+fi
 
 # 仮想環境のアクティベート
 echo "🔧 仮想環境をアクティベート中..."
@@ -25,8 +33,8 @@ source .venv/bin/activate
 
 # 依存関係のインストール
 echo "📚 依存関係をインストール中..."
-pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 
 # 実行権限の付与
 chmod +x run_local.py
