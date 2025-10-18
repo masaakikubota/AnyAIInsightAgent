@@ -150,20 +150,18 @@ class ScoringPipeline:
         )
         self._log_callback = event_logger
         self._ssr_settings: Optional[SSRSettings] = None
-        if (
-            getattr(cfg, "enable_ssr", True)
-            and cfg.ssr_reference_path
-            and cfg.ssr_reference_set
-        ):
-            reference_path = Path(cfg.ssr_reference_path).expanduser()
+        reference_path_value = getattr(cfg, "ssr_reference_path", None)
+        reference_set_value = getattr(cfg, "ssr_reference_set", None)
+        if getattr(cfg, "enable_ssr", True) and reference_path_value and reference_set_value:
+            reference_path = Path(reference_path_value).expanduser()
             self._ssr_settings = SSRSettings(
                 reference_path=reference_path,
-                reference_set=cfg.ssr_reference_set,
-                embeddings_column=cfg.ssr_embeddings_column,
-                model_name=cfg.ssr_model_name,
-                device=cfg.ssr_device,
-                temperature=float(cfg.ssr_temperature),
-                epsilon=float(cfg.ssr_epsilon),
+                reference_set=reference_set_value,
+                embeddings_column=getattr(cfg, "ssr_embeddings_column", "embedding"),
+                model_name=getattr(cfg, "ssr_model_name", "sentence-transformers/all-MiniLM-L6-v2"),
+                device=getattr(cfg, "ssr_device", None),
+                temperature=float(getattr(cfg, "ssr_temperature", 1.0)),
+                epsilon=float(getattr(cfg, "ssr_epsilon", 0.0)),
             )
 
     def _log(self, message: str) -> None:
