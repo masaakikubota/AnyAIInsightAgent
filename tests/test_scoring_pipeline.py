@@ -250,15 +250,74 @@ class ScoringPipelineWriterTests(unittest.TestCase):
         finally:
             pipeline._validation_executor.shutdown(wait=True)
 
-        self.assertEqual(len(updates), 1)
-        payload = updates[0]
-        self.assertEqual(len(payload), 2)
-        analysis_update = payload[0]
-        score_update = payload[1]
-        self.assertIn("Scores" , analysis_update["range"])
+        self.assertEqual(len(updates), 2)
+        analysis_update = updates[0][0]
+        score_update = updates[1][0]
+        self.assertIn("Scores", analysis_update["range"])
         self.assertEqual(analysis_update["values"], [["Strong alignment"]])
         self.assertIn("Embeddings", score_update["range"])
         self.assertEqual(score_update["values"], [[0.25]])
+
+    def test_writer_flush_batches_updates_without_crash(self) -> None:
+        _, pipeline = _make_pipeline(
+            score_cache=None,
+            flush_interval=10.0,
+            flush_unit_threshold=10,
+            sheet_batch_row_size=1,
+        )
+
+        updates: list[list[dict]] = []
+
+        def capture_updates(spreadsheet_id: str, payload: list[dict]) -> None:
+            updates.append(payload)
+
+        async def run_writer_with_batches() -> None:
+            writer_queue: asyncio.Queue[Optional[SheetUpdate]] = asyncio.Queue()
+            writer = asyncio.create_task(pipeline._writer(writer_queue))
+            unit1 = PipelineUnit(row_index=0, block_index=0, col_offset=0)
+            await writer_queue.put(
+                SheetUpdate(
+                    unit=unit1,
+                    scores=[0.4],
+                    analyses=["Row1 analysis"],
+                    result=ScoreResult(
+                        scores=[0.4],
+                        analyses=["Row1 analysis"],
+                        provider=Provider.gemini,
+                        model="gemini-test",
+                    ),
+                )
+            )
+            unit2 = PipelineUnit(row_index=1, block_index=0, col_offset=0)
+            await writer_queue.put(
+                SheetUpdate(
+                    unit=unit2,
+                    scores=[0.6],
+                    analyses=["Row2 analysis"],
+                    result=ScoreResult(
+                        scores=[0.6],
+                        analyses=["Row2 analysis"],
+                        provider=Provider.gemini,
+                        model="gemini-test",
+                    ),
+                )
+            )
+            await writer_queue.put(None)
+            await writer
+
+        try:
+            with patch("app.scoring_pipeline.batch_update_values", side_effect=capture_updates):
+                asyncio.run(run_writer_with_batches())
+        finally:
+            pipeline._validation_executor.shutdown(wait=True)
+
+        self.assertEqual(len(updates), 4)
+        self.assertTrue(all(isinstance(entry, list) for entry in updates))
+        self.assertEqual(updates[0][0]["values"], [["Row1 analysis"]])
+        self.assertEqual(updates[1][0]["values"], [["Row2 analysis"]])
+        self.assertEqual(updates[2][0]["values"], [[0.4]])
+        self.assertEqual(updates[3][0]["values"], [[0.6]])
+        self.assertEqual(pipeline.stats.flush_count, 1)
 
 
 if __name__ == "__main__":
