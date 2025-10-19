@@ -8,7 +8,7 @@
       label: 'CORE',
       items: [
         { id: 'scoring', href: '/', text: 'Score', tooltip: 'AnyAI Scoring', icon: 'sparkles' },
-        { id: 'cleansing', href: '/cleansing', text: 'Cleanse', tooltip: 'AnyAI Cleansing', icon: 'broom' },
+        { id: 'cleansing', href: '/cleansing', text: 'Cleanse', tooltip: 'AnyAI Cleansing', icon: 'wand-2' },
         { id: 'interview', href: '/interview', text: 'Interview', tooltip: 'AnyAI Interview', icon: 'mic' }
       ]
     },
@@ -32,12 +32,6 @@
     }
   ];
 
-  const FOOTER_ITEMS = [
-    { id: 'settings', href: '/settings', text: 'Settings', tooltip: 'Settings', icon: 'settings' },
-    { id: 'help', href: '/help', text: 'Help', tooltip: 'Help & Support', icon: 'help-circle' },
-    { id: 'account', href: '/account', text: 'Account', tooltip: 'Account', icon: 'user' }
-  ];
-
   const active = sidebar.dataset.activeTool || '';
   const root = document.createElement('div');
   root.className = 'anyai-sidebar-inner';
@@ -53,17 +47,7 @@
     <span class="brand-icon" aria-hidden="true"><img src="/static/anyai/assets/AnyAI_logo.png" alt=""></span>
     <span class="sr-only">AnyAI ホーム</span>
   `;
-
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'sidebar-toggle';
-  toggle.setAttribute('aria-label', 'サイドバーを折りたたむ');
-  toggle.innerHTML = `
-    <span class="sr-only">Toggle sidebar</span>
-    <i data-lucide="chevrons-left" class="toggle-icon" aria-hidden="true"></i>
-  `;
-
-  header.append(brand, toggle);
+  header.append(brand);
 
   const nav = document.createElement('nav');
   nav.className = 'sidebar-nav';
@@ -110,75 +94,10 @@
     nav.appendChild(groupEl);
   });
 
-  const footer = document.createElement('div');
-  footer.className = 'sidebar-footer';
-
-  FOOTER_ITEMS.forEach((item) => {
-    const link = document.createElement('a');
-    link.className = 'nav-item footer-item';
-    link.href = item.href;
-    link.dataset.tool = item.id;
-    link.dataset.tooltip = item.tooltip;
-    link.title = item.tooltip;
-    link.innerHTML = `
-      <span class="nav-icon" aria-hidden="true"><i data-lucide="${item.icon}"></i></span>
-      <span class="nav-text">${item.text}</span>
-    `;
-    footer.appendChild(link);
-  });
-
-  root.append(header, nav, footer);
+  root.append(header, nav);
   sidebar.appendChild(root);
 
-  const STORAGE_KEY = 'anyai.sidebar.collapsed';
-
-  const getStoredCollapsed = () => {
-    try {
-      return window.localStorage.getItem(STORAGE_KEY) === 'true';
-    } catch (error) {
-      return false;
-    }
-  };
-
-  const applyCollapsed = (collapsed, { store = true } = {}) => {
-    sidebar.setAttribute('data-collapsed', collapsed ? 'true' : 'false');
-    document.body.classList.toggle('sidebar-collapsed', collapsed);
-    toggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
-    toggle.setAttribute('aria-label', collapsed ? 'サイドバーを展開する' : 'サイドバーを折りたたむ');
-    if (store) {
-      try {
-        window.localStorage.setItem(STORAGE_KEY, collapsed ? 'true' : 'false');
-      } catch (error) {
-        /* noop */
-      }
-    }
-  };
-
-  const initialCollapsed = getStoredCollapsed();
-  applyCollapsed(initialCollapsed, { store: false });
-
-  toggle.addEventListener('click', () => {
-    const next = !document.body.classList.contains('sidebar-collapsed');
-    applyCollapsed(next);
-  });
-
-  const mediaQuery = window.matchMedia('(max-width: 960px)');
-  const handleMedia = () => {
-    if (mediaQuery.matches) {
-      applyCollapsed(false, { store: false });
-    } else {
-      applyCollapsed(getStoredCollapsed(), { store: false });
-    }
-  };
-
-  if (typeof mediaQuery.addEventListener === 'function') {
-    mediaQuery.addEventListener('change', handleMedia);
-  } else if (typeof mediaQuery.addListener === 'function') {
-    mediaQuery.addListener(handleMedia);
-  }
-  handleMedia();
-
   if (window.lucide && typeof window.lucide.createIcons === 'function') {
-    window.lucide.createIcons({ attrs: { width: 20, height: 20, 'aria-hidden': 'true' } });
+    window.lucide.createIcons();
   }
 })();
