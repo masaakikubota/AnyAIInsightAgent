@@ -13,15 +13,10 @@
     <link rel="stylesheet" href="/static/anyai/core/anyai.components.css" />
     <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css" />
     <link rel="stylesheet" href="/static/anyai/tool-layout.css" />
+    <script src="/static/anyai/loading-overlay.js"></script>
     <script defer src="/static/anyai/vendor/lucide.js"></script>
     <script defer src="/static/anyai/sidebar.js"></script>
     <style>
-      .anyai-header .brand img { height: calc(64px - 8px); width: auto; }
-      .nav { display: flex; gap: var(--anyai-space-3); align-items: center; flex-wrap: wrap; }
-      .nav-link { font-weight: 600; text-decoration: none; color: var(--anyai-text); padding: 6px 12px; border-radius: 999px; transition: background 0.2s ease; }
-      .nav-link:hover { background: rgba(0, 0, 0, 0.06); }
-      .nav-link.active { background: rgba(0, 0, 0, 0.12); }
-
       input[type="text"] {
         width: 100%;
         padding: 10px 12px;
@@ -39,30 +34,15 @@
     </style>
   </head>
   <body>
-    <header class="anyai-header">
-      <a class="brand" href="/" aria-label="AnyAI Cleansing">
-        <img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ">
-        <span>AnyAI Cleansing</span>
-      </a>
-      <nav class="nav">
-        <a class="nav-link" href="/">AnyAI Scoring</a>
-        <a class="nav-link active" href="/cleansing">AnyAI Cleansing</a>
-        <a class="nav-link" href="/interview">AnyAI Interview</a>
-        <a class="nav-link" href="/persona">Persona Seeds</a>
-        <a class="nav-link" href="/dashboard">Persona Dashboard</a>
-        <a class="nav-link" href="/video-analysis">Video Analysis</a>
-        <a class="nav-link" href="/comment-enhancer">Comment Enhancer</a>
-        <a class="nav-link" href="/video-comment-review">Video Comment Review</a>
-        <a class="nav-link" href="/kol-reviewer">KOL Reviewer</a>
-      </nav>
-    </header>
-
     <div class="anyai-layout">
       <aside class="anyai-sidebar" data-active-tool="cleansing"></aside>
       <main class="anyai-content">
         <div class="anyai-app">
           <section class="anyai-app-primary" aria-labelledby="cleansing-heading">
-            <h1 id="cleansing-heading" class="mt-0">Related列を自動クレンジング</h1>
+            <h1 id="cleansing-heading" class="mt-0 page-title-with-icon">
+              <span class="page-title-icon" aria-hidden="true"><i data-lucide="wand-2"></i></span>
+              <span>Related列を自動クレンジング</span>
+            </h1>
             <p class="field-hint">content と Related 列を含むシートを指定すると、重複や欠損を整理した関連語リストを生成します。</p>
 
             <div class="anyai-form" aria-labelledby="cleansing-config-heading">
@@ -97,6 +77,7 @@
                         <div class="info-panel">ヘッダーに <code>content</code> と <code>Related</code> が含まれているシートを指定してください。</div>
                       </details>
                     </div>
+                    <input type="hidden" id="concurrency" name="concurrency" value="50" />
                   </div>
                 </form>
               </section>
@@ -128,6 +109,12 @@
     </div>
 
     <script>
+      const loadingOverlay = window.AnyAILoading || {
+        run: async (task) => task(),
+        show: () => {},
+        hide: () => {},
+      };
+
       const form = document.getElementById('cleansing-form');
       const jobSection = document.getElementById('job-section');
       const jobIdEl = document.getElementById('job-id');
@@ -216,22 +203,39 @@
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         stopPolling();
-        const fd = new FormData(form);
-        const res = await fetch('/cleansing/jobs', { method: 'POST', body: fd });
-        if (!res.ok) {
-          alert('ジョブの作成に失敗しました');
-          return;
-        }
-        const data = await res.json();
-        currentJobId = data.job_id;
-        jobSection.style.display = 'block';
-        progressEl.value = 0;
-        jobStatusEl.textContent = 'ステータス: pending';
-        jobMessageEl.textContent = 'ジョブを開始しました。';
-        jobCountsEl.textContent = '';
-        errorList.innerHTML = '';
-        errorBox.style.display = 'none';
-        pollStatus(currentJobId);
+        await loadingOverlay.run(async () => {
+          const fd = new FormData(form);
+          if (!fd.get('concurrency')) {
+            fd.set('concurrency', '50');
+          }
+          const res = await fetch('/cleansing/jobs', { method: 'POST', body: fd });
+          if (!res.ok) {
+            let message = 'ジョブの作成に失敗しました';
+            try {
+              const detail = await res.json();
+              if (detail?.detail) {
+                message = detail.detail;
+              }
+            } catch (_) {
+              try {
+                const text = await res.text();
+                if (text) message = text;
+              } catch (__) {}
+            }
+            alert(message);
+            return;
+          }
+          const data = await res.json();
+          currentJobId = data.job_id;
+          jobSection.style.display = 'block';
+          progressEl.value = 0;
+          jobStatusEl.textContent = 'ステータス: pending';
+          jobMessageEl.textContent = 'ジョブを開始しました。';
+          jobCountsEl.textContent = '';
+          errorList.innerHTML = '';
+          errorBox.style.display = 'none';
+          pollStatus(currentJobId);
+        });
       });
     </script>
   </body>

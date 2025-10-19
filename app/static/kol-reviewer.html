@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="/static/anyai/core/anyai.components.css">
 <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css">
 <link rel="stylesheet" href="/static/anyai/tool-layout.css">
+<script src="/static/anyai/loading-overlay.js"></script>
 <script defer src="/static/anyai/vendor/lucide.js"></script>
 <script defer src="/static/anyai/sidebar.js"></script>
 <script defer src="/static/anyai/core/anyai.js"></script>
@@ -45,10 +46,10 @@
 </style>
 </head>
 <body>
-<div class="anyai-layout">
-  <aside class="anyai-sidebar" data-active-tool="kol-reviewer"></aside>
-  <main class="anyai-content">
-    <div class="page container">
+  <div class="anyai-layout">
+    <aside class="anyai-sidebar" data-active-tool="kol-reviewer"></aside>
+    <main class="anyai-content">
+      <div class="page container">
   <h1 class="mb-4">AnyAIKOLReviewer</h1>
   <p class="text-subtle mb-4">`KOL_List` シートのC列（KOL調査メモ）と指定したコメント列レンジ（デフォルト: H〜Q）をもとに、プロフィール概要・起用リスク・コンテンツ傾向・カテゴリ・KOLトライブを D/E/F/G/H 列へ詳細出力します。</p>
 
@@ -208,6 +209,12 @@
 </div>
 
 <script>
+  const loadingOverlay = window.AnyAILoading || {
+    run: async (task) => task(),
+    show: () => {},
+    hide: () => {},
+  };
+
   const form = document.getElementById('kol-form');
   const logContainer = document.getElementById('log-container');
   const runButton = document.getElementById('run-button');
@@ -351,11 +358,13 @@
     stopButton.disabled = false;
 
     try {
-      const resp = await fetch('/run-kol-reviewer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const resp = await loadingOverlay.run(() =>
+        fetch('/run-kol-reviewer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      );
       const result = await resp.json();
       if (!resp.ok) {
         log(`Error: ${result.error || 'Unknown error'}`, true);
