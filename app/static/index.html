@@ -394,6 +394,11 @@
       const queueStatus = document.getElementById('queue-status');
       const cancelButton = document.getElementById('btn-cancel-job');
       const resultSection = document.getElementById('result');
+      const queueAddButton = document.getElementById('btn-queue-add');
+      const queueAddStartButton = document.getElementById('btn-queue-add-start');
+      const checkStatusButton = document.getElementById('btn-check-status');
+      const validationBanner = document.getElementById('validation-banner');
+      const validationState = { ok: false, payload: null, key: '', message: '' };
       let currentMode = modeForm.querySelector('input[name="mode"]:checked').value;
       let currentJobId = null;
       let pollTimer = null;
@@ -406,6 +411,51 @@
         concurrency: concurrencyInput.value || MODE_DEFAULTS.csv.concurrency,
         timeout: timeoutInput.value || MODE_DEFAULTS.csv.timeout
       };
+
+      function buildValidationKey(){
+        return [spreadsheetUrlInput.value.trim(), sheetKeywordInput.value.trim()].join('|');
+      }
+
+      function setValidationResult(ok, payload, message){
+        validationState.ok = !!ok;
+        validationState.payload = payload || null;
+        validationState.message = message || '';
+        validationState.key = buildValidationKey();
+      }
+
+      function isValidationCurrent(){
+        return validationState.ok && validationState.key === buildValidationKey();
+      }
+
+      function showValidationBanner(state, message){
+        if(!validationBanner) return;
+        if(!state){
+          validationBanner.removeAttribute('data-state');
+          validationBanner.textContent = message || '';
+          return;
+        }
+        validationBanner.setAttribute('data-state', state);
+        validationBanner.textContent = message || '';
+      }
+
+      function updateQueueActionState(){
+        const valid = isValidationCurrent();
+        if(queueAddButton) queueAddButton.disabled = !valid;
+        if(queueAddStartButton) queueAddStartButton.disabled = !valid;
+      }
+
+      function markValidationDirty(showMessage = true){
+        const wasValid = validationState.ok;
+        validationState.ok = false;
+        validationState.payload = null;
+        validationState.key = '';
+        if(showMessage && wasValid){
+          showValidationBanner('info', '設定が変更されました。右下の「再取得」で検証してください。');
+        } else if(!validationBanner?.hasAttribute('data-state')){
+          showValidationBanner(null, '');
+        }
+        updateQueueActionState();
+      }
 
       function stopPolling(){
         if (pollTimer) {
@@ -493,6 +543,32 @@
         });
       }
 
+      function applyMode(mode) {
+        applyModeContent(mode);
+        const defaults = MODE_DEFAULTS[mode] || MODE_DEFAULTS.csv;
+        if (enableSSR.checked) {
+          batchSizeInput.value = '1';
+          concurrencyInput.value = '1';
+          timeoutInput.value = defaults.timeout || MODE_DEFAULTS.csv.timeout;
+          batchSizeInput.disabled = true;
+          concurrencyInput.disabled = true;
+        } else {
+          restoreNonSSRValues(mode);
+          batchSizeInput.disabled = false;
+          concurrencyInput.disabled = false;
+          const stored = nonSSRState[mode] || defaults;
+          timeoutInput.value = stored.timeout || defaults.timeout;
+        }
+        updateSSREnabled();
+      }
+
+      function handleSSRChange() {
+        if (enableSSR.checked) {
+          storeCurrentNonSSRValues(currentMode);
+        }
+        applyMode(currentMode);
+      }
+
       function appendPromptFields(fd) {
         fd.set('enable_ssr', enableSSR.checked ? 'true' : 'false');
         fd.set('system_prompt_ssr', form.system_prompt_ssr.value || '');
@@ -529,10 +605,7 @@
         nonSSRState[currentMode].timeout = timeoutInput.value;
       });
 
-      if (enableSSR.checked) {
-        storeCurrentNonSSRValues(currentMode);
-      }
-      applyMode(currentMode);
+      handleSSRChange();
 
       // Settings status
       async function refreshKeysStatus(){
@@ -559,47 +632,105 @@
       });
 
       const form = jobForm;
-      document.getElementById('btn-queue-add').addEventListener('click', async (e) => {
-        e.preventDefault();
-        if(!isValidationCurrent()){
-          showValidationBanner('error', 'スプレッドシート設定の検証を完了してください（右下の「再取得」）。');
-          return;
-        }
-        const fd = new FormData(form);
-        fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
-        const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
-        fd.append('mode', selectedMode);
-        appendPromptFields(fd);
-        fd.append('action', 'queue');
-        const res = await fetch('/jobs', { method: 'POST', body: fd });
-        if (!res.ok) { alert('キュー追加に失敗'); return; }
-        await refreshQueue();
-        alert('キューに追加しました');
+
+      [spreadsheetUrlInput, sheetKeywordInput].forEach((input) => {
+        if (!input) return;
+        input.addEventListener('input', () => markValidationDirty());
       });
 
-      document.getElementById('btn-queue-add-start').addEventListener('click', async (e) => {
-        e.preventDefault();
-        if(!isValidationCurrent()){
-          showValidationBanner('error', 'スプレッドシート設定の検証を完了してください（右下の「再取得」）。');
-          return;
-        }
-        await loadingOverlay.run(async () => {
+      if (checkStatusButton) {
+        checkStatusButton.addEventListener('click', async (e) => {
+          e.preventDefault();
+          const url = spreadsheetUrlInput.value.trim();
+          const sheetKeyword = sheetKeywordInput.value.trim() || 'Link';
+          if (!url) {
+            const message = 'スプレッドシートURLを入力してください。';
+            showValidationBanner('error', message);
+            setValidationResult(false, null, message);
+            updateQueueActionState();
+            return;
+          }
+          showValidationBanner('info', 'スプレッドシートを検証中です...');
+          checkStatusButton.disabled = true;
+          try {
+            const res = await fetch('/jobs/check', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ spreadsheet_url: url, sheet_keyword: sheetKeyword }),
+            });
+            let data = null;
+            try {
+              data = await res.json();
+            } catch (err) {
+              data = null;
+            }
+            if (!res.ok || !data || !data.ok) {
+              const message = (data && data.message) || 'スプレッドシートの検証に失敗しました。';
+              showValidationBanner('error', message);
+              setValidationResult(false, data, message);
+            } else {
+              const message = data.message || 'スプレッドシートを確認しました。';
+              showValidationBanner('success', message);
+              setValidationResult(true, data, message);
+            }
+          } catch (err) {
+            const message = `検証に失敗しました: ${err instanceof Error ? err.message : err}`;
+            showValidationBanner('error', message);
+            setValidationResult(false, null, message);
+          } finally {
+            checkStatusButton.disabled = false;
+            updateQueueActionState();
+          }
+        });
+      }
+
+      updateQueueActionState();
+
+      if (queueAddButton) {
+        queueAddButton.addEventListener('click', async (e) => {
+          e.preventDefault();
+          if(!isValidationCurrent()){
+            showValidationBanner('error', 'スプレッドシート設定の検証を完了してください（右下の「再取得」）。');
+            return;
+          }
           const fd = new FormData(form);
           fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
           const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
-          fd.set('mode', selectedMode);
+          fd.append('mode', selectedMode);
           appendPromptFields(fd);
-          fd.set('action', 'start');
+          fd.append('action', 'queue');
           const res = await fetch('/jobs', { method: 'POST', body: fd });
-          if (!res.ok) { alert('開始に失敗'); return; }
-          const data = await res.json();
-          currentJobId = data.job_id;
-          resultSection.style.display = 'block';
-          document.getElementById('job-id').textContent = currentJobId;
-          startPolling(currentJobId);
+          if (!res.ok) { alert('キュー追加に失敗'); return; }
           await refreshQueue();
+          alert('キューに追加しました');
         });
-      });
+      }
+
+      if (queueAddStartButton) {
+        queueAddStartButton.addEventListener('click', async (e) => {
+          e.preventDefault();
+          if(!isValidationCurrent()){
+            showValidationBanner('error', 'スプレッドシート設定の検証を完了してください（右下の「再取得」）。');
+            return;
+          }
+          await loadingOverlay.run(async () => {
+            const fd = new FormData(form);
+            fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
+            const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
+            fd.set('mode', selectedMode);
+            appendPromptFields(fd);
+            fd.set('action', 'start');
+            const res = await fetch('/jobs', { method: 'POST', body: fd });
+            if (!res.ok) { alert('開始に失敗'); return; }
+            const data = await res.json();
+            currentJobId = data.job_id;
+            resultSection.style.display = 'block';
+            document.getElementById('job-id').textContent = currentJobId;
+            startPolling(currentJobId);
+            await refreshQueue();
+          });
+        });
+      }
 
       document.getElementById('btn-queue-start').addEventListener('click', async ()=>{
         await fetch('/queue/start', { method:'POST' });

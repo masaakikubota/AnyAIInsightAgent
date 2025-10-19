@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from queue import Empty
+from pathlib import Path
 from typing import Any, AsyncGenerator, Dict
 
 import anyio
@@ -13,6 +13,15 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 from app.services.video_suite import queue as queue_service
 from app.services.video_suite import workers
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+
+def _load_static(filename: str) -> str:
+    try:
+        return (STATIC_DIR / filename).read_text(encoding="utf-8")
+    except FileNotFoundError as exc:  # pragma: no cover - static assets are required
+        raise HTTPException(status_code=404, detail=f"Static page '{filename}' was not found.") from exc
 
 
 def _ensure_video_suite_ready() -> None:
