@@ -47,16 +47,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 var(--anyai-space-2, 8px);
+  padding: 0;
 }
 
 
 .sidebar-brand {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
+  display: block;
+  width: 100%;
   border-radius: var(--anyai-radius-2, 10px);
   text-decoration: none;
   color: inherit;
@@ -64,10 +61,10 @@ body {
 }
 
 .sidebar-brand img {
-  height: 32px;
-  aspect-ratio: 1545 / 663;
-  width: auto;
   display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1545 / 663;
 }
 
 .sidebar-brand:hover,
