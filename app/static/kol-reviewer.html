@@ -13,6 +13,8 @@
 <link rel="stylesheet" href="/static/anyai/core/anyai.components.css">
 <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css">
 <link rel="stylesheet" href="/static/anyai/tool-layout.css">
+<script defer src="/static/anyai/vendor/lucide.js"></script>
+<script defer src="/static/anyai/sidebar.js"></script>
 <script defer src="/static/anyai/core/anyai.js"></script>
 <script defer src="/static/anyai/queue-manager.js"></script>
 <style>
@@ -44,25 +46,7 @@
 </head>
 <body>
 <div class="anyai-layout">
-  <aside class="anyai-sidebar">
-    <a class="brand" href="/" aria-label="AnyAI ホーム">
-      <img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ">
-      <span>AnyAI</span>
-    </a>
-    <nav>
-      <ul class="anyai-nav">
-        <li><a class="anyai-nav-link" href="/">AnyAI Scoring</a></li>
-        <li><a class="anyai-nav-link" href="/cleansing">AnyAI Cleansing</a></li>
-        <li><a class="anyai-nav-link" href="/interview">AnyAI Interview</a></li>
-        <li><a class="anyai-nav-link" href="/persona">Persona Seeds</a></li>
-        <li><a class="anyai-nav-link" href="/dashboard">Persona Dashboard</a></li>
-        <li><a class="anyai-nav-link" href="/video-analysis">Video Analysis</a></li>
-        <li><a class="anyai-nav-link" href="/comment-enhancer">Comment Enhancer</a></li>
-        <li><a class="anyai-nav-link" href="/video-comment-review">Video Comment Review</a></li>
-        <li><a class="anyai-nav-link active" href="/kol-reviewer">KOL Reviewer</a></li>
-      </ul>
-    </nav>
-  </aside>
+  <aside class="anyai-sidebar" data-active-tool="kol-reviewer"></aside>
   <main class="anyai-content">
     <div class="page container">
   <h1 class="mb-4">AnyAIKOLReviewer</h1>
