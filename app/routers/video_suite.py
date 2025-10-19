@@ -9,11 +9,27 @@ from typing import Any, AsyncGenerator, Dict
 
 import anyio
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
-from starlette.responses import EventSourceResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 from app.services.video_suite import queue as queue_service
 from app.services.video_suite import workers
+
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+
+def _load_static(filename: str) -> str:
+    path = STATIC_DIR / filename
+    if not path.is_file():
+        raise HTTPException(status_code=500, detail=f"Static template '{filename}' not found.")
+    return path.read_text(encoding="utf-8")
+
+
+def _ensure_video_suite_ready() -> None:
+    try:
+        workers.ensure_dependencies()
+    except workers.LegacyDependencyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 router = APIRouter()
 
@@ -30,28 +46,29 @@ async def _get_request_json(request: Request) -> Dict[str, Any]:
 
 @router.get("/video-analysis", response_class=HTMLResponse)
 async def video_analysis_page() -> HTMLResponse:
-    return HTMLResponse("<h1>AnyAI Video Analysis</h1>")
+    return HTMLResponse(_load_static("video-analysis.html"))
 
 
 @router.get("/comment-enhancer", response_class=HTMLResponse)
 async def comment_enhancer_page() -> HTMLResponse:
-    return HTMLResponse("<h1>AnyAI Comment Enhancer</h1>")
+    return HTMLResponse(_load_static("comment-enhancer.html"))
 
 
 @router.get("/video-summarizer", response_class=HTMLResponse)
 async def video_summarizer_page() -> HTMLResponse:
-    return HTMLResponse("<h1>AnyAI Video Comment Review</h1>")
+    return HTMLResponse(_load_static("video-comment-review.html"))
 
 
 @router.get("/kol-reviewer", response_class=HTMLResponse)
 async def kol_reviewer_page() -> HTMLResponse:
-    return HTMLResponse("<h1>AnyAI KOL Reviewer</h1>")
+    return HTMLResponse(_load_static("kol-reviewer.html"))
 
 
 @router.post("/run-analysis")
 async def run_analysis(request: Request) -> JSONResponse:
     base_log_queue = queue_service.get_shared_log_queue()
     data = await _get_request_json(request)
+    _ensure_video_suite_ready()
 
     raw_sheet_ref = data.get("sheet_url")
     sheet_url = workers.normalise_sheet_reference(raw_sheet_ref)
@@ -140,6 +157,7 @@ async def run_analysis(request: Request) -> JSONResponse:
 async def run_comment_enhancer(request: Request) -> JSONResponse:
     base_log_queue = queue_service.get_shared_log_queue()
     data = await _get_request_json(request)
+    _ensure_video_suite_ready()
 
     sheet_url = data.get("sheet_url")
     try:
@@ -202,6 +220,7 @@ async def run_comment_enhancer(request: Request) -> JSONResponse:
 async def run_video_comment_review(request: Request) -> JSONResponse:
     base_log_queue = queue_service.get_shared_log_queue()
     data = await _get_request_json(request)
+    _ensure_video_suite_ready()
 
     sheet_url = data.get("sheet_url")
     if not sheet_url:
@@ -302,6 +321,7 @@ async def run_video_comment_review(request: Request) -> JSONResponse:
 async def run_kol_reviewer(request: Request) -> JSONResponse:
     base_log_queue = queue_service.get_shared_log_queue()
     data = await _get_request_json(request)
+    _ensure_video_suite_ready()
 
     sheet_url = data.get("sheet_url")
     if not sheet_url:
@@ -418,11 +438,41 @@ async def _log_event_stream(process_id: str) -> AsyncGenerator[Any, None]:
             yield {"data": message}
 
 
+def _serialize_sse_event(event: Any) -> bytes:
+    """Convert an event payload into Server-Sent Event bytes."""
+
+    if isinstance(event, str):
+        text = event if event.endswith("\n\n") else event.rstrip("\n") + "\n\n"
+        return text.encode("utf-8")
+
+    if isinstance(event, dict):
+        lines: list[str] = []
+        event_name = event.get("event")
+        if isinstance(event_name, str) and event_name:
+            lines.append(f"event: {event_name}")
+
+        data = event.get("data")
+        if data is not None:
+            if not isinstance(data, str):
+                data = json.dumps(data)
+            for line in data.splitlines() or [""]:
+                lines.append(f"data: {line}")
+
+        return ("\n".join(lines) + "\n\n").encode("utf-8")
+
+    return (f"data: {event}\n\n").encode("utf-8")
+
+
 @router.get("/stream-logs")
-async def stream_logs(process_id: str) -> EventSourceResponse:
+async def stream_logs(process_id: str) -> StreamingResponse:
     if not process_id:
         raise HTTPException(status_code=400, detail="process_id is required.")
-    return EventSourceResponse(_log_event_stream(process_id))
+
+    async def event_generator() -> AsyncGenerator[bytes, None]:
+        async for event in _log_event_stream(process_id):
+            yield _serialize_sse_event(event)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post("/stop-analysis")
