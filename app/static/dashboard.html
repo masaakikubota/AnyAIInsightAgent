@@ -12,6 +12,9 @@
     <link rel="stylesheet" href="/static/anyai/core/anyai.tokens.css" />
     <link rel="stylesheet" href="/static/anyai/core/anyai.components.css" />
     <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css" />
+    <link rel="stylesheet" href="/static/anyai/tool-layout.css" />
+    <script defer src="/static/anyai/vendor/lucide.js"></script>
+    <script defer src="/static/anyai/sidebar.js"></script>
     <style>
       :root {
         color-scheme: dark light;
@@ -27,7 +30,7 @@
         flex-direction: column;
         min-height: 100vh;
       }
-      .anyai-app {
+      .dashboard-shell {
         display: grid;
         grid-template-columns: 320px 1fr;
         gap: var(--anyai-space-4);
@@ -35,7 +38,7 @@
         flex: 1;
       }
       @media (max-width: 1100px) {
-        .anyai-app {
+        .dashboard-shell {
           grid-template-columns: 1fr;
         }
       }
@@ -303,8 +306,10 @@
       </div>
     </header>
 
-    <div class="anyai-app" id="dashboard-app">
-      <aside class="filters-panel" id="filters-panel">
+    <div class="anyai-layout">
+      <aside class="anyai-sidebar" data-active-tool="persona-dashboard"></aside>
+      <div class="dashboard-shell" id="dashboard-app">
+        <aside class="filters-panel" id="filters-panel">
         <div>
           <h2 class="section-title">ダッシュボード選択</h2>
           <select id="run-select" class="select-field"></select>
@@ -348,9 +353,9 @@
             <button class="btn btn-outline" id="export-pdf">PDF</button>
           </div>
         </div>
-      </aside>
+        </aside>
 
-      <main class="content-panel" id="dashboard-content">
+        <main class="content-panel" id="dashboard-content">
         <section id="overview-section">
           <div class="status-badge" id="status-badge">
             <span class="status-dot" aria-hidden="true"></span>
@@ -380,7 +385,8 @@
             </table>
           </div>
         </section>
-      </main>
+        </main>
+      </div>
     </div>
 
     <div class="toast" id="toast"></div>

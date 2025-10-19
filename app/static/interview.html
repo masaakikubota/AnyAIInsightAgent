@@ -12,6 +12,9 @@
     <link rel="stylesheet" href="/static/anyai/core/anyai.tokens.css" />
     <link rel="stylesheet" href="/static/anyai/core/anyai.components.css" />
     <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css" />
+    <link rel="stylesheet" href="/static/anyai/tool-layout.css" />
+    <script defer src="/static/anyai/vendor/lucide.js"></script>
+    <script defer src="/static/anyai/sidebar.js"></script>
     <style>
       body { font-family: 'Noto Sans JP', sans-serif; }
       .layout { display:flex; flex-direction:column; min-height:100vh; }
@@ -103,8 +106,10 @@
       </div>
     </header>
 
-    <main class="anyai-content">
-      <div class="container">
+    <div class="anyai-layout">
+      <aside class="anyai-sidebar" data-active-tool="interview"></aside>
+      <main class="anyai-content">
+        <div class="container">
         <h1 class="mt-0" style="margin:0;">合成消費者インタビューを自動生成</h1>
         <section class="card" aria-labelledby="interview-guide-title">
           <div class="stack-sm">
@@ -262,8 +267,9 @@
             <div id="artifact-list" class="muted"></div>
           </div>
         </section>
-      </div>
-    </main>
+        </div>
+      </main>
+    </div>
 
     <script>
       const form = document.getElementById('interview-form');

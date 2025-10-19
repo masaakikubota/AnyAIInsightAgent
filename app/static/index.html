@@ -12,6 +12,9 @@
     <link rel="stylesheet" href="/static/anyai/core/anyai.tokens.css" />
     <link rel="stylesheet" href="/static/anyai/core/anyai.components.css" />
     <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css" />
+    <link rel="stylesheet" href="/static/anyai/tool-layout.css" />
+    <script defer src="/static/anyai/vendor/lucide.js"></script>
+    <script defer src="/static/anyai/sidebar.js"></script>
     
     <style>
       .form-grid { display: grid; grid-template-columns: 1fr; gap: var(--anyai-space-4); }
@@ -27,10 +30,13 @@
       .muted { color: var(--anyai-text-subtle); font-size: var(--anyai-fs-2); }
       progress { width: 100%; height: 12px; }
       /* Layout stability tweaks */
-      .anyai-app { grid-template-columns: minmax(320px, 70%) minmax(300px, 30%); }
-      .anyai-sidebar { overflow-y: auto; }
       .anyai-content { min-width: 0; }
       .anyai-content .container { min-width: 0; width: 100%; max-width: none; }
+      .scoring-shell { display: grid; grid-template-columns: minmax(320px, 1.1fr) minmax(320px, 0.9fr); gap: var(--anyai-space-5); align-items: flex-start; width: 100%; }
+      .scoring-panel { display:flex; flex-direction:column; gap: var(--anyai-space-4); }
+      .scoring-panel .card { padding: var(--anyai-space-4); }
+      .scoring-shell .anyai-content > .container { min-width: 0; width: 100%; }
+      @media (max-width: 1080px) { .scoring-shell { grid-template-columns: 1fr; } }
       pre { max-width: 100%; white-space: pre-wrap; word-break: break-word; }
       /* ログUIは廃止 */
       .actions-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -90,8 +96,10 @@
       </div>
     </header>
 
-    <div class="anyai-app">
-      <aside class="anyai-sidebar">
+    <div class="anyai-layout">
+      <aside class="anyai-sidebar" data-active-tool="scoring"></aside>
+      <div class="scoring-shell">
+        <section class="scoring-panel">
         <div class="section">
           <h3>モード設定</h3>
           <form id="mode-form" class="card" style="padding:var(--anyai-space-4);">
@@ -304,7 +312,7 @@
             </details>
           </div>
         </div>
-      </aside>
+        </section>
 
       <main class="anyai-content">
         <div class="container">
@@ -335,6 +343,7 @@
           <!-- ログUI廃止 -->
         </div>
       </main>
+      </div>
     </div>
 
     
