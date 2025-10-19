@@ -121,6 +121,21 @@
         font-weight: 600;
       }
 
+      .log-viewer {
+        max-height: 240px;
+        width: 100%;
+        padding: var(--anyai-space-3) var(--anyai-space-4);
+        background: color-mix(in srgb, var(--anyai-panel), transparent 10%);
+        border-radius: var(--anyai-radius-2);
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 10%);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.85rem;
+        color: var(--anyai-text);
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow: auto;
+      }
+
       .btn[aria-busy="true"] {
         position: relative;
         pointer-events: none;
@@ -417,6 +432,14 @@
               <div id="validation-status-meta" class="validation-meta"></div>
             </div>
 
+            <div id="job-log-card" class="anyai-support-card" style="display:none;">
+              <div class="support-header">
+                <h2 class="mt-0">実行ログ</h2>
+                <button type="button" class="btn btn-outline" id="btn-log-refresh">更新</button>
+              </div>
+              <pre id="job-log-content" class="log-viewer" tabindex="0"></pre>
+            </div>
+
             <section id="result" class="anyai-support-card" style="display:none;">
               <div class="stack-sm">
                 <div>ジョブID: <code id="job-id"></code></div>
@@ -477,6 +500,11 @@
       const validationStatusMessage = document.getElementById('validation-status-message');
       const validationStatusMeta = document.getElementById('validation-status-meta');
       const autoSlowdownToggle = document.getElementById('auto_slowdown');
+      const systemPromptSSRInput = document.getElementById('system_prompt_ssr');
+      const systemPromptNumericInput = document.getElementById('system_prompt_numeric');
+      const logCard = document.getElementById('job-log-card');
+      const logContent = document.getElementById('job-log-content');
+      const logRefreshButton = document.getElementById('btn-log-refresh');
       const validation = (() => {
         const state = { ok: false, payload: null, cacheKey: '', message: '', status: 'info' };
 
@@ -594,9 +622,56 @@
 
         return { state, buildKey, updateCard, setResult, markDirty, isCurrent };
       })();
+
+      function resetLogView() {
+        if (!logCard || !logContent) return;
+        logCard.style.display = 'none';
+        logContent.textContent = '';
+      }
+
+      async function refreshJobLog(jobId, { manual = false } = {}) {
+        if (!logCard || !logContent) return;
+        if (!jobId) {
+          resetLogView();
+          return;
+        }
+        try {
+          const res = await fetch(`/jobs/${jobId}/log?lines=400`);
+          if (!res.ok) {
+            if (res.status === 404) {
+              logCard.style.display = '';
+              logContent.textContent = 'ログはまだ生成されていません。';
+              return;
+            }
+            throw new Error(`status ${res.status}`);
+          }
+          const data = await res.json();
+          logCard.style.display = '';
+          const logText = data.log || '';
+          logContent.textContent = logText || 'ログはまだ記録されていません。';
+          logContent.scrollTop = logContent.scrollHeight;
+        } catch (err) {
+          if (manual) {
+            alert('ログの取得に失敗しました。');
+          } else {
+            console.warn('Failed to load job log', err);
+          }
+        }
+      }
       let currentMode = modeForm.querySelector('input[name="mode"]:checked').value;
       let currentJobId = null;
       let pollTimer = null;
+
+      if (logRefreshButton) {
+        logRefreshButton.addEventListener('click', () => {
+          if (currentJobId) {
+            refreshJobLog(currentJobId, { manual: true });
+          } else {
+            resetLogView();
+          }
+        });
+      }
+
       const nonSSRState = {
         csv: { ...MODE_DEFAULTS.csv },
         video: { ...MODE_DEFAULTS.video }
@@ -739,9 +814,11 @@
           document.getElementById('prog').value = 0;
           document.getElementById('stat').textContent = '';
           document.getElementById('eta').textContent = '';
+          resetLogView();
           return;
         }
         const keepRunning = await updateProgress(jobId);
+        await refreshJobLog(jobId);
         if (keepRunning) {
           pollTimer = setTimeout(()=>startPolling(jobId), 2000);
         }
@@ -794,16 +871,22 @@
         applyModeContent(mode);
         const defaults = MODE_DEFAULTS[mode] || MODE_DEFAULTS.csv;
         if (enableSSR.checked) {
-          batchSizeInput.value = '1';
-          concurrencyInput.value = '1';
+          batchSizeInput.disabled = false;
+          concurrencyInput.disabled = false;
           timeoutInput.value = defaults.timeout || MODE_DEFAULTS.csv.timeout;
-          batchSizeInput.disabled = true;
-          concurrencyInput.disabled = true;
+          if (!batchSizeInput.value) {
+            batchSizeInput.value = defaults.batchSize || MODE_DEFAULTS.csv.batchSize;
+          }
+          if (!concurrencyInput.value) {
+            concurrencyInput.value = defaults.concurrency || MODE_DEFAULTS.csv.concurrency;
+          }
         } else {
           restoreNonSSRValues(mode);
           batchSizeInput.disabled = false;
           concurrencyInput.disabled = false;
           const stored = nonSSRState[mode] || defaults;
+          batchSizeInput.value = stored.batchSize || defaults.batchSize;
+          concurrencyInput.value = stored.concurrency || defaults.concurrency;
           timeoutInput.value = stored.timeout || defaults.timeout;
         }
         updateSSREnabled();
@@ -817,10 +900,12 @@
       }
 
       function appendPromptFields(fd) {
+        const ssrPrompt = systemPromptSSRInput ? systemPromptSSRInput.value : '';
+        const numericPrompt = systemPromptNumericInput ? systemPromptNumericInput.value : '';
         fd.set('enable_ssr', enableSSR.checked ? 'true' : 'false');
-        fd.set('system_prompt_ssr', form.system_prompt_ssr.value || '');
-        fd.set('system_prompt_numeric', form.system_prompt_numeric.value || '');
-        const activePrompt = enableSSR.checked ? form.system_prompt_ssr.value : form.system_prompt_numeric.value;
+        fd.set('system_prompt_ssr', ssrPrompt);
+        fd.set('system_prompt_numeric', numericPrompt);
+        const activePrompt = enableSSR.checked ? ssrPrompt : numericPrompt;
         fd.set('system_prompt', activePrompt || '');
       }
 
@@ -983,6 +1068,7 @@
               currentJobId = data.job_id;
               resultSection.style.display = 'block';
               document.getElementById('job-id').textContent = currentJobId;
+              resetLogView();
               startPolling(currentJobId);
               showValidationBanner('success', 'ジョブを開始しました。右側の進捗を確認できます。');
               await refreshQueue();
@@ -1088,8 +1174,12 @@
                 form.timeout_sec.value = cfg.timeout_sec;
                 document.querySelector(`#mode-form input[name="mode"][value="${cfg.mode}"]`).checked = true;
                 enableSSR.checked = cfg.enable_ssr !== false;
-                form.system_prompt_ssr.value = cfg.ssr_system_prompt || '';
-                form.system_prompt_numeric.value = cfg.numeric_system_prompt || '';
+                if (systemPromptSSRInput) {
+                  systemPromptSSRInput.value = cfg.ssr_system_prompt || '';
+                }
+                if (systemPromptNumericInput) {
+                  systemPromptNumericInput.value = cfg.numeric_system_prompt || '';
+                }
                 updateSSREnabled();
                 form.dataset.editing = it.job_id;
                 alert('フォームに読み込みました。下の「編集を保存」で反映できます。');

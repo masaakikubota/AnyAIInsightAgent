@@ -182,9 +182,12 @@ class JobManager:
                     continue
                 try:
                     await self.run_job(job_id)
-                except Exception:
-                    # Keep going to next item regardless of failures
-                    pass
+                except Exception as exc:
+                    job = self.jobs.get(job_id)
+                    logger = self._job_logger(job_id)
+                    logger(f"Job failed with exception: {exc!r}")
+                    if job:
+                        job.status = JobStatus.failed
                 finally:
                     await self.remove_from_queue(job_id)
                     self.current_job_id = None
@@ -711,15 +714,25 @@ class JobManager:
         job.cancel_reason = reason or "user_requested"
 
     def _adjust_mode_defaults(self, job: Job) -> None:
+        def _apply_chunk_settings(chunk_rows: int) -> None:
+            job.cfg.sheet_chunk_rows = chunk_rows
+            job.cfg.chunk_row_limit = chunk_rows
+            job.cfg.writer_flush_batch_size = chunk_rows
+
         if job.cfg.mode == "video":
             # VideoモードはGeminiのみを使用（ファイルベース推論のため）
             job.cfg.primary_provider = Provider.gemini
             job.cfg.concurrency = job.cfg.concurrency or job.cfg.video_concurrency_default
             job.cfg.timeout_sec = job.cfg.timeout_sec or job.cfg.video_timeout_default
-            job.cfg.sheet_chunk_rows = 30
+            if job.cfg.enable_ssr:
+                _apply_chunk_settings(50)
+            else:
+                _apply_chunk_settings(100)
         else:
-            job.cfg.sheet_chunk_rows = 500
-        job.cfg.chunk_row_limit = 500
+            if job.cfg.enable_ssr:
+                _apply_chunk_settings(100)
+            else:
+                _apply_chunk_settings(500)
 
     def _prune_old_runs(self, keep: int = 2) -> None:
         try:

@@ -449,7 +449,9 @@ body {
   justify-content: center;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(6px);
+  transition: opacity 0.25s ease;
   z-index: 120;
 }
 
@@ -458,45 +460,61 @@ body {
   opacity: 1;
 }
 
-.anyai-loading-overlay__backdrop {
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--anyai-text, #0f172a) 8%, transparent);
-  backdrop-filter: blur(4px);
-}
-
-.anyai-loading-overlay__panel {
-  position: relative;
+.anyai-loading-overlay__container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--anyai-space-4, 16px);
-  padding: clamp(var(--anyai-space-6, 24px), 5vw, var(--anyai-space-8, 32px));
-  border-radius: var(--anyai-radius-2, 10px);
-  background: color-mix(in srgb, var(--anyai-panel, #ffffff) 92%, transparent);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
-  border: 1px solid color-mix(in srgb, var(--anyai-border, #dfe3f0), transparent 10%);
+  text-align: center;
+  gap: clamp(18px, 5vw, 28px);
+  padding: clamp(16px, 5vw, 24px);
+  color: #111827;
+  animation: anyai-loading-breathe 2.4s ease-in-out infinite;
 }
 
 .anyai-loading-overlay__logo {
-  width: clamp(72px, 18vw, 128px);
+  width: clamp(96px, 24vw, 180px);
   height: auto;
-  animation: anyai-loading-spin 1.4s linear infinite;
+  animation: anyai-loading-spin 4s linear infinite;
+  filter: drop-shadow(0 18px 32px rgba(15, 23, 42, 0.18));
+  transition: filter 0.4s ease, opacity 0.4s ease;
 }
 
 .anyai-loading-overlay__text {
-  font-size: clamp(1rem, 2.6vw, 1.4rem);
-  font-weight: 600;
+  font-size: clamp(1.1rem, 2.8vw, 1.6rem);
+  font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--anyai-text, #0f172a);
   display: inline-flex;
-  gap: 0.08em;
+  align-items: center;
+  gap: 0.2em;
+  transition: color 0.4s ease, opacity 0.4s ease;
 }
 
-.anyai-loading-overlay__text span {
+.anyai-loading-overlay__label {
   display: inline-block;
-  animation: anyai-loading-wave 1.2s ease-in-out infinite;
-  animation-delay: calc(var(--anyai-wave-index, 0) * 0.08s);
+}
+
+.anyai-loading-overlay__dots {
+  display: inline-block;
+  min-width: 2ch;
+  text-align: left;
+}
+
+.anyai-loading-overlay__text.is-pulse {
+  animation: anyai-loading-pulse 0.6s ease;
+}
+
+.anyai-loading-overlay.is-completing .anyai-loading-overlay__container {
+  animation: anyai-loading-complete 0.6s ease forwards;
+}
+
+.anyai-loading-overlay.is-completing .anyai-loading-overlay__logo {
+  animation-play-state: paused;
+  filter: brightness(1.2) drop-shadow(0 20px 36px rgba(15, 23, 42, 0.25));
+}
+
+.anyai-loading-overlay.is-completing .anyai-loading-overlay__text {
+  color: #000000;
+  opacity: 1;
 }
 
 @keyframes anyai-loading-spin {
@@ -508,13 +526,45 @@ body {
   }
 }
 
-@keyframes anyai-loading-wave {
+@keyframes anyai-loading-breathe {
   0%,
   100% {
     transform: translateY(0);
+    opacity: 0.92;
   }
   50% {
-    transform: translateY(-0.4em);
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@keyframes anyai-loading-pulse {
+  from {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.85;
+  }
+}
+
+@keyframes anyai-loading-complete {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 1;
+    filter: brightness(1.25);
+  }
+  100% {
+    transform: scale(0.98);
+    opacity: 0;
+    filter: brightness(0.85);
   }
 }
 

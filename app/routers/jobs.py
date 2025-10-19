@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -98,10 +99,10 @@ async def create_job(
     except GoogleSheetsError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    batch_size_value = 1 if enable_ssr else batch_size
-    concurrency_value = 1 if enable_ssr else concurrency
+    batch_size_value = batch_size
+    concurrency_value = concurrency
     timeout_value = timeout_sec
-    if not enable_ssr and mode == "video":
+    if mode == "video":
         default_concurrency = RunConfig.model_fields["video_concurrency_default"].default
         default_timeout = RunConfig.model_fields["video_timeout_default"].default
         concurrency_value = concurrency or default_concurrency
@@ -230,6 +231,30 @@ async def get_job_config(job_id: str, base_dir: Path = Depends(get_base_dir)):
     return JSONResponse(content=cfg_path.read_text(encoding="utf-8"))
 
 
+@router.get("/jobs/{job_id}/log")
+async def get_job_log(
+    job_id: str,
+    lines: int = 400,
+    base_dir: Path = Depends(get_base_dir),
+):
+    log_path = base_dir / job_id / "worker.log"
+    if not log_path.exists():
+        raise HTTPException(status_code=404, detail="Log not found")
+    try:
+        text = log_path.read_text(encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to read log: {exc}") from exc
+    if lines > 0:
+        log_lines = text.splitlines()
+        text = "\n".join(log_lines[-lines:])
+    return {
+        "job_id": job_id,
+        "log": text,
+        "lines": text.count("\n") + (1 if text else 0),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+
+
 @router.post("/queue/{job_id}/edit")
 async def edit_job(
     job_id: str,
@@ -270,10 +295,10 @@ async def edit_job(
     except GoogleSheetsError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    batch_size_value = 1 if enable_ssr else batch_size
-    concurrency_value = 1 if enable_ssr else concurrency
+    batch_size_value = batch_size
+    concurrency_value = concurrency
     timeout_value = timeout_sec
-    if not enable_ssr and mode == "video":
+    if mode == "video":
         default_concurrency = RunConfig.model_fields["video_concurrency_default"].default
         default_timeout = RunConfig.model_fields["video_timeout_default"].default
         concurrency_value = concurrency or default_concurrency
