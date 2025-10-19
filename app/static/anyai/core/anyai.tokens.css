@@ -81,6 +81,17 @@
   --anyai-content-md: 960px;
   --anyai-content-lg: 1200px;
   --anyai-content-xl: 1440px;
+  --anyai-app-max-width: 1200px;
+  --anyai-app-grid-columns: 12;
+  --anyai-app-primary-span: 8;
+  --anyai-app-support-span: 4;
+  --anyai-app-gutter: var(--anyai-space-7);
+  --anyai-app-padding-inline: clamp(var(--anyai-space-6), 6vw, var(--anyai-space-9));
+  --anyai-app-padding-block: var(--anyai-space-8);
+  --anyai-app-padding-block-end: var(--anyai-space-9);
+
+  /* フォームレイヤー */
+  --anyai-form-band: #f1f5f9;
 
   /* トランジション */
   --anyai-ease: cubic-bezier(.2,.8,.2,1);
@@ -94,6 +105,7 @@
   --anyai-panel: hsl(222 21% 13%);
   --anyai-elevated: hsl(222 21% 17%);
   --anyai-border: hsl(222 16% 24%);
+  --anyai-form-band: color-mix(in srgb, var(--anyai-bg), white 6%);
 
   --anyai-text: hsl(0 0% 96%);
   --anyai-text-subtle: hsl(0 0% 70%);
@@ -170,31 +182,65 @@ pre {
   overflow: auto;
 }
 
-/* アプリレイアウト（サイドバー + コンテンツ） */
+/* アプリレイアウト（コンテンツ + 右ペイン） */
+.anyai-content {
+  flex: 1;
+  min-width: 0;
+  padding: var(--anyai-app-padding-block) var(--anyai-app-padding-inline) var(--anyai-app-padding-block-end);
+  display: flex;
+  justify-content: flex-start;
+}
+
 .anyai-app {
   display: grid;
-  grid-template-columns: 280px 1fr;
-  min-height: calc(100dvh - 64px);
+  grid-template-columns: repeat(var(--anyai-app-grid-columns), minmax(0, 1fr));
+  column-gap: var(--anyai-app-gutter);
+  row-gap: var(--anyai-app-gutter);
+  align-items: start;
+  width: min(100%, var(--anyai-app-max-width));
+  margin-inline: 0 auto;
 }
-.anyai-sidebar {
-  border-right: 1px solid var(--anyai-border);
-  background: color-mix(in oklab, var(--anyai-panel), white 1.5%);
-  padding: var(--anyai-space-5);
-}
-.anyai-sidebar .section { margin-bottom: var(--anyai-space-6); }
-.anyai-sidebar h3 {
-  margin: 0 0 var(--anyai-space-3);
-  font-size: var(--anyai-fs-2); color: var(--anyai-text-subtle);
-  text-transform: uppercase; letter-spacing: .2px;
-}
-.anyai-sidebar a {
-  display: block; padding: 8px 10px; border-radius: 8px;
-  color: inherit; text-decoration: none; opacity: .9;
-}
-.anyai-sidebar a:hover { background: var(--anyai-bg-subtle); opacity: 1; }
 
-.anyai-content {
-  padding: var(--anyai-space-7);
+.anyai-app-primary,
+.anyai-app-support {
+  display: flex;
+  flex-direction: column;
+  gap: var(--anyai-space-6);
+  min-width: 0;
+}
+
+.anyai-app-primary { grid-column: span var(--anyai-app-primary-span); }
+
+.anyai-app-support {
+  grid-column: span var(--anyai-app-support-span);
+  position: sticky;
+  top: calc(64px + var(--anyai-space-7));
+  max-height: calc(100dvh - 64px - var(--anyai-app-padding-block) - var(--anyai-space-7));
+  overflow: auto;
+  padding-right: 2px;
+}
+
+@media (max-width: 1023px) {
+  .anyai-content {
+    padding-inline: clamp(var(--anyai-space-5), 6vw, var(--anyai-space-8));
+    padding-block: var(--anyai-space-6) var(--anyai-space-8);
+  }
+
+  .anyai-app {
+    width: 100%;
+    margin-inline: 0;
+  }
+
+  .anyai-app-primary,
+  .anyai-app-support {
+    grid-column: 1 / -1;
+  }
+
+  .anyai-app-support {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
 }
 
 /* ヒーロー */

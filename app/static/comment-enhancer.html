@@ -1,339 +1,422 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light">
-<link rel="icon" href="/static/anyai/assets/AnyAI_icon.png">
-<title>AnyAICommentEnhancer</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/anyai/core/anyai.tokens.css">
-<link rel="stylesheet" href="/static/anyai/core/anyai.components.css">
-<link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css">
-<link rel="stylesheet" href="/static/anyai/tool-layout.css">
-<script defer src="/static/anyai/vendor/lucide.js"></script>
-<script defer src="/static/anyai/sidebar.js"></script>
-<script defer src="/static/anyai/core/anyai.js"></script>
-<script defer src="/static/anyai/queue-manager.js"></script>
-<style>
-  .page { padding: var(--anyai-space-08, 48px) 0 var(--anyai-space-10, 80px); }
-  #log-container { height: 320px; overflow-y: auto; font-family: var(--anyai-font-mono, 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace); font-size: 0.9rem; white-space: pre-wrap; background: var(--anyai-surface-alt, #f4f6ff); padding: var(--anyai-space-04, 16px); border-radius: var(--anyai-radius-md, 16px); border: 1px solid var(--anyai-border, #dfe3f0); }
-  #history-list li { cursor: pointer; border: 1px solid var(--anyai-border, #dfe3f0); border-radius: var(--anyai-radius-sm, 12px); padding: var(--anyai-space-03, 12px) var(--anyai-space-04, 16px); transition: background .15s ease; }
-  #history-list li:hover { background: var(--anyai-surface-alt, #f4f6ff); }
-  .queue-header { display:flex; justify-content:space-between; align-items:center; gap:var(--anyai-space-04, 16px); }
-  .queue-header-actions { display:flex; gap:var(--anyai-space-02, 8px); }
-  .queue-card .card-body { display:flex; flex-direction:column; gap:var(--anyai-space-04, 16px); }
-  .queue-content { display:flex; gap:var(--anyai-space-04, 16px); flex:1; min-height:220px; flex-wrap:wrap; }
-  .queue-list-container { flex:1 1 220px; display:flex; flex-direction:column; gap:var(--anyai-space-03, 12px); overflow:hidden; }
-  .queue-details { flex:1 1 220px; display:flex; flex-direction:column; gap:var(--anyai-space-03, 12px); }
-  .queue-details textarea { flex:1; resize:vertical; font-family:var(--anyai-font-mono, 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace); font-size:0.85rem; }
-  .queue-details a { word-break:break-all; font-size:0.85rem; color:var(--anyai-color-primary-600, #3358ff); }
-  .queue-controls { display:flex; flex-wrap:wrap; gap:var(--anyai-space-02, 8px); }
-  .queue-item { border:1px solid var(--anyai-border, #dfe3f0); border-radius:var(--anyai-radius-sm, 12px); padding:var(--anyai-space-03, 12px) var(--anyai-space-04, 16px); background:var(--anyai-surface, #ffffff); display:flex; flex-direction:column; gap:var(--anyai-space-02, 8px); cursor:pointer; }
-  .queue-item.is-active { border-color:var(--anyai-color-primary-500, #4a63ff); box-shadow:0 0 0 1px var(--anyai-color-primary-300, #8fa3ff); }
-  .queue-item-sub { display:flex; justify-content:space-between; gap:var(--anyai-space-02, 8px); color:var(--anyai-text-muted, #596080); font-size:0.85rem; }
-  .queue-item-type { font-size:0.75rem; color:var(--anyai-text-muted, #596080); text-transform:uppercase; letter-spacing:0.04em; }
-  .queue-status { display:inline-flex; align-items:center; gap:var(--anyai-space-02, 8px); padding:0 var(--anyai-space-02, 8px); border-radius:var(--anyai-radius-pill, 999px); font-size:0.75rem; text-transform:uppercase; letter-spacing:0.03em; }
-  .queue-status-queued { background:var(--anyai-color-info-100, #e6f1ff); color:var(--anyai-color-info-700, #2459d6); }
-  .queue-status-running { background:var(--anyai-color-success-100, #e5f6ee); color:var(--anyai-color-success-700, #1a7f4b); }
-  .queue-status-paused { background:var(--anyai-color-warning-100, #fff4d6); color:var(--anyai-color-warning-800, #8c5a00); }
-  .queue-status-cancelled { background:var(--anyai-color-danger-100, #ffe4e6); color:var(--anyai-color-danger-700, #b42318); }
-  .queue-status-completed { background:var(--anyai-color-neutral-200, #f0f2f8); color:var(--anyai-color-neutral-700, #3e4a66); }
-  .queue-card .btn.btn-text { padding:0 var(--anyai-space-02, 8px); }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/static/anyai/assets/AnyAI_icon.png">
+  <title>AnyAI Comment Enhancer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/anyai/core/anyai.tokens.css">
+  <link rel="stylesheet" href="/static/anyai/core/anyai.components.css">
+  <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css">
+  <link rel="stylesheet" href="/static/anyai/tool-layout.css">
+  <script defer src="/static/anyai/vendor/lucide.js"></script>
+  <script defer src="/static/anyai/sidebar.js"></script>
+  <script defer src="/static/anyai/core/anyai.js"></script>
+  <script defer src="/static/anyai/queue-manager.js"></script>
+  <style>
+    .anyai-header .brand img { height: calc(64px - 8px); width: auto; }
+    .nav { display: flex; gap: var(--anyai-space-3); align-items: center; flex-wrap: wrap; }
+    .nav-link { font-weight: 600; text-decoration: none; color: var(--anyai-text); padding: 6px 12px; border-radius: 999px; transition: background 0.2s ease; }
+    .nav-link:hover { background: rgba(0, 0, 0, 0.06); }
+    .nav-link.active { background: rgba(0, 0, 0, 0.12); }
+
+    #log-container {
+      height: 320px;
+      overflow-y: auto;
+      font-family: var(--anyai-font-mono, 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace);
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      background: var(--anyai-bg-subtle);
+      padding: var(--anyai-space-4);
+      border-radius: var(--anyai-radius-2);
+      border: 1px solid var(--anyai-border);
+    }
+
+    .queue-card {
+      gap: var(--anyai-space-4);
+    }
+
+    .queue-header { display:flex; justify-content:space-between; align-items:center; gap:var(--anyai-space-4); }
+    .queue-header-actions { display:flex; gap:var(--anyai-space-2); }
+    .queue-content { display:flex; gap:var(--anyai-space-4); flex:1; min-height:220px; flex-wrap:wrap; }
+    .queue-list-container { flex:1 1 220px; display:flex; flex-direction:column; gap:var(--anyai-space-3); overflow:hidden; }
+    .queue-details { flex:1 1 220px; display:flex; flex-direction:column; gap:var(--anyai-space-3); }
+    .queue-details textarea { flex:1; resize:vertical; font-family:var(--anyai-font-mono, 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace); font-size:0.85rem; }
+    .queue-details a { word-break:break-all; font-size:0.85rem; color:var(--anyai-primary-700); }
+    .queue-controls { display:flex; flex-wrap:wrap; gap:var(--anyai-space-2); }
+    .queue-item { border:1px solid var(--anyai-border); border-radius:var(--anyai-radius-2); padding:var(--anyai-space-3) var(--anyai-space-4); background:var(--anyai-panel); display:flex; flex-direction:column; gap:var(--anyai-space-2); cursor:pointer; }
+    .queue-item.is-active { border-color:var(--anyai-primary-600); box-shadow:0 0 0 1px color-mix(in srgb, var(--anyai-primary), transparent 60%); }
+    .queue-item-sub { display:flex; justify-content:space-between; gap:var(--anyai-space-2); color:var(--anyai-text-subtle); font-size:0.85rem; }
+    .queue-item-type { font-size:0.75rem; color:var(--anyai-text-subtle); text-transform:uppercase; letter-spacing:0.04em; }
+    .queue-status { display:inline-flex; align-items:center; gap:var(--anyai-space-2); padding:0 var(--anyai-space-2); border-radius:var(--anyai-radius-pill, 999px); font-size:0.75rem; text-transform:uppercase; letter-spacing:0.03em; }
+    .queue-status-queued { background:var(--anyai-bg-subtle); color:var(--anyai-primary-700); }
+    .queue-status-running { background:color-mix(in srgb, var(--anyai-success), transparent 82%); color:var(--anyai-success); }
+    .queue-status-paused { background:color-mix(in srgb, var(--anyai-warning), transparent 80%); color:var(--anyai-warning); }
+    .queue-status-cancelled { background:color-mix(in srgb, var(--anyai-danger), transparent 80%); color:var(--anyai-danger); }
+    .queue-status-completed { background:var(--anyai-bg-subtle); color:var(--anyai-text-subtle); }
+
+    .history-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--anyai-space-2); }
+    .history-list li { cursor:pointer; border:1px solid var(--anyai-border); border-radius:var(--anyai-radius-2); padding:var(--anyai-space-3) var(--anyai-space-4); transition:background .15s ease; }
+    .history-list li:hover { background:var(--anyai-bg-subtle); }
+
+    .mode-options { display:flex; flex-wrap:wrap; gap:var(--anyai-space-3); align-items:center; }
+    .mode-options label { display:inline-flex; align-items:center; gap:var(--anyai-space-2); font-weight:600; }
+
+    .field-inline { display:flex; align-items:center; gap:var(--anyai-space-3); }
+    .field-inline label { font-weight:400; }
+
+    @media (max-width: 720px) {
+      #log-container { height: 240px; }
+      .queue-content { flex-direction:column; }
+    }
+  </style>
 </head>
 <body>
-<div class="anyai-layout">
-  <aside class="anyai-sidebar" data-active-tool="comment-enhancer"></aside>
-  <main class="anyai-content">
-    <div class="page container">
-  <h1 class="mb-4">AnyAICommentEnhancer</h1>
-  <div class="row" style="gap:var(--anyai-space-05); align-items:flex-start; flex-wrap:wrap;">
-    <div class="card" style="flex:2; min-width:320px;">
-      <div class="card-body">
-        <form id="enhancer-form" class="column gap-4">
-          <div class="field">
-            <label for="sheet-url">Google Spreadsheet URL / ID</label>
-            <input class="input" type="text" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/... または シートID" required>
-          </div>
-          <div class="field">
-            <label for="workers">並列処理数 (デフォルト: 50)</label>
-            <input class="input" type="number" id="workers" value="50" min="1" max="200">
-          </div>
-          <div class="field">
-            <label>OpenAI モデル</label>
-            <label class="radio"><input type="radio" name="model-name" value="gpt-4.1" checked><span>GPT-4.1</span></label>
-          </div>
-          <div class="row right">
-            <button type="button" class="btn btn-outline" id="stop-button" disabled>停止</button>
-            <button type="submit" class="btn btn-primary" id="run-button">実行</button>
-          </div>
-        </form>
-      </div>
-    </div>
-    <aside class="column gap-4" style="flex:1; min-width:260px;">
-      <div class="card">
-        <div class="card-header">
-          <strong>Spreadsheet History</strong>
-        </div>
-        <div class="card-body">
-          <p class="text-subtle" id="history-empty">実行履歴はまだありません。</p>
-          <ul id="history-list" class="column gap-2" style="list-style:none; margin:0; padding:0;"></ul>
-        </div>
-      </div>
-      <div class="card queue-card" id="queue-panel">
-        <div class="card-header queue-header">
-          <strong>Current Queue</strong>
-          <div class="queue-header-actions">
-            <button type="button" class="btn btn-text" data-queue-refresh>更新</button>
-            <button type="button" class="btn btn-text" data-queue-toggle>折りたたむ</button>
-          </div>
-        </div>
-        <div class="card-body" data-queue-body>
-          <div class="queue-content">
-            <div class="queue-list-container">
-              <ul class="column gap-2" data-queue-list style="list-style:none; margin:0; padding:0; overflow-y:auto; max-height:240px;"></ul>
-              <p class="text-subtle" data-queue-empty>待機中のジョブはありません。</p>
-            </div>
-            <div class="queue-details" data-queue-details hidden>
-              <div>
-                <strong data-queue-title>(タイトル未取得)</strong><br>
-                <a href="#" target="_blank" data-queue-url></a>
+  <header class="anyai-header">
+    <a class="brand" href="/" aria-label="AnyAI ホーム">
+      <img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ">
+      <span>AnyAI Comment Enhancer</span>
+    </a>
+    <nav class="nav">
+      <a class="nav-link" href="/">AnyAI Scoring</a>
+      <a class="nav-link" href="/cleansing">AnyAI Cleansing</a>
+      <a class="nav-link" href="/interview">AnyAI Interview</a>
+      <a class="nav-link" href="/persona">Persona Seeds</a>
+      <a class="nav-link" href="/dashboard">Persona Dashboard</a>
+      <a class="nav-link" href="/video-analysis">Video Analysis</a>
+      <a class="nav-link active" href="/comment-enhancer">Comment Enhancer</a>
+      <a class="nav-link" href="/video-comment-review">Video Comment Review</a>
+      <a class="nav-link" href="/kol-reviewer">KOL Reviewer</a>
+    </nav>
+  </header>
+
+  <div class="anyai-layout">
+    <aside class="anyai-sidebar" data-active-tool="comment-enhancer"></aside>
+    <main class="anyai-content">
+      <div class="anyai-app">
+        <section class="anyai-app-primary" aria-labelledby="enhancer-heading">
+          <h1 id="enhancer-heading" class="mt-0">コメント改善をバッチ処理</h1>
+          <p class="field-hint">スプレッドシートのコメント列を取り込み、指定モデルで改善案を生成します。</p>
+
+          <form id="enhancer-form" class="anyai-form" aria-labelledby="enhancer-config-heading">
+            <section class="anyai-form-section" aria-labelledby="sheet-heading">
+              <header>
+                <h2 id="sheet-heading" class="mt-0">対象シート</h2>
+                <p class="field-hint">URL と実行並列数を設定します。</p>
+              </header>
+              <div class="anyai-form-fields">
+                <div class="field">
+                  <label for="sheet-url">Google Spreadsheet URL / ID</label>
+                  <p class="field-hint">共有可能な URL またはシート ID を貼り付けます。</p>
+                  <input class="input" type="text" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..." required>
+                </div>
+                <div class="field">
+                  <label for="workers">並列処理数</label>
+                  <p class="field-hint">同時実行するワーカー数（推奨: 50）。</p>
+                  <input class="input" type="number" id="workers" value="50" min="1" max="200">
+                  <details class="field-info">
+                    <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
+                    <div class="info-panel">429 対策が必要な場合は値を下げてください。最大 200 まで指定できます。</div>
+                  </details>
+                </div>
               </div>
-              <div>機能: <span data-queue-job-type>-</span></div>
-              <div>状態: <span data-queue-status class="queue-status queue-status-queued">queued</span></div>
-              <div>順番: <span data-queue-order>-</span></div>
-              <div class="queue-controls">
-                <button type="button" class="btn btn-outline" data-queue-move-up>上へ</button>
-                <button type="button" class="btn btn-outline" data-queue-move-down>下へ</button>
-                <button type="button" class="btn btn-outline" data-queue-remove>削除</button>
-                <button type="button" class="btn btn-outline" data-queue-apply>更新</button>
+            </section>
+
+            <section class="anyai-form-section" aria-labelledby="model-heading">
+              <header>
+                <h2 id="model-heading" class="mt-0">モデル選択</h2>
+                <p class="field-hint">改善処理に利用する OpenAI モデルを選択します。</p>
+              </header>
+              <div class="anyai-form-fields">
+                <div class="field">
+                  <label>OpenAI モデル</label>
+                  <div class="mode-options">
+                    <label><input type="radio" name="model-name" value="gpt-4.1" checked> <span>GPT-4.1</span></label>
+                  </div>
+                  <details class="field-info">
+                    <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>利用ガイド</span></summary>
+                    <div class="info-panel">現在は GPT-4.1 のみ対応しています。モデル追加時はここに選択肢が増えます。</div>
+                  </details>
+                </div>
+                <div class="field field-inline">
+                  <button type="button" class="btn btn-outline" id="stop-button" disabled>停止</button>
+                  <span class="field-hint">ジョブを即時停止します。</span>
+                </div>
               </div>
-              <textarea data-queue-json rows="6"></textarea>
+            </section>
+          </form>
+        </section>
+
+        <aside class="anyai-app-support">
+          <section class="anyai-support-card">
+            <div class="support-header">
+              <h2 class="mt-0">最近のシート</h2>
             </div>
-          </div>
-        </div>
+            <p class="field-hint" id="history-empty">実行履歴はまだありません。</p>
+            <ul id="history-list" class="history-list"></ul>
+          </section>
+
+          <section class="anyai-support-card queue-card" id="queue-panel">
+            <div class="queue-header">
+              <h2 class="mt-0">キュー状況</h2>
+              <div class="queue-header-actions">
+                <button type="button" class="btn btn-text" data-queue-refresh>更新</button>
+                <button type="button" class="btn btn-text" data-queue-toggle>折りたたむ</button>
+              </div>
+            </div>
+            <div class="queue-content" data-queue-body>
+              <div class="queue-list-container">
+                <ul class="column gap-2" data-queue-list style="list-style:none; margin:0; padding:0; overflow-y:auto; max-height:240px;"></ul>
+                <p class="text-subtle" data-queue-empty>待機中のジョブはありません。</p>
+              </div>
+              <div class="queue-details" data-queue-details hidden>
+                <div>
+                  <strong data-queue-title>(タイトル未取得)</strong><br>
+                  <a href="#" target="_blank" data-queue-url></a>
+                </div>
+                <div>機能: <span data-queue-job-type>-</span></div>
+                <div>状態: <span data-queue-status class="queue-status queue-status-queued">queued</span></div>
+                <div>順番: <span data-queue-order>-</span></div>
+                <div class="queue-controls">
+                  <button type="button" class="btn btn-outline" data-queue-move-up>上へ</button>
+                  <button type="button" class="btn btn-outline" data-queue-move-down>下へ</button>
+                  <button type="button" class="btn btn-outline" data-queue-remove>削除</button>
+                  <button type="button" class="btn btn-outline" data-queue-apply disabled title="現在のジョブ編集は未対応です">更新</button>
+                </div>
+                <textarea data-queue-json rows="6"></textarea>
+              </div>
+            </div>
+          </section>
+
+          <section class="anyai-support-card">
+            <h2 class="mt-0">Execution Log</h2>
+            <div id="log-container"><span class="text-subtle">Awaiting configuration...</span></div>
+          </section>
+        </aside>
       </div>
-    </aside>
+    </main>
   </div>
 
-  <section class="mt-6">
-    <div class="card">
-      <div class="card-header">
-        <strong>Execution Log</strong>
-      </div>
-      <div class="card-body">
-        <div id="log-container"><span class="text-subtle">Awaiting configuration...</span></div>
-      </div>
-    </div>
-  </section>
-    </div>
-  </main>
-</div>
+  <div class="anyai-action-bar" role="region" aria-label="コメント改善操作">
+    <button type="button" class="btn btn-outline" id="btn-refresh-queue">再取得</button>
+    <button type="submit" class="btn btn-primary" id="run-button" form="enhancer-form">実行</button>
+  </div>
 
-<script>
-  const form = document.getElementById('enhancer-form');
-  const logContainer = document.getElementById('log-container');
-  const runButton = document.getElementById('run-button');
-  const stopButton = document.getElementById('stop-button');
-  const sheetInput = document.getElementById('sheet-url');
-  const historyList = document.getElementById('history-list');
-  const historyEmpty = document.getElementById('history-empty');
-  const queuePanel = document.getElementById('queue-panel');
-  let currentProcessId = null;
-  let eventSource = null;
+  <script>
+    const form = document.getElementById('enhancer-form');
+    const logContainer = document.getElementById('log-container');
+    const runButton = document.getElementById('run-button');
+    const stopButton = document.getElementById('stop-button');
+    const sheetInput = document.getElementById('sheet-url');
+    const historyList = document.getElementById('history-list');
+    const historyEmpty = document.getElementById('history-empty');
+    const queuePanel = document.getElementById('queue-panel');
+    const refreshQueueButton = document.getElementById('btn-refresh-queue');
+    let currentProcessId = null;
+    let eventSource = null;
 
-  const HISTORY_KEY = 'anyai_sheet_history_v3';
-  const MAX_HISTORY = 10;
+    const HISTORY_KEY = 'anyai_sheet_history_v3';
+    const MAX_HISTORY = 10;
 
-  function log(message, isError = false) {
-    const timestamp = new Date().toLocaleTimeString();
-    const line = document.createElement('div');
-    line.innerHTML = `<span class="text-subtle">[${timestamp}]</span> <span style="color:${isError ? 'var(--anyai-color-danger-700)' : 'inherit'};">${message}</span>`;
-    logContainer.appendChild(line);
-    logContainer.scrollTop = logContainer.scrollHeight;
-  }
-
-  const queueManager = (window.AnyAIQueueManager && queuePanel)
-    ? window.AnyAIQueueManager.init({ root: queuePanel, log })
-    : null;
-
-  function finalizeUI() {
-    runButton.disabled = false;
-    runButton.textContent = '実行';
-    stopButton.disabled = true;
-    if (eventSource) {
-      eventSource.close();
-      eventSource = null;
-    }
-    currentProcessId = null;
-  }
-
-  function parseSheetValue(value) {
-    return (value || '').trim();
-  }
-
-  function loadHistory() {
-    try {
-      return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-    } catch (e) {
-      return [];
-    }
-  }
-
-  function saveHistory(items) {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
-  }
-
-  function addToHistory(rawValue, title, status = 'queued') {
-    const value = parseSheetValue(rawValue);
-    if (!value) return;
-    const items = loadHistory().filter(entry => entry.value !== value);
-    title = (title || "").trim();
-    items.unshift({ value, title, status, savedAt: new Date().toISOString() });
-    if (items.length > MAX_HISTORY) items.length = MAX_HISTORY;
-    saveHistory(items);
-    renderHistory();
-  }
-
-  function renderHistory() {
-    const items = loadHistory();
-    historyList.innerHTML = '';
-    if (!items.length) {
-      historyEmpty.style.display = 'block';
-      return;
-    }
-    historyEmpty.style.display = 'none';
-    for (const entry of items) {
-      const value = entry.value;
-      const title = entry.title || '';
-      const li = document.createElement('li');
-      const displayTitle = title || '(シート名未取得)';
-      li.innerHTML = `${displayTitle}<br><small class="text-subtle">状態: ${entry.status || 'queued'}</small>`;
-      li.title = value;
-      li.addEventListener('click', () => {
-        sheetInput.value = value;
-        sheetInput.focus();
-      });
-      historyList.appendChild(li);
-    }
-  }
-
-  renderHistory();
-
-  stopButton.addEventListener('click', async () => {
-    if (!currentProcessId) {
-      log('-> 停止対象のジョブがありません。', true);
-      return;
-    }
-    stopButton.disabled = true;
-    log('-> 停止信号を送信します...');
-    try {
-      await fetch('/stop-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ process_id: currentProcessId }),
-      });
-      log('-> 停止信号を送信しました。');
-    } catch (error) {
-      log(`-> 停止リクエストでエラー: ${error}`, true);
-    }
-  });
-
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-
-    if (eventSource) {
-      eventSource.close();
-      eventSource = null;
+    function log(message, isError = false) {
+      const timestamp = new Date().toLocaleTimeString();
+      const line = document.createElement('div');
+      line.innerHTML = `<span class="text-subtle">[${timestamp}]</span> <span style="color:${isError ? 'var(--anyai-color-danger-700)' : 'inherit'};">${message}</span>`;
+      logContainer.appendChild(line);
+      logContainer.scrollTop = logContainer.scrollHeight;
     }
 
-    const payload = {
-      sheet_url: document.getElementById('sheet-url').value,
-      workers: document.getElementById('workers').value,
-      model_name: document.querySelector('input[name="model-name"]:checked').value,
-    };
+    const queueManager = (window.AnyAIQueueManager && queuePanel)
+      ? window.AnyAIQueueManager.init({ root: queuePanel, log })
+      : null;
 
-    logContainer.innerHTML = '';
-    log('-> AnyAICommentEnhancer を開始します...');
-    runButton.disabled = true;
-    runButton.textContent = '実行中...';
-    stopButton.disabled = false;
+    function finalizeUI() {
+      runButton.disabled = false;
+      runButton.textContent = '実行';
+      stopButton.disabled = true;
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      currentProcessId = null;
+    }
 
-    try {
-      const resp = await fetch('/run-comment-enhancer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const result = await resp.json();
-      if (!resp.ok) {
-        log(`Error: ${result.error || 'Unknown error'}`, true);
-        finalizeUI();
+    function parseSheetValue(value) {
+      return (value || '').trim();
+    }
+
+    function loadHistory() {
+      try {
+        return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveHistory(items) {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
+    }
+
+    function addToHistory(rawValue, title, status = 'queued') {
+      const value = parseSheetValue(rawValue);
+      if (!value) return;
+      const items = loadHistory().filter(entry => entry.value !== value);
+      title = (title || '').trim();
+      items.unshift({ value, title, status, savedAt: new Date().toISOString() });
+      if (items.length > MAX_HISTORY) items.length = MAX_HISTORY;
+      saveHistory(items);
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const items = loadHistory();
+      historyList.innerHTML = '';
+      if (!items.length) {
+        historyEmpty.style.display = 'block';
         return;
       }
-
-      currentProcessId = result.process_id;
-      const jobSheetUrl = result.sheet_url || payload.sheet_url;
-      const jobTitle = result.sheet_title;
-      const jobParams = { ...payload };
-      addToHistory(jobSheetUrl, jobTitle, 'queued');
-      log(`-> Process ID: ${currentProcessId}`);
-
-      if (queueManager) {
-        queueManager.addJob({
-          process_id: currentProcessId,
-          status: result.status || 'queued',
-          sheet_title: jobTitle,
-          sheet_url: jobSheetUrl,
-          params: jobParams,
-          job_type: result.job_type,
+      historyEmpty.style.display = 'none';
+      for (const entry of items) {
+        const value = entry.value;
+        const title = entry.title || '';
+        const li = document.createElement('li');
+        const displayTitle = title || '(シート名未取得)';
+        li.innerHTML = `${displayTitle}<br><small class="text-subtle">状態: ${entry.status || 'queued'}</small>`;
+        li.title = value;
+        li.addEventListener('click', () => {
+          sheetInput.value = value;
+          sheetInput.focus();
         });
+        historyList.appendChild(li);
       }
-      eventSource = new EventSource(`/stream-logs?process_id=${currentProcessId}`);
-      eventSource.onmessage = (evt) => {
-        log(evt.data);
-      };
-      eventSource.addEventListener('queue', (evt) => {
-        try {
-          const queuePayload = JSON.parse(evt.data);
-          const status = queuePayload.status || 'queued';
-          log(`-> ジョブ ${queuePayload.process_id} の状態: ${status}`);
-          if (queueManager) {
-            queueManager.handleQueueEvent(queuePayload);
-          }
-          if (queuePayload.process_id === currentProcessId) {
-            addToHistory(queuePayload.sheet_url || jobSheetUrl, queuePayload.sheet_title || jobTitle, status);
-            renderHistory();
-          }
-        } catch (error) {
-          log(`-> キュー情報の解析に失敗: ${error}`, true);
-        }
-      });
-      eventSource.addEventListener('error', (evt) => {
-        if (evt.data) {
-          log(`-> ${evt.data}`, true);
-        } else {
-          log('-> ログストリームが切断されました。', true);
-        }
-        finalizeUI();
-      });
-      eventSource.addEventListener('complete', (evt) => {
-        log(`-> ${evt.data}`);
-        addToHistory(jobSheetUrl, jobTitle, 'completed');
-        if (queueManager) {
-          queueManager.handleCompletion(currentProcessId);
+    }
+
+    renderHistory();
+
+    if (refreshQueueButton) {
+      refreshQueueButton.addEventListener('click', () => {
+        if (queueManager && typeof queueManager.refresh === 'function') {
+          queueManager.refresh();
         }
         renderHistory();
-        finalizeUI();
       });
-    } catch (error) {
-      log(`Network or server error: ${error}`, true);
-      finalizeUI();
     }
-  });
-</script>
+
+    stopButton.addEventListener('click', async () => {
+      if (!currentProcessId) {
+        log('-> 停止対象のジョブがありません。', true);
+        return;
+      }
+      stopButton.disabled = true;
+      log('-> 停止信号を送信します...');
+      try {
+        await fetch('/stop-analysis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ process_id: currentProcessId }),
+        });
+        log('-> 停止信号を送信しました。');
+      } catch (error) {
+        log(`-> 停止リクエストでエラー: ${error}`, true);
+      }
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+
+      const payload = {
+        sheet_url: document.getElementById('sheet-url').value,
+        workers: document.getElementById('workers').value,
+        model_name: document.querySelector('input[name="model-name"]:checked').value,
+      };
+
+      logContainer.innerHTML = '';
+      log('-> AnyAICommentEnhancer を開始します...');
+      runButton.disabled = true;
+      runButton.textContent = '実行中...';
+      stopButton.disabled = false;
+
+      try {
+        const resp = await fetch('/run-comment-enhancer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const result = await resp.json();
+        if (!resp.ok) {
+          log(`Error: ${result.error || 'Unknown error'}`, true);
+          finalizeUI();
+          return;
+        }
+
+        currentProcessId = result.process_id;
+        const jobSheetUrl = result.sheet_url || payload.sheet_url;
+        const jobTitle = result.sheet_title;
+        const jobParams = { ...payload };
+        addToHistory(jobSheetUrl, jobTitle, 'queued');
+        log(`-> Process ID: ${currentProcessId}`);
+
+        if (queueManager) {
+          queueManager.addJob({
+            process_id: currentProcessId,
+            status: result.status || 'queued',
+            sheet_title: jobTitle,
+            sheet_url: jobSheetUrl,
+            params: jobParams,
+            job_type: result.job_type,
+          });
+        }
+        eventSource = new EventSource(`/stream-logs?process_id=${currentProcessId}`);
+        eventSource.onmessage = (evt) => {
+          log(evt.data);
+        };
+        eventSource.addEventListener('queue', (evt) => {
+          try {
+            const queuePayload = JSON.parse(evt.data);
+            const status = queuePayload.status || 'queued';
+            log(`-> ジョブ ${queuePayload.process_id} の状態: ${status}`);
+            if (queueManager) {
+              queueManager.handleQueueEvent(queuePayload);
+            }
+            if (queuePayload.process_id === currentProcessId) {
+              addToHistory(queuePayload.sheet_url || jobSheetUrl, queuePayload.sheet_title || jobTitle, status);
+              renderHistory();
+            }
+          } catch (error) {
+            log(`-> キュー情報の解析に失敗: ${error}`, true);
+          }
+        });
+        eventSource.addEventListener('error', (evt) => {
+          if (evt.data) {
+            log(`-> ${evt.data}`, true);
+          } else {
+            log('-> ログストリームが切断されました。', true);
+          }
+          finalizeUI();
+        });
+        eventSource.addEventListener('complete', (evt) => {
+          log(`-> ${evt.data}`);
+          addToHistory(jobSheetUrl, jobTitle, 'completed');
+          if (queueManager) {
+            queueManager.handleCompletion(currentProcessId);
+          }
+          renderHistory();
+          finalizeUI();
+        });
+      } catch (error) {
+        log(`Network or server error: ${error}`, true);
+        finalizeUI();
+      }
+    });
+  </script>
 </body>
 </html>
