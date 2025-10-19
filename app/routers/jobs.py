@@ -100,6 +100,7 @@ async def create_job(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     batch_size_value = batch_size
+    max_category_cols_value = max_category_cols
     concurrency_value = concurrency
     timeout_value = timeout_sec
     if mode == "video":
@@ -107,6 +108,13 @@ async def create_job(
         default_timeout = RunConfig.model_fields["video_timeout_default"].default
         concurrency_value = concurrency or default_concurrency
         timeout_value = timeout_sec or default_timeout
+        if batch_size_value != 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Videoモードではカテゴリ同梱数Nは1のみ指定できます。",
+            )
+        batch_size_value = 1
+        max_category_cols_value = 1
 
     cfg = RunConfig(
         spreadsheet_url=spreadsheet_url,
@@ -125,7 +133,7 @@ async def create_job(
         detail_row=detail_row,
         start_row=start_row,
         batch_size=batch_size_value,
-        max_category_cols=max_category_cols,
+        max_category_cols=max_category_cols_value,
         concurrency=concurrency_value,
         max_retries=max_retries,
         auto_slowdown=auto_slowdown,
