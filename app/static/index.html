@@ -78,6 +78,64 @@
         font-size: var(--anyai-fs-2);
       }
 
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.125rem 0.5rem;
+        border-radius: 999px;
+        font-size: var(--anyai-fs-2);
+        font-weight: 600;
+        border: 1px solid transparent;
+      }
+      .status-badge[data-state="success"] {
+        background: color-mix(in srgb, var(--anyai-success), transparent 82%);
+        color: var(--anyai-success);
+        border-color: color-mix(in srgb, var(--anyai-success), transparent 65%);
+      }
+      .status-badge[data-state="error"] {
+        background: color-mix(in srgb, var(--anyai-danger), transparent 82%);
+        color: var(--anyai-danger);
+        border-color: color-mix(in srgb, var(--anyai-danger), transparent 65%);
+      }
+      .status-badge[data-state="info"] {
+        background: color-mix(in srgb, var(--anyai-primary), transparent 88%);
+        color: var(--anyai-primary-700);
+        border-color: color-mix(in srgb, var(--anyai-primary), transparent 70%);
+      }
+
+      .validation-meta {
+        margin-top: var(--anyai-space-3);
+        display: flex;
+        flex-direction: column;
+        gap: var(--anyai-space-2);
+      }
+      .validation-meta-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--anyai-space-2);
+        font-size: var(--anyai-fs-2);
+      }
+      .validation-meta-label {
+        color: var(--anyai-text-subtle);
+        font-weight: 600;
+      }
+
+      .log-viewer {
+        max-height: 240px;
+        width: 100%;
+        padding: var(--anyai-space-3) var(--anyai-space-4);
+        background: color-mix(in srgb, var(--anyai-panel), transparent 10%);
+        border-radius: var(--anyai-radius-2);
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 10%);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.85rem;
+        color: var(--anyai-text);
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow: auto;
+      }
+
       .btn[aria-busy="true"] {
         position: relative;
         pointer-events: none;
@@ -365,6 +423,23 @@
               <div id="queue-list" class="stack-sm"></div>
             </div>
 
+            <div id="validation-status-card" class="anyai-support-card" style="display:none;">
+              <div class="support-header">
+                <h2 class="mt-0">検証状況</h2>
+                <span id="validation-status-badge" class="status-badge" data-state="info">情報</span>
+              </div>
+              <p id="validation-status-message" class="muted" role="status" aria-live="polite"></p>
+              <div id="validation-status-meta" class="validation-meta"></div>
+            </div>
+
+            <div id="job-log-card" class="anyai-support-card" style="display:none;">
+              <div class="support-header">
+                <h2 class="mt-0">実行ログ</h2>
+                <button type="button" class="btn btn-outline" id="btn-log-refresh">更新</button>
+              </div>
+              <pre id="job-log-content" class="log-viewer" tabindex="0"></pre>
+            </div>
+
             <section id="result" class="anyai-support-card" style="display:none;">
               <div class="stack-sm">
                 <div>ジョブID: <code id="job-id"></code></div>
@@ -384,8 +459,8 @@
     </div>
 
     <div class="anyai-action-bar" role="region" aria-label="スコアリング操作">
-      <button type="button" class="btn btn-outline" id="btn-check-status">再取得</button>
-      <button type="button" class="btn btn-primary" id="btn-queue-add-start">実行</button>
+      <button type="button" class="btn btn-outline" id="btn-check-status">CheckSheetInfo</button>
+      <button type="button" class="btn btn-primary" id="btn-queue-add-start" style="display:none;">Run</button>
     </div>
 
     <script>
@@ -420,10 +495,183 @@
       const queueAddStartButton = document.getElementById('btn-queue-add-start');
       const checkStatusButton = document.getElementById('btn-check-status');
       const validationBanner = document.getElementById('validation-banner');
-      const validationState = { ok: false, payload: null, key: '', message: '' };
+      const validationStatusCard = document.getElementById('validation-status-card');
+      const validationStatusBadge = document.getElementById('validation-status-badge');
+      const validationStatusMessage = document.getElementById('validation-status-message');
+      const validationStatusMeta = document.getElementById('validation-status-meta');
+      const autoSlowdownToggle = document.getElementById('auto_slowdown');
+      const systemPromptSSRInput = document.getElementById('system_prompt_ssr');
+      const systemPromptNumericInput = document.getElementById('system_prompt_numeric');
+      const logCard = document.getElementById('job-log-card');
+      const logContent = document.getElementById('job-log-content');
+      const logRefreshButton = document.getElementById('btn-log-refresh');
+      const validation = (() => {
+        const state = { ok: false, payload: null, cacheKey: '', message: '', status: 'info' };
+
+        function buildKey() {
+          const url = spreadsheetUrlInput.value.trim();
+          const sheetKeyword = sheetKeywordInput.value.trim();
+          const scoreKeyword = scoreSheetKeywordInput ? scoreSheetKeywordInput.value.trim() : '';
+          return [url, sheetKeyword, scoreKeyword].join('|');
+        }
+
+        function updateCard(status = 'info', message = '', payload = null) {
+          if (!validationStatusCard) return;
+          const normalizedStatus = status || 'info';
+          const hasMeta =
+            payload && typeof payload === 'object' && payload !== null && Object.keys(payload).length > 0;
+          const hasMessage = Boolean(message);
+
+          if (!hasMessage && !hasMeta && normalizedStatus === 'idle') {
+            validationStatusCard.style.display = 'none';
+            return;
+          }
+
+          validationStatusCard.style.display = '';
+          if (validationStatusBadge) {
+            const labelMap = { success: '検証済み', error: '要対応', info: '情報', idle: '情報' };
+            validationStatusBadge.textContent = labelMap[normalizedStatus] || '情報';
+            validationStatusBadge.setAttribute(
+              'data-state',
+              normalizedStatus === 'idle' ? 'info' : normalizedStatus,
+            );
+          }
+
+          if (validationStatusMessage) {
+            validationStatusMessage.textContent = message || '右下の CheckSheetInfo で検証してください。';
+          }
+
+          if (validationStatusMeta) {
+            validationStatusMeta.replaceChildren();
+            if (hasMeta) {
+              const entries = [];
+              if (payload.sheet_name) entries.push(['Sheet Name', String(payload.sheet_name)]);
+              if (payload.sheet_id !== undefined && payload.sheet_id !== null) {
+                entries.push(['Sheet ID', String(payload.sheet_id)]);
+              }
+              if (payload.spreadsheet_id) {
+                entries.push(['Spreadsheet ID', String(payload.spreadsheet_id)]);
+              }
+              if (
+                payload.score_sheet_name &&
+                payload.score_sheet_name !== payload.sheet_name
+              ) {
+                entries.push(['Score Sheet', String(payload.score_sheet_name)]);
+              }
+              if (
+                payload.score_sheet_id !== undefined &&
+                payload.score_sheet_id !== null &&
+                payload.score_sheet_id !== payload.sheet_id
+              ) {
+                entries.push(['Score Sheet ID', String(payload.score_sheet_id)]);
+              }
+
+              if (entries.length) {
+                entries.forEach(([label, value]) => {
+                  const row = document.createElement('div');
+                  row.className = 'validation-meta-row';
+                  const labelEl = document.createElement('span');
+                  labelEl.className = 'validation-meta-label';
+                  labelEl.textContent = label;
+                  const valueEl = document.createElement('code');
+                  valueEl.textContent = value;
+                  row.appendChild(labelEl);
+                  row.appendChild(valueEl);
+                  validationStatusMeta.appendChild(row);
+                });
+                validationStatusMeta.style.display = '';
+              } else {
+                validationStatusMeta.style.display = 'none';
+              }
+            } else {
+              validationStatusMeta.style.display = 'none';
+            }
+          }
+        }
+
+        function setResult(ok, payload, message, status) {
+          state.ok = Boolean(ok);
+          state.payload = payload ?? null;
+          state.message = message ?? '';
+          state.status = status || (state.ok ? 'success' : 'error');
+          state.cacheKey = state.ok ? buildKey() : '';
+          updateCard(state.status, state.message, state.payload);
+        }
+
+        function markDirty(showMessage = true) {
+          const wasValid = state.ok;
+          state.ok = false;
+          state.payload = null;
+          state.cacheKey = '';
+          state.status = 'info';
+          state.message = '';
+          const infoMessage = wasValid
+            ? '設定が変更されました。右下の CheckSheetInfo を実行してください。'
+            : '右下の CheckSheetInfo で検証してください。';
+          updateCard('info', infoMessage, null);
+          if (showMessage && wasValid) {
+            showValidationBanner('info', '設定が変更されました。右下の「CheckSheetInfo」で検証してください。');
+          } else if (!validationBanner?.hasAttribute('data-state')) {
+            showValidationBanner(null, '');
+          }
+        }
+
+        function isCurrent() {
+          return state.ok && state.cacheKey === buildKey();
+        }
+
+        return { state, buildKey, updateCard, setResult, markDirty, isCurrent };
+      })();
+
+      function resetLogView() {
+        if (!logCard || !logContent) return;
+        logCard.style.display = 'none';
+        logContent.textContent = '';
+      }
+
+      async function refreshJobLog(jobId, { manual = false } = {}) {
+        if (!logCard || !logContent) return;
+        if (!jobId) {
+          resetLogView();
+          return;
+        }
+        try {
+          const res = await fetch(`/jobs/${jobId}/log?lines=400`);
+          if (!res.ok) {
+            if (res.status === 404) {
+              logCard.style.display = '';
+              logContent.textContent = 'ログはまだ生成されていません。';
+              return;
+            }
+            throw new Error(`status ${res.status}`);
+          }
+          const data = await res.json();
+          logCard.style.display = '';
+          const logText = data.log || '';
+          logContent.textContent = logText || 'ログはまだ記録されていません。';
+          logContent.scrollTop = logContent.scrollHeight;
+        } catch (err) {
+          if (manual) {
+            alert('ログの取得に失敗しました。');
+          } else {
+            console.warn('Failed to load job log', err);
+          }
+        }
+      }
       let currentMode = modeForm.querySelector('input[name="mode"]:checked').value;
       let currentJobId = null;
       let pollTimer = null;
+
+      if (logRefreshButton) {
+        logRefreshButton.addEventListener('click', () => {
+          if (currentJobId) {
+            refreshJobLog(currentJobId, { manual: true });
+          } else {
+            resetLogView();
+          }
+        });
+      }
+
       const nonSSRState = {
         csv: { ...MODE_DEFAULTS.csv },
         video: { ...MODE_DEFAULTS.video }
@@ -434,19 +682,13 @@
         timeout: timeoutInput.value || MODE_DEFAULTS.csv.timeout
       };
 
-      function buildValidationKey(){
-        return [spreadsheetUrlInput.value.trim(), sheetKeywordInput.value.trim()].join('|');
-      }
-
-      function setValidationResult(ok, payload, message){
-        validationState.ok = !!ok;
-        validationState.payload = payload || null;
-        validationState.message = message || '';
-        validationState.key = buildValidationKey();
+      function setValidationResult(ok, payload, message, status){
+        validation.setResult(ok, payload, message, status);
+        updateQueueActionState();
       }
 
       function isValidationCurrent(){
-        return validationState.ok && validationState.key === buildValidationKey();
+        return validation.isCurrent();
       }
 
       function showValidationBanner(state, message){
@@ -463,7 +705,16 @@
       function updateQueueActionState(){
         const valid = isValidationCurrent();
         if(queueAddButton) queueAddButton.disabled = !valid;
-        if(queueAddStartButton) queueAddStartButton.disabled = !valid;
+        if(queueAddStartButton){
+          queueAddStartButton.disabled = !valid;
+          queueAddStartButton.style.display = valid ? '' : 'none';
+        }
+        if(checkStatusButton){
+          checkStatusButton.style.display = valid ? 'none' : '';
+          if (!valid) {
+            checkStatusButton.disabled = false;
+          }
+        }
       }
 
       function lockActionButtons(lock) {
@@ -524,15 +775,7 @@
       }
 
       function markValidationDirty(showMessage = true){
-        const wasValid = validationState.ok;
-        validationState.ok = false;
-        validationState.payload = null;
-        validationState.key = '';
-        if(showMessage && wasValid){
-          showValidationBanner('info', '設定が変更されました。右下の「再取得」で検証してください。');
-        } else if(!validationBanner?.hasAttribute('data-state')){
-          showValidationBanner(null, '');
-        }
+        validation.markDirty(showMessage);
         updateQueueActionState();
       }
 
@@ -571,9 +814,11 @@
           document.getElementById('prog').value = 0;
           document.getElementById('stat').textContent = '';
           document.getElementById('eta').textContent = '';
+          resetLogView();
           return;
         }
         const keepRunning = await updateProgress(jobId);
+        await refreshJobLog(jobId);
         if (keepRunning) {
           pollTimer = setTimeout(()=>startPolling(jobId), 2000);
         }
@@ -626,16 +871,22 @@
         applyModeContent(mode);
         const defaults = MODE_DEFAULTS[mode] || MODE_DEFAULTS.csv;
         if (enableSSR.checked) {
-          batchSizeInput.value = '1';
-          concurrencyInput.value = '1';
+          batchSizeInput.disabled = false;
+          concurrencyInput.disabled = false;
           timeoutInput.value = defaults.timeout || MODE_DEFAULTS.csv.timeout;
-          batchSizeInput.disabled = true;
-          concurrencyInput.disabled = true;
+          if (!batchSizeInput.value) {
+            batchSizeInput.value = defaults.batchSize || MODE_DEFAULTS.csv.batchSize;
+          }
+          if (!concurrencyInput.value) {
+            concurrencyInput.value = defaults.concurrency || MODE_DEFAULTS.csv.concurrency;
+          }
         } else {
           restoreNonSSRValues(mode);
           batchSizeInput.disabled = false;
           concurrencyInput.disabled = false;
           const stored = nonSSRState[mode] || defaults;
+          batchSizeInput.value = stored.batchSize || defaults.batchSize;
+          concurrencyInput.value = stored.concurrency || defaults.concurrency;
           timeoutInput.value = stored.timeout || defaults.timeout;
         }
         updateSSREnabled();
@@ -649,11 +900,27 @@
       }
 
       function appendPromptFields(fd) {
+        const ssrPrompt = systemPromptSSRInput ? systemPromptSSRInput.value : '';
+        const numericPrompt = systemPromptNumericInput ? systemPromptNumericInput.value : '';
         fd.set('enable_ssr', enableSSR.checked ? 'true' : 'false');
-        fd.set('system_prompt_ssr', form.system_prompt_ssr.value || '');
-        fd.set('system_prompt_numeric', form.system_prompt_numeric.value || '');
-        const activePrompt = enableSSR.checked ? form.system_prompt_ssr.value : form.system_prompt_numeric.value;
+        fd.set('system_prompt_ssr', ssrPrompt);
+        fd.set('system_prompt_numeric', numericPrompt);
+        const activePrompt = enableSSR.checked ? ssrPrompt : numericPrompt;
         fd.set('system_prompt', activePrompt || '');
+      }
+
+      function buildJobFormData(action) {
+        const fd = new FormData(form);
+        if (autoSlowdownToggle) {
+          fd.set('auto_slowdown', autoSlowdownToggle.checked ? 'true' : 'false');
+        }
+        const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
+        fd.set('mode', selectedMode);
+        appendPromptFields(fd);
+        if (action) {
+          fd.set('action', action);
+        }
+        return fd;
       }
 
       enableSSR.addEventListener('change', () => {
@@ -687,18 +954,6 @@
       handleSSRChange();
 
       // Settings status
-      async function refreshKeysStatus(){
-        try{
-          const el = document.getElementById('keys-status');
-          if(!el) return;
-          const r = await fetch('/settings');
-          if(!r.ok) return;
-          const j = await r.json();
-          const s = j.keys || {};
-          el.textContent = `Gemini=${s.gemini?'セット済み':'未設定'} / OpenAI=${s.openai?'セット済み':'未設定'}`;
-        }catch{}
-      }
-
       const kf = document.getElementById('keys-form');
       kf.addEventListener('submit', async (e)=>{
         e.preventDefault();
@@ -706,13 +961,12 @@
         fd.set('persist', document.getElementById('persist').checked ? 'true' : 'false');
         const r = await fetch('/settings', { method:'POST', body: fd });
         if(!r.ok){ alert('APIキー保存に失敗しました'); return; }
-        await refreshKeysStatus();
         alert('APIキーを反映しました');
       });
 
       const form = jobForm;
 
-      [spreadsheetUrlInput, sheetKeywordInput].forEach((input) => {
+      [spreadsheetUrlInput, sheetKeywordInput, scoreSheetKeywordInput].forEach((input) => {
         if (!input) return;
         input.addEventListener('input', () => markValidationDirty());
       });
@@ -722,21 +976,25 @@
           e.preventDefault();
           const url = spreadsheetUrlInput.value.trim();
           const sheetKeyword = sheetKeywordInput.value.trim() || 'Link';
+          const scoreSheetKeyword = scoreSheetKeywordInput?.value.trim() || sheetKeyword;
           if (!url) {
             const message = 'スプレッドシートURLを入力してください。';
             showValidationBanner('error', message);
-            setValidationResult(false, null, message);
-            updateQueueActionState();
+            setValidationResult(false, null, message, 'error');
             return;
           }
           showValidationBanner('info', 'スプレッドシートを検証中です...');
           checkStatusButton.disabled = true;
           try {
-            const res = await fetch('/jobs/check', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ spreadsheet_url: url, sheet_keyword: sheetKeyword }),
-            });
+              const res = await fetch('/jobs/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  spreadsheet_url: url,
+                  sheet_keyword: sheetKeyword,
+                  score_sheet_keyword: scoreSheetKeyword,
+                }),
+              });
             let data = null;
             try {
               data = await res.json();
@@ -746,38 +1004,32 @@
             if (!res.ok || !data || !data.ok) {
               const message = (data && data.message) || 'スプレッドシートの検証に失敗しました。';
               showValidationBanner('error', message);
-              setValidationResult(false, data, message);
+              setValidationResult(false, data, message, 'error');
             } else {
               const message = data.message || 'スプレッドシートを確認しました。';
               showValidationBanner('success', message);
-              setValidationResult(true, data, message);
+              setValidationResult(true, data, message, 'success');
             }
           } catch (err) {
             const message = `検証に失敗しました: ${err instanceof Error ? err.message : err}`;
             showValidationBanner('error', message);
-            setValidationResult(false, null, message);
+            setValidationResult(false, null, message, 'error');
           } finally {
             checkStatusButton.disabled = false;
-            updateQueueActionState();
           }
         });
       }
 
-      updateQueueActionState();
+      setValidationResult(false, null, '右下の CheckSheetInfo で検証してください。', 'info');
 
       if (queueAddButton) {
         queueAddButton.addEventListener('click', async (e) => {
           e.preventDefault();
           if(!isValidationCurrent()){
-            showValidationBanner('error', 'スプレッドシート設定の検証を完了してください（右下の「再取得」）。');
+            showValidationBanner('error', 'スプレッドシート設定の検証を完了してください（右下の「CheckSheetInfo」）。');
             return;
           }
-          const fd = new FormData(form);
-          fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
-          const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
-          fd.append('mode', selectedMode);
-          appendPromptFields(fd);
-          fd.append('action', 'queue');
+          const fd = buildJobFormData('queue');
           const res = await fetch('/jobs', { method: 'POST', body: fd });
           if (!res.ok) { alert('キュー追加に失敗'); return; }
           await refreshQueue();
@@ -789,7 +1041,7 @@
         queueAddStartButton.addEventListener('click', async (e) => {
           e.preventDefault();
           if(!isValidationCurrent()){
-            showValidationBanner('error', 'スプレッドシート設定の検証を完了してください（右下の「再取得」）。');
+            showValidationBanner('error', 'スプレッドシート設定の検証を完了してください（右下の「CheckSheetInfo」）。');
             return;
           }
           const releaseButton = setButtonBusy(queueAddStartButton, '実行中...');
@@ -797,12 +1049,7 @@
           showValidationBanner('info', 'ジョブを開始しています。数秒お待ちください...');
           try {
             await runWithOverlay(async () => {
-              const fd = new FormData(form);
-              fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
-              const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
-              fd.set('mode', selectedMode);
-              appendPromptFields(fd);
-              fd.set('action', 'start');
+              const fd = buildJobFormData('start');
               const res = await fetch('/jobs', { method: 'POST', body: fd });
               if (!res.ok) {
                 let message = '開始に失敗しました。設定を確認してください。';
@@ -821,6 +1068,7 @@
               currentJobId = data.job_id;
               resultSection.style.display = 'block';
               document.getElementById('job-id').textContent = currentJobId;
+              resetLogView();
               startPolling(currentJobId);
               showValidationBanner('success', 'ジョブを開始しました。右側の進捗を確認できます。');
               await refreshQueue();
@@ -920,18 +1168,24 @@
                 form.max_category_cols.value = cfg.max_category_cols;
                 form.concurrency.value = cfg.concurrency;
                 form.max_retries.value = cfg.max_retries;
-                document.getElementById('auto_slowdown').checked = !!cfg.auto_slowdown;
+                if (autoSlowdownToggle) {
+                  autoSlowdownToggle.checked = !!cfg.auto_slowdown;
+                }
                 form.timeout_sec.value = cfg.timeout_sec;
                 document.querySelector(`#mode-form input[name="mode"][value="${cfg.mode}"]`).checked = true;
                 enableSSR.checked = cfg.enable_ssr !== false;
-                form.system_prompt_ssr.value = cfg.ssr_system_prompt || '';
-                form.system_prompt_numeric.value = cfg.numeric_system_prompt || '';
+                if (systemPromptSSRInput) {
+                  systemPromptSSRInput.value = cfg.ssr_system_prompt || '';
+                }
+                if (systemPromptNumericInput) {
+                  systemPromptNumericInput.value = cfg.numeric_system_prompt || '';
+                }
                 updateSSREnabled();
                 form.dataset.editing = it.job_id;
                 alert('フォームに読み込みました。下の「編集を保存」で反映できます。');
-                validationState.ok = false;
-                validationState.payload = null;
-                showValidationBanner('info', '読み込んだ設定です。右下の「再取得」で検証してください。');
+                validation.markDirty(false);
+                showValidationBanner('info', '読み込んだ設定です。右下の「CheckSheetInfo」で検証してください。');
+                validation.updateCard('info', '読み込んだ設定です。右下の CheckSheetInfo で検証してください。', null);
                 updateQueueActionState();
               }catch{}
             };
@@ -939,11 +1193,7 @@
             save.onclick = async ()=>{
               const ej = form.dataset.editing;
               if(!ej){ alert('編集対象が読み込まれていません'); return; }
-              const fd = new FormData(form);
-              fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
-              const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
-              fd.set('mode', selectedMode);
-              appendPromptFields(fd);
+              const fd = buildJobFormData();
               const r = await fetch(`/queue/${ej}/edit`, { method:'POST', body: fd });
               if(!r.ok){ alert('保存に失敗'); return; }
               alert('保存しました'); form.dataset.editing='';

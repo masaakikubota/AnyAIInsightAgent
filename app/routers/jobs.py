@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -25,6 +26,7 @@ router = APIRouter()
 class JobCheckRequest(BaseModel):
     spreadsheet_url: str
     sheet_keyword: str
+    score_sheet_keyword: Optional[str] = None
 
 
 class JobCheckResponse(BaseModel):
@@ -33,6 +35,8 @@ class JobCheckResponse(BaseModel):
     spreadsheet_id: Optional[str] = None
     sheet_id: Optional[int] = None
     sheet_name: Optional[str] = None
+    score_sheet_id: Optional[int] = None
+    score_sheet_name: Optional[str] = None
 
 
 @router.post("/jobs/check", response_model=JobCheckResponse)
@@ -41,6 +45,8 @@ async def check_job(payload: JobCheckRequest) -> JobCheckResponse:
         spreadsheet_id = extract_spreadsheet_id(payload.spreadsheet_url)
         await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
         sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, payload.sheet_keyword)
+        score_keyword = (payload.score_sheet_keyword or payload.sheet_keyword).strip()
+        score_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_keyword)
     except GoogleSheetsError as exc:
         return JobCheckResponse(ok=False, message=str(exc))
     except Exception as exc:  # noqa: BLE001
@@ -52,6 +58,8 @@ async def check_job(payload: JobCheckRequest) -> JobCheckResponse:
         spreadsheet_id=sheet_match.spreadsheet_id,
         sheet_id=sheet_match.sheet_id,
         sheet_name=sheet_match.sheet_name,
+        score_sheet_id=score_match.sheet_id,
+        score_sheet_name=score_match.sheet_name,
     )
 
 
@@ -60,6 +68,7 @@ async def create_job(
     _background: BackgroundTasks,
     spreadsheet_url: str = Form(...),
     sheet_keyword: str = Form("Link"),
+    score_sheet_keyword: str = Form("Embedding"),
     utterance_col: int = Form(3),
     category_start_col: int = Form(4),
     name_row: int = Form(2),
@@ -86,13 +95,14 @@ async def create_job(
         spreadsheet_id = extract_spreadsheet_id(spreadsheet_url)
         await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
         sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, sheet_keyword)
+        score_sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_sheet_keyword)
     except GoogleSheetsError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    batch_size_value = 1 if enable_ssr else batch_size
-    concurrency_value = 1 if enable_ssr else concurrency
+    batch_size_value = batch_size
+    concurrency_value = concurrency
     timeout_value = timeout_sec
-    if not enable_ssr and mode == "video":
+    if mode == "video":
         default_concurrency = RunConfig.model_fields["video_concurrency_default"].default
         default_timeout = RunConfig.model_fields["video_timeout_default"].default
         concurrency_value = concurrency or default_concurrency
@@ -104,6 +114,9 @@ async def create_job(
         spreadsheet_id=sheet_match.spreadsheet_id,
         sheet_name=sheet_match.sheet_name,
         sheet_gid=sheet_match.sheet_id,
+        score_sheet_keyword=score_sheet_keyword,
+        score_sheet_name=score_sheet_match.sheet_name,
+        score_sheet_gid=score_sheet_match.sheet_id,
         mode=mode,
         utterance_col=utterance_col,
         category_start_col=category_start_col,
@@ -218,12 +231,37 @@ async def get_job_config(job_id: str, base_dir: Path = Depends(get_base_dir)):
     return JSONResponse(content=cfg_path.read_text(encoding="utf-8"))
 
 
+@router.get("/jobs/{job_id}/log")
+async def get_job_log(
+    job_id: str,
+    lines: int = 400,
+    base_dir: Path = Depends(get_base_dir),
+):
+    log_path = base_dir / job_id / "worker.log"
+    if not log_path.exists():
+        raise HTTPException(status_code=404, detail="Log not found")
+    try:
+        text = log_path.read_text(encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to read log: {exc}") from exc
+    if lines > 0:
+        log_lines = text.splitlines()
+        text = "\n".join(log_lines[-lines:])
+    return {
+        "job_id": job_id,
+        "log": text,
+        "lines": text.count("\n") + (1 if text else 0),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+
+
 @router.post("/queue/{job_id}/edit")
 async def edit_job(
     job_id: str,
     _background: BackgroundTasks,
     spreadsheet_url: str = Form(...),
     sheet_keyword: str = Form("Link"),
+    score_sheet_keyword: str = Form("Embedding"),
     utterance_col: int = Form(3),
     category_start_col: int = Form(4),
     name_row: int = Form(2),
@@ -251,14 +289,16 @@ async def edit_job(
         raise HTTPException(status_code=400, detail="Job is running and cannot be edited")
     try:
         spreadsheet_id = extract_spreadsheet_id(spreadsheet_url)
+        await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
         sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, sheet_keyword)
+        score_sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_sheet_keyword)
     except GoogleSheetsError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    batch_size_value = 1 if enable_ssr else batch_size
-    concurrency_value = 1 if enable_ssr else concurrency
+    batch_size_value = batch_size
+    concurrency_value = concurrency
     timeout_value = timeout_sec
-    if not enable_ssr and mode == "video":
+    if mode == "video":
         default_concurrency = RunConfig.model_fields["video_concurrency_default"].default
         default_timeout = RunConfig.model_fields["video_timeout_default"].default
         concurrency_value = concurrency or default_concurrency
@@ -270,6 +310,9 @@ async def edit_job(
         spreadsheet_id=sheet_match.spreadsheet_id,
         sheet_name=sheet_match.sheet_name,
         sheet_gid=sheet_match.sheet_id,
+        score_sheet_keyword=score_sheet_keyword,
+        score_sheet_name=score_sheet_match.sheet_name,
+        score_sheet_gid=score_sheet_match.sheet_id,
         mode=mode,
         utterance_col=utterance_col,
         category_start_col=category_start_col,
