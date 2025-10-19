@@ -71,6 +71,17 @@
   --anyai-ease: cubic-bezier(.2,.8,.2,1);
   --anyai-fast: .12s var(--anyai-ease);
   --anyai-slow: .25s var(--anyai-ease);
+
+  /* ヘッダー関連 */
+  --anyai-header-padding-inline: 24px;
+  --anyai-header-padding-block: 12px;
+  --anyai-header-gap: var(--anyai-space-6);
+  --anyai-header-hit-area: 44px;
+  --anyai-header-logo-size: 28px;
+  --anyai-header-product-size: var(--anyai-fs-3);
+  --anyai-header-product-weight: 600;
+  --anyai-header-title-size: var(--anyai-fs-5);
+  --anyai-header-title-weight: 600;
 }
 
 :root[data-theme="dark"] {
@@ -104,32 +115,135 @@ body {
   position: sticky;
   top: 0;
   z-index: 50;
-  height: 64px;
-  display: flex; align-items: center; gap: var(--anyai-space-4);
-  padding: 0 var(--anyai-space-6);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--anyai-header-gap);
+  align-items: start;
+  padding: var(--anyai-header-padding-block) var(--anyai-header-padding-inline);
   background: color-mix(in oklab, var(--anyai-bg), white 2%);
   border-bottom: 1px solid var(--anyai-border);
   backdrop-filter: saturate(140%) blur(8px);
 }
 
-.anyai-header .brand {
-  display: inline-flex; align-items: center; gap: var(--anyai-space-2);
-}
-.anyai-header .brand img {
-  height: 28px; width: auto; display: block;
-}
-.anyai-header .brand span {
-  font-weight: 700; letter-spacing: .2px;
+.anyai-header__branding {
+  display: grid;
+  gap: 4px;
+  align-content: start;
 }
 
-.anyai-header .nav {
-  display: flex; gap: var(--anyai-space-4); align-items: center;
-  margin-left: auto;
+.anyai-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--anyai-space-2);
+  min-height: var(--anyai-header-hit-area);
+  padding: calc((var(--anyai-header-hit-area) - var(--anyai-header-logo-size)) / 2)
+           var(--anyai-space-2);
+  border-radius: var(--anyai-radius-2);
+  color: inherit;
+  text-decoration: none;
+  font-size: var(--anyai-header-product-size);
+  font-weight: var(--anyai-header-product-weight);
+  letter-spacing: .2px;
 }
-.anyai-header a {
-  color: inherit; text-decoration: none; opacity: .9;
+
+.anyai-brand img {
+  width: var(--anyai-header-logo-size);
+  height: var(--anyai-header-logo-size);
+  display: block;
 }
-.anyai-header a:hover { opacity: 1; }
+
+.anyai-brand__name {
+  line-height: 1.2;
+}
+
+.anyai-brand__title {
+  margin: 0;
+  font-size: var(--anyai-header-title-size);
+  font-weight: var(--anyai-header-title-weight);
+  letter-spacing: .1px;
+}
+
+.anyai-nav {
+  display: flex;
+  gap: var(--anyai-space-3);
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.anyai-nav__link {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px var(--anyai-space-3);
+  border-radius: 999px;
+  font-weight: 600;
+  text-decoration: none;
+  color: inherit;
+  opacity: .9;
+  transition: background var(--anyai-fast), opacity var(--anyai-fast);
+}
+
+.anyai-nav__link:hover,
+.anyai-nav__link:focus-visible {
+  background: color-mix(in oklab, var(--anyai-text) 12%, transparent 88%);
+  opacity: 1;
+}
+
+.anyai-nav__link.is-active {
+  background: color-mix(in oklab, var(--anyai-text) 16%, transparent 84%);
+  opacity: 1;
+}
+
+.anyai-header__actions {
+  display: inline-flex;
+  gap: var(--anyai-space-2);
+  align-items: center;
+}
+
+.anyai-icon-button {
+  width: var(--anyai-header-hit-area);
+  height: var(--anyai-header-hit-area);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklab, var(--anyai-text) 12%, transparent 88%);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--anyai-fast), border-color var(--anyai-fast);
+}
+
+.anyai-icon-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.anyai-icon-button:hover,
+.anyai-icon-button:focus-visible {
+  background: color-mix(in oklab, var(--anyai-text) 10%, transparent 90%);
+  border-color: color-mix(in oklab, var(--anyai-text) 24%, transparent 76%);
+}
+
+.anyai-icon-button:focus-visible {
+  outline: none;
+  box-shadow: var(--anyai-ring);
+}
+
+@media (max-width: 960px) {
+  .anyai-header {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "branding"
+      "nav"
+      "actions";
+    align-items: stretch;
+  }
+
+  .anyai-header__branding { grid-area: branding; }
+  .anyai-nav { grid-area: nav; justify-content: flex-start; }
+  .anyai-header__actions { grid-area: actions; justify-content: flex-end; }
+}
 
 .container { width: min(100% - 32px, var(--anyai-content-lg)); margin-inline: auto; }
 

@@ -29,10 +29,6 @@
       textarea { min-height: 132px; }
       progress { width:100%; height:12px; }
       .muted { color: var(--anyai-text-subtle); font-size: var(--anyai-fs-2); }
-      .nav { display:flex; gap: 12px; align-items:center; }
-      .nav-link { font-weight:600; text-decoration:none; color: var(--anyai-text); padding:6px 12px; border-radius:999px; transition:background 0.2s ease; }
-      .nav-link:hover { background: rgba(0,0,0,0.06); }
-      .nav-link.active { background: rgba(0,0,0,0.12); }
       code { font-family: 'JetBrains Mono', monospace; }
       ul { margin:0; padding-left:18px; }
       .dropzone {
@@ -67,21 +63,44 @@
   </head>
   <body class="layout">
     <header class="anyai-header">
-      <a class="brand" href="/" aria-label="AnyAI Interview">
-        <img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ">
-        <span>AnyAI Interview</span>
-      </a>
-      <nav class="nav">
-        <a class="nav-link" href="/">AnyAI Scoring</a>
-        <a class="nav-link" href="/cleansing">AnyAI Cleansing</a>
-        <a class="nav-link active" href="/interview">AnyAI Interview</a>
-        <a class="nav-link" href="/persona">Persona Seeds</a>
-        <a class="nav-link" href="/dashboard">Persona Dashboard</a>
-        <a class="nav-link" href="/video-analysis">Video Analysis</a>
-        <a class="nav-link" href="/comment-enhancer">Comment Enhancer</a>
-        <a class="nav-link" href="/video-comment-review">Video Comment Review</a>
-        <a class="nav-link" href="/kol-reviewer">KOL Reviewer</a>
+      <div class="anyai-header__branding">
+        <a class="anyai-brand" href="/" aria-label="AnyAI InsightAgent ホーム">
+          <img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ">
+          <span class="anyai-brand__name">AnyAI InsightAgent</span>
+        </a>
+        <p class="anyai-brand__title">AnyAI Interview</p>
+      </div>
+      <nav class="anyai-nav" aria-label="AnyAI プロダクト">
+        <a class="anyai-nav__link" href="/">AnyAI Scoring</a>
+        <a class="anyai-nav__link" href="/cleansing">AnyAI Cleansing</a>
+        <a class="anyai-nav__link is-active" aria-current="page" href="/interview">AnyAI Interview</a>
+        <a class="anyai-nav__link" href="/persona">Persona Seeds</a>
+        <a class="anyai-nav__link" href="/dashboard">Persona Dashboard</a>
+        <a class="anyai-nav__link" href="/video-analysis">Video Analysis</a>
+        <a class="anyai-nav__link" href="/comment-enhancer">Comment Enhancer</a>
+        <a class="anyai-nav__link" href="/video-comment-review">Video Comment Review</a>
+        <a class="anyai-nav__link" href="/kol-reviewer">KOL Reviewer</a>
       </nav>
+      <div class="anyai-header__actions" aria-label="クイック操作">
+        <button type="button" class="anyai-icon-button" aria-label="テーマを切り替え">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <path d="M12 3v2m0 14v2m9-9h-2M5 12H3m16.364-7.364-1.414 1.414M7.05 16.95l-1.414 1.414m0-12.728 1.414 1.414m9.9 9.9 1.414 1.414" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+        <button type="button" class="anyai-icon-button" aria-label="サイト内検索を開く">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <path d="m20 20-3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+        <button type="button" class="anyai-icon-button" aria-label="アカウントメニューを開く">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <path d="M5 20.5a7 7 0 0 1 14 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
     </header>
 
     <main class="anyai-content">
