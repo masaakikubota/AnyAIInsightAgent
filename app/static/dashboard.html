@@ -243,25 +243,7 @@
         border-radius: 50%;
         background: var(--anyai-success);
       }
-      .nav {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-      }
-      .nav-link {
-        font-weight: 600;
-        text-decoration: none;
-        color: var(--anyai-text);
-        padding: 6px 12px;
-        border-radius: 999px;
-        transition: background 0.2s ease;
-      }
-      .nav-link:hover {
-        background: rgba(0,0,0,0.06);
-      }
-      .nav-link.active {
-        background: rgba(0,0,0,0.12);
-      }
+
       .toast {
         position: fixed;
         right: 24px;
@@ -284,24 +266,6 @@
     </style>
   </head>
   <body class="layout">
-    <header class="anyai-header">
-      <a class="brand" href="/" aria-label="AnyAI Persona Dashboard">
-        <img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ">
-        <span>AnyAI Persona Dashboard</span>
-      </a>
-      <nav class="nav">
-        <a class="nav-link" href="/">AnyAI Scoring</a>
-        <a class="nav-link" href="/cleansing">AnyAI Cleansing</a>
-        <a class="nav-link" href="/interview">AnyAI Interview</a>
-        <a class="nav-link" href="/persona">Persona Seeds</a>
-        <a class="nav-link active" href="/dashboard">Persona Dashboard</a>
-        <a class="nav-link" href="/video-analysis">Video Analysis</a>
-        <a class="nav-link" href="/comment-enhancer">Comment Enhancer</a>
-        <a class="nav-link" href="/video-comment-review">Video Comment Review</a>
-        <a class="nav-link" href="/kol-reviewer">KOL Reviewer</a>
-      </nav>
-    </header>
-
     <div class="anyai-layout">
       <aside class="anyai-sidebar" data-active-tool="persona-dashboard"></aside>
       <div class="dashboard-shell" id="dashboard-app">
