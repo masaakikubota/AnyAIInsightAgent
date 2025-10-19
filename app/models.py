@@ -214,6 +214,7 @@ class ScoreRequest(BaseModel):
     timeout_sec: int = 60
     file_parts: Optional[List[dict]] = None
     model_override: Optional[str] = None
+    ssr_enabled: bool = True
 
 
 class ScoreResult(BaseModel):

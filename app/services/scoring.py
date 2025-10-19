@@ -85,6 +85,7 @@ async def score_with_fallback(
     timeout_sec: int,
     max_retries: int,
     prefer: Provider,
+    ssr_enabled: bool = True,
     file_parts: Optional[List[dict]] = None,
     model_override: Optional[str] = None,
     cache: Optional[ScoreCache] = None,
@@ -118,6 +119,7 @@ async def score_with_fallback(
             timeout_sec=timeout_sec,
             file_parts=file_parts if p == Provider.gemini else None,
             model_override=model_override if p == Provider.gemini else None,
+            ssr_enabled=ssr_enabled,
         )
         if p == Provider.gemini:
             return await call_gemini(req)
@@ -166,7 +168,7 @@ async def score_with_fallback(
                     if cached:
                         return cached, errors, True
                 res, status = await try_call(provider)
-                if res.analyses:
+                if ssr_enabled and res.analyses:
                     converted_scores = await _convert_analyses_to_scores(
                         utterance=utterance,
                         categories=categories,
