@@ -12,64 +12,59 @@
 <link rel="stylesheet" href="/static/anyai/core/anyai.tokens.css">
 <link rel="stylesheet" href="/static/anyai/core/anyai.components.css">
 <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css">
+<link rel="stylesheet" href="/static/anyai/tool-layout.css">
 <script defer src="/static/anyai/core/anyai.js"></script>
 <script defer src="/static/anyai/queue-manager.js"></script>
 <style>
-  :root { color-scheme: light; }
-  body { background: var(--anyai-app-bg, #f8f8fb); }
-  .page { padding: var(--anyai-space-08) 0 var(--anyai-space-10); }
-  .anyai-header { display:flex; align-items:center; justify-content:space-between; gap:var(--anyai-space-06); padding:var(--anyai-space-04) var(--anyai-space-06); background:var(--anyai-surface); border-bottom:1px solid var(--anyai-border); }
-  .anyai-header .brand { display:flex; align-items:center; gap:var(--anyai-space-03); font-weight:700; color:inherit; text-decoration:none; }
-  .anyai-header .brand img { height:32px; width:auto; }
-  .nav { display:flex; flex-wrap:wrap; gap:var(--anyai-space-03); align-items:center; }
-  .nav-link { padding:var(--anyai-space-02) var(--anyai-space-03); border-radius:999px; font-weight:600; color:var(--anyai-text); text-decoration:none; transition:background .2s ease; }
-  .nav-link:hover { background:rgba(0,0,0,0.06); }
-  .nav-link.active { background:rgba(0,0,0,0.12); }
-  #log-container { height: 320px; overflow-y: auto; font-family: var(--anyai-font-mono); font-size: 0.9rem; white-space: pre-wrap; background: var(--anyai-surface-alt); padding: var(--anyai-space-04); border-radius: var(--anyai-radius-md); border: 1px solid var(--anyai-border); }
-  #history-list li { cursor: pointer; border: 1px solid var(--anyai-border); border-radius: var(--anyai-radius-sm); padding: var(--anyai-space-03) var(--anyai-space-04); transition: background .15s ease; }
-  #history-list li:hover { background: var(--anyai-surface-alt); }
-  .queue-header { display:flex; justify-content:space-between; align-items:center; gap:var(--anyai-space-04); }
-  .queue-header-actions { display:flex; gap:var(--anyai-space-02); }
-  .queue-card .card-body { display:flex; flex-direction:column; gap:var(--anyai-space-04); }
-  .queue-content { display:flex; gap:var(--anyai-space-04); flex:1; min-height:220px; flex-wrap:wrap; }
-  .queue-list-container { flex:1 1 220px; display:flex; flex-direction:column; gap:var(--anyai-space-03); overflow:hidden; }
-  .queue-details { flex:1 1 220px; display:flex; flex-direction:column; gap:var(--anyai-space-03); }
-  .queue-details textarea { flex:1; resize:vertical; font-family:var(--anyai-font-mono); font-size:0.85rem; }
-  .queue-details a { word-break:break-all; font-size:0.85rem; color:var(--anyai-color-primary-600); }
-  .queue-controls { display:flex; flex-wrap:wrap; gap:var(--anyai-space-02); }
-  .queue-item { border:1px solid var(--anyai-border); border-radius:var(--anyai-radius-sm); padding:var(--anyai-space-03) var(--anyai-space-04); background:var(--anyai-surface); display:flex; flex-direction:column; gap:var(--anyai-space-02); cursor:pointer; }
-  .queue-item.is-active { border-color:var(--anyai-color-primary-500); box-shadow:0 0 0 1px var(--anyai-color-primary-300); }
-  .queue-item-sub { display:flex; justify-content:space-between; gap:var(--anyai-space-02); color:var(--anyai-text-muted); font-size:0.85rem; }
-  .queue-item-type { font-size:0.75rem; color:var(--anyai-text-muted); text-transform:uppercase; letter-spacing:0.04em; }
-  .queue-status { display:inline-flex; align-items:center; gap:var(--anyai-space-02); padding:0 var(--anyai-space-02); border-radius:var(--anyai-radius-pill); font-size:0.75rem; text-transform:uppercase; letter-spacing:0.03em; }
-  .queue-status-queued { background:var(--anyai-color-info-100); color:var(--anyai-color-info-700); }
-  .queue-status-running { background:var(--anyai-color-success-100); color:var(--anyai-color-success-700); }
-  .queue-status-paused { background:var(--anyai-color-warning-100); color:var(--anyai-color-warning-800); }
-  .queue-status-cancelled { background:var(--anyai-color-danger-100); color:var(--anyai-color-danger-700); }
-  .queue-status-completed { background:var(--anyai-color-neutral-200); color:var(--anyai-color-neutral-700); }
-  .queue-card .btn.btn-text { padding:0 var(--anyai-space-02); }
+  .page { padding: var(--anyai-space-08, 48px) 0 var(--anyai-space-10, 80px); }
+  #log-container { height: 320px; overflow-y: auto; font-family: var(--anyai-font-mono, 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace); font-size: 0.9rem; white-space: pre-wrap; background: var(--anyai-surface-alt, #f4f6ff); padding: var(--anyai-space-04, 16px); border-radius: var(--anyai-radius-md, 16px); border: 1px solid var(--anyai-border, #dfe3f0); }
+  #history-list li { cursor: pointer; border: 1px solid var(--anyai-border, #dfe3f0); border-radius: var(--anyai-radius-sm, 12px); padding: var(--anyai-space-03, 12px) var(--anyai-space-04, 16px); transition: background .15s ease; }
+  #history-list li:hover { background: var(--anyai-surface-alt, #f4f6ff); }
+  .queue-header { display:flex; justify-content:space-between; align-items:center; gap:var(--anyai-space-04, 16px); }
+  .queue-header-actions { display:flex; gap:var(--anyai-space-02, 8px); }
+  .queue-card .card-body { display:flex; flex-direction:column; gap:var(--anyai-space-04, 16px); }
+  .queue-content { display:flex; gap:var(--anyai-space-04, 16px); flex:1; min-height:220px; flex-wrap:wrap; }
+  .queue-list-container { flex:1 1 220px; display:flex; flex-direction:column; gap:var(--anyai-space-03, 12px); overflow:hidden; }
+  .queue-details { flex:1 1 220px; display:flex; flex-direction:column; gap:var(--anyai-space-03, 12px); }
+  .queue-details textarea { flex:1; resize:vertical; font-family:var(--anyai-font-mono, 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace); font-size:0.85rem; }
+  .queue-details a { word-break:break-all; font-size:0.85rem; color:var(--anyai-color-primary-600, #3358ff); }
+  .queue-controls { display:flex; flex-wrap:wrap; gap:var(--anyai-space-02, 8px); }
+  .queue-item { border:1px solid var(--anyai-border, #dfe3f0); border-radius:var(--anyai-radius-sm, 12px); padding:var(--anyai-space-03, 12px) var(--anyai-space-04, 16px); background:var(--anyai-surface, #ffffff); display:flex; flex-direction:column; gap:var(--anyai-space-02, 8px); cursor:pointer; }
+  .queue-item.is-active { border-color:var(--anyai-color-primary-500, #4a63ff); box-shadow:0 0 0 1px var(--anyai-color-primary-300, #8fa3ff); }
+  .queue-item-sub { display:flex; justify-content:space-between; gap:var(--anyai-space-02, 8px); color:var(--anyai-text-muted, #596080); font-size:0.85rem; }
+  .queue-item-type { font-size:0.75rem; color:var(--anyai-text-muted, #596080); text-transform:uppercase; letter-spacing:0.04em; }
+  .queue-status { display:inline-flex; align-items:center; gap:var(--anyai-space-02, 8px); padding:0 var(--anyai-space-02, 8px); border-radius:var(--anyai-radius-pill, 999px); font-size:0.75rem; text-transform:uppercase; letter-spacing:0.03em; }
+  .queue-status-queued { background:var(--anyai-color-info-100, #e6f1ff); color:var(--anyai-color-info-700, #2459d6); }
+  .queue-status-running { background:var(--anyai-color-success-100, #e5f6ee); color:var(--anyai-color-success-700, #1a7f4b); }
+  .queue-status-paused { background:var(--anyai-color-warning-100, #fff4d6); color:var(--anyai-color-warning-800, #8c5a00); }
+  .queue-status-cancelled { background:var(--anyai-color-danger-100, #ffe4e6); color:var(--anyai-color-danger-700, #b42318); }
+  .queue-status-completed { background:var(--anyai-color-neutral-200, #f0f2f8); color:var(--anyai-color-neutral-700, #3e4a66); }
+  .queue-card .btn.btn-text { padding:0 var(--anyai-space-02, 8px); }
 </style>
 </head>
 <body>
-<header class="anyai-header">
-  <a class="brand" href="/" aria-label="AnyAI ホーム">
-    <img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ">
-    <span>AnyAI</span>
-  </a>
-  <nav class="nav">
-    <a class="nav-link" href="/">AnyAI Scoring</a>
-    <a class="nav-link" href="/cleansing">AnyAI Cleansing</a>
-    <a class="nav-link" href="/interview">AnyAI Interview</a>
-    <a class="nav-link" href="/persona">Persona Seeds</a>
-    <a class="nav-link" href="/dashboard">Persona Dashboard</a>
-    <a class="nav-link" href="/video-analysis">Video Analysis</a>
-    <a class="nav-link active" href="/comment-enhancer">Comment Enhancer</a>
-    <a class="nav-link" href="/video-comment-review">Video Comment Review</a>
-    <a class="nav-link" href="/kol-reviewer">KOL Reviewer</a>
-  </nav>
-</header>
-
-<main class="page container">
+<div class="anyai-layout">
+  <aside class="anyai-sidebar">
+    <a class="brand" href="/" aria-label="AnyAI ホーム">
+      <img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ">
+      <span>AnyAI</span>
+    </a>
+    <nav>
+      <ul class="anyai-nav">
+        <li><a class="anyai-nav-link" href="/">AnyAI Scoring</a></li>
+        <li><a class="anyai-nav-link" href="/cleansing">AnyAI Cleansing</a></li>
+        <li><a class="anyai-nav-link" href="/interview">AnyAI Interview</a></li>
+        <li><a class="anyai-nav-link" href="/persona">Persona Seeds</a></li>
+        <li><a class="anyai-nav-link" href="/dashboard">Persona Dashboard</a></li>
+        <li><a class="anyai-nav-link" href="/video-analysis">Video Analysis</a></li>
+        <li><a class="anyai-nav-link active" href="/comment-enhancer">Comment Enhancer</a></li>
+        <li><a class="anyai-nav-link" href="/video-comment-review">Video Comment Review</a></li>
+        <li><a class="anyai-nav-link" href="/kol-reviewer">KOL Reviewer</a></li>
+      </ul>
+    </nav>
+  </aside>
+  <main class="anyai-content">
+    <div class="page container">
   <h1 class="mb-4">AnyAICommentEnhancer</h1>
   <div class="row" style="gap:var(--anyai-space-05); align-items:flex-start; flex-wrap:wrap;">
     <div class="card" style="flex:2; min-width:320px;">
@@ -150,7 +145,9 @@
       </div>
     </div>
   </section>
-</main>
+    </div>
+  </main>
+</div>
 
 <script>
   const form = document.getElementById('enhancer-form');
