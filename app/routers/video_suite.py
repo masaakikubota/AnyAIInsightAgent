@@ -15,6 +15,18 @@ from app.services.video_suite import queue as queue_service
 from app.services.video_suite import workers
 
 
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+
+def _load_static(filename: str) -> str:
+    """Return the contents of a static HTML file."""
+
+    try:
+        return (STATIC_DIR / filename).read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Static file '{filename}' not found.") from exc
+
+
 def _ensure_video_suite_ready() -> None:
     try:
         workers.ensure_dependencies()
@@ -36,22 +48,22 @@ async def _get_request_json(request: Request) -> Dict[str, Any]:
 
 @router.get("/video-analysis", response_class=HTMLResponse)
 async def video_analysis_page() -> HTMLResponse:
-    return HTMLResponse("<h1>AnyAI Video Analysis</h1>")
+    return HTMLResponse(_load_static("video-analysis.html"))
 
 
 @router.get("/comment-enhancer", response_class=HTMLResponse)
 async def comment_enhancer_page() -> HTMLResponse:
-    return HTMLResponse("<h1>AnyAI Comment Enhancer</h1>")
+    return HTMLResponse(_load_static("comment-enhancer.html"))
 
 
 @router.get("/video-summarizer", response_class=HTMLResponse)
 async def video_summarizer_page() -> HTMLResponse:
-    return HTMLResponse("<h1>AnyAI Video Comment Review</h1>")
+    return HTMLResponse(_load_static("video-comment-review.html"))
 
 
 @router.get("/kol-reviewer", response_class=HTMLResponse)
 async def kol_reviewer_page() -> HTMLResponse:
-    return HTMLResponse("<h1>AnyAI KOL Reviewer</h1>")
+    return HTMLResponse(_load_static("kol-reviewer.html"))
 
 
 @router.post("/run-analysis")
