@@ -721,6 +721,8 @@ class JobManager:
 
         if job.cfg.mode == "video":
             # VideoモードはGeminiのみを使用（ファイルベース推論のため）
+            job.cfg.batch_size = 1
+            job.cfg.max_category_cols = max(1, min(job.cfg.max_category_cols, job.cfg.batch_size))
             job.cfg.primary_provider = Provider.gemini
             job.cfg.concurrency = job.cfg.concurrency or job.cfg.video_concurrency_default
             job.cfg.timeout_sec = job.cfg.timeout_sec or job.cfg.video_timeout_default
