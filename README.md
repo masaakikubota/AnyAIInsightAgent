@@ -41,6 +41,9 @@ pip install -r requirements.txt
 python3 run_local.py
 # または
 uvicorn app.main:app --host 0.0.0.0 --port 25253
+
+# 対話的シェルで起動した場合、`GEMINI_API_KEY` または `OPENAI_API_KEY` が未設定だと
+# 起動時に入力が促されます。CI/CD など非対話環境では事前に環境変数を設定してください。
 ```
 
 ## 詳細セットアップ
@@ -56,6 +59,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 25253
    uvicorn app.main:app --host 0.0.0.0 --port 25253
    # または
    python -m app.main
+   # 対話的な実行では、未設定の API キーがあると起動時に入力を求められます。
 
 使い方
 - ブラウザで http://localhost:25252 を開き、左サイドバー下部の「APIキー設定」でキーを設定（任意）。
