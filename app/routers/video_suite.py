@@ -15,18 +15,6 @@ from app.services.video_suite import queue as queue_service
 from app.services.video_suite import workers
 
 
-STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
-
-
-def _load_static(filename: str) -> str:
-    """Return the contents of a static HTML file."""
-
-    try:
-        return (STATIC_DIR / filename).read_text(encoding="utf-8")
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=f"Static file '{filename}' not found.") from exc
-
-
 def _ensure_video_suite_ready() -> None:
     try:
         workers.ensure_dependencies()
