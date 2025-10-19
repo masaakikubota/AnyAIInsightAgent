@@ -25,6 +25,7 @@ router = APIRouter()
 class JobCheckRequest(BaseModel):
     spreadsheet_url: str
     sheet_keyword: str
+    score_sheet_keyword: Optional[str] = None
 
 
 class JobCheckResponse(BaseModel):
@@ -33,6 +34,8 @@ class JobCheckResponse(BaseModel):
     spreadsheet_id: Optional[str] = None
     sheet_id: Optional[int] = None
     sheet_name: Optional[str] = None
+    score_sheet_id: Optional[int] = None
+    score_sheet_name: Optional[str] = None
 
 
 @router.post("/jobs/check", response_model=JobCheckResponse)
@@ -41,6 +44,8 @@ async def check_job(payload: JobCheckRequest) -> JobCheckResponse:
         spreadsheet_id = extract_spreadsheet_id(payload.spreadsheet_url)
         await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
         sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, payload.sheet_keyword)
+        score_keyword = (payload.score_sheet_keyword or payload.sheet_keyword).strip()
+        score_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_keyword)
     except GoogleSheetsError as exc:
         return JobCheckResponse(ok=False, message=str(exc))
     except Exception as exc:  # noqa: BLE001
@@ -52,6 +57,8 @@ async def check_job(payload: JobCheckRequest) -> JobCheckResponse:
         spreadsheet_id=sheet_match.spreadsheet_id,
         sheet_id=sheet_match.sheet_id,
         sheet_name=sheet_match.sheet_name,
+        score_sheet_id=score_match.sheet_id,
+        score_sheet_name=score_match.sheet_name,
     )
 
 
@@ -60,6 +67,7 @@ async def create_job(
     _background: BackgroundTasks,
     spreadsheet_url: str = Form(...),
     sheet_keyword: str = Form("Link"),
+    score_sheet_keyword: str = Form("Embedding"),
     utterance_col: int = Form(3),
     category_start_col: int = Form(4),
     name_row: int = Form(2),
@@ -86,6 +94,7 @@ async def create_job(
         spreadsheet_id = extract_spreadsheet_id(spreadsheet_url)
         await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
         sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, sheet_keyword)
+        score_sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_sheet_keyword)
     except GoogleSheetsError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -104,6 +113,9 @@ async def create_job(
         spreadsheet_id=sheet_match.spreadsheet_id,
         sheet_name=sheet_match.sheet_name,
         sheet_gid=sheet_match.sheet_id,
+        score_sheet_keyword=score_sheet_keyword,
+        score_sheet_name=score_sheet_match.sheet_name,
+        score_sheet_gid=score_sheet_match.sheet_id,
         mode=mode,
         utterance_col=utterance_col,
         category_start_col=category_start_col,
@@ -224,6 +236,7 @@ async def edit_job(
     _background: BackgroundTasks,
     spreadsheet_url: str = Form(...),
     sheet_keyword: str = Form("Link"),
+    score_sheet_keyword: str = Form("Embedding"),
     utterance_col: int = Form(3),
     category_start_col: int = Form(4),
     name_row: int = Form(2),
@@ -251,7 +264,9 @@ async def edit_job(
         raise HTTPException(status_code=400, detail="Job is running and cannot be edited")
     try:
         spreadsheet_id = extract_spreadsheet_id(spreadsheet_url)
+        await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
         sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, sheet_keyword)
+        score_sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_sheet_keyword)
     except GoogleSheetsError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -270,6 +285,9 @@ async def edit_job(
         spreadsheet_id=sheet_match.spreadsheet_id,
         sheet_name=sheet_match.sheet_name,
         sheet_gid=sheet_match.sheet_id,
+        score_sheet_keyword=score_sheet_keyword,
+        score_sheet_name=score_sheet_match.sheet_name,
+        score_sheet_gid=score_sheet_match.sheet_id,
         mode=mode,
         utterance_col=utterance_col,
         category_start_col=category_start_col,
