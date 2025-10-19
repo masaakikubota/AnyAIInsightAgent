@@ -100,6 +100,7 @@ class ScoringPipelineValidationTests(unittest.TestCase):
                 system_prompt=cfg.system_prompt,
                 provider=result.provider,
                 model=result.model,
+                ssr_enabled=cfg.enable_ssr,
             )
             self.assertEqual(outcome.cache_key, expected_key)
         finally:

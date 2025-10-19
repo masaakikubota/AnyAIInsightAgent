@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import numbers
 import os
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -54,19 +55,34 @@ async def call_gemini(req: ScoreRequest) -> Tuple[ScoreResult, int]:
         user_text_lines.append(f"   Detail: {c.detail}")
     user_text = "\n".join(user_text_lines)
 
-    response_schema = {
-        "type": "object",
-        "properties": {
-            "analyses": {
-                "type": "array",
-                "minItems": len(req.categories),
-                "maxItems": len(req.categories),
-                "items": {"type": "string", "minLength": 4},
-            }
-        },
-        "required": ["analyses"],
-        "additionalProperties": False,
-    }
+    if req.ssr_enabled:
+        response_schema = {
+            "type": "object",
+            "properties": {
+                "analyses": {
+                    "type": "array",
+                    "minItems": len(req.categories),
+                    "maxItems": len(req.categories),
+                    "items": {"type": "string", "minLength": 4},
+                }
+            },
+            "required": ["analyses"],
+            "additionalProperties": False,
+        }
+    else:
+        response_schema = {
+            "type": "object",
+            "properties": {
+                "scores": {
+                    "type": "array",
+                    "minItems": len(req.categories),
+                    "maxItems": len(req.categories),
+                    "items": {"type": "number"},
+                }
+            },
+            "required": ["scores"],
+            "additionalProperties": False,
+        }
 
     parts: List[dict] = []
     if req.file_parts:
@@ -122,26 +138,52 @@ async def call_gemini(req: ScoreRequest) -> Tuple[ScoreResult, int]:
     except json.JSONDecodeError as exc:  # noqa: BLE001
         raise ValueError(f"Gemini returned non-JSON: {text}") from exc
 
-    if isinstance(scores, dict) and "analyses" in scores:
-        analyses = scores["analyses"]
-    else:
-        raise ValueError(f"Gemini returned unexpected payload: {scores}")
+    if req.ssr_enabled:
+        if isinstance(scores, dict) and "analyses" in scores:
+            analyses = scores["analyses"]
+        else:
+            raise ValueError(f"Gemini returned unexpected payload: {scores}")
 
-    if not isinstance(analyses, list) or len(analyses) != len(req.categories):
-        raise ValueError("Gemini analyses length mismatch")
+        if not isinstance(analyses, list) or len(analyses) != len(req.categories):
+            raise ValueError("Gemini analyses length mismatch")
 
-    cleaned_analyses: List[str] = []
-    for item in analyses:
-        if not isinstance(item, str):
-            raise ValueError("Gemini analysis entries must be strings")
-        cleaned_analyses.append(item.strip())
+        cleaned_analyses: List[str] = []
+        for item in analyses:
+            if not isinstance(item, str):
+                raise ValueError("Gemini analysis entries must be strings")
+            cleaned_analyses.append(item.strip())
 
-    expected_len = len(req.categories)
+        expected_len = len(req.categories)
+
+        result = ScoreResult(
+            scores=[None] * expected_len,
+            analyses=cleaned_analyses,
+            pre_scores=None,
+            provider=Provider.gemini,
+            model=model,
+            raw_text=text,
+            request_text=user_text,
+            missing_indices=None,
+            partial=False,
+        )
+        return result, status
+
+    numeric_values = scores
+    if isinstance(scores, dict):
+        numeric_values = scores.get("scores")
+    if not isinstance(numeric_values, list) or len(numeric_values) != len(req.categories):
+        raise ValueError("Gemini scores length mismatch")
+
+    cleaned_scores: List[float] = []
+    for idx, value in enumerate(numeric_values):
+        if not isinstance(value, numbers.Real):
+            raise ValueError(f"Gemini score at index {idx} is not numeric: {value}")
+        cleaned_scores.append(float(value))
 
     result = ScoreResult(
-        scores=[None] * expected_len,
-        analyses=cleaned_analyses,
-        pre_scores=None,
+        scores=cleaned_scores,
+        analyses=None,
+        pre_scores=list(cleaned_scores),
         provider=Provider.gemini,
         model=model,
         raw_text=text,
@@ -178,23 +220,42 @@ async def call_openai(req: ScoreRequest) -> Tuple[ScoreResult, int]:
         user_text_lines.append(f"   Detail: {c.detail}")
     user_text = "\n".join(user_text_lines)
 
-    schema = {
-        "name": "analyses_schema",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "analyses": {
-                    "type": "array",
-                    "minItems": len(req.categories),
-                    "maxItems": len(req.categories),
-                    "items": {"type": "string", "minLength": 4},
-                }
+    if req.ssr_enabled:
+        schema = {
+            "name": "analyses_schema",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "analyses": {
+                        "type": "array",
+                        "minItems": len(req.categories),
+                        "maxItems": len(req.categories),
+                        "items": {"type": "string", "minLength": 4},
+                    }
+                },
+                "required": ["analyses"],
+                "additionalProperties": False,
             },
-            "required": ["analyses"],
-            "additionalProperties": False,
-        },
-        "strict": True,
-    }
+            "strict": True,
+        }
+    else:
+        schema = {
+            "name": "scores_schema",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "scores": {
+                        "type": "array",
+                        "minItems": len(req.categories),
+                        "maxItems": len(req.categories),
+                        "items": {"type": "number"},
+                    }
+                },
+                "required": ["scores"],
+                "additionalProperties": False,
+            },
+            "strict": True,
+        }
 
     payload = {
         "model": OPENAI_MODEL,
@@ -222,24 +283,48 @@ async def call_openai(req: ScoreRequest) -> Tuple[ScoreResult, int]:
 
     try:
         obj = json.loads(text)
-        scores = obj["analyses"]
     except Exception as e:  # noqa: BLE001
         raise ValueError(f"OpenAI returned invalid JSON: {text}") from e
 
-    if not (isinstance(scores, list) and len(scores) == len(req.categories)):
-        raise ValueError("OpenAI analyses length mismatch")
+    if req.ssr_enabled:
+        scores = obj.get("analyses") if isinstance(obj, dict) else None
+        if not (isinstance(scores, list) and len(scores) == len(req.categories)):
+            raise ValueError("OpenAI analyses length mismatch")
 
-    analyses: List[str] = []
-    for item in scores:
-        if not isinstance(item, str):
-            raise ValueError("OpenAI analysis entries must be strings")
-        analyses.append(item.strip())
+        analyses: List[str] = []
+        for item in scores:
+            if not isinstance(item, str):
+                raise ValueError("OpenAI analysis entries must be strings")
+            analyses.append(item.strip())
+
+        return (
+            ScoreResult(
+                scores=[None] * len(analyses),
+                analyses=analyses,
+                pre_scores=None,
+                provider=Provider.openai,
+                model=OPENAI_MODEL,
+                raw_text=text,
+                request_text=user_text,
+            ),
+            status,
+        )
+
+    numeric_values = obj.get("scores") if isinstance(obj, dict) else None
+    if not (isinstance(numeric_values, list) and len(numeric_values) == len(req.categories)):
+        raise ValueError("OpenAI scores length mismatch")
+
+    cleaned_scores: List[float] = []
+    for idx, value in enumerate(numeric_values):
+        if not isinstance(value, numbers.Real):
+            raise ValueError(f"OpenAI score at index {idx} is not numeric: {value}")
+        cleaned_scores.append(float(value))
 
     return (
         ScoreResult(
-            scores=[None] * len(analyses),
-            analyses=analyses,
-            pre_scores=None,
+            scores=cleaned_scores,
+            analyses=None,
+            pre_scores=list(cleaned_scores),
             provider=Provider.openai,
             model=OPENAI_MODEL,
             raw_text=text,

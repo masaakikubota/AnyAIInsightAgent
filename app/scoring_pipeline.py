@@ -318,6 +318,7 @@ class ScoringPipeline:
                             timeout_sec=self.cfg.timeout_sec,
                             max_retries=self.cfg.max_retries,
                             prefer=self.cfg.primary_provider,
+                            ssr_enabled=self.cfg.enable_ssr,
                             file_parts=task.file_parts,
                             model_override=task.model_override,
                             cache=self.score_cache,
@@ -475,6 +476,7 @@ class ScoringPipeline:
                 system_prompt=self.cfg.active_system_prompt,
                 provider=result.provider,
                 model=result.model,
+                ssr_enabled=self.cfg.enable_ssr,
             )
 
         return ValidationOutcome(

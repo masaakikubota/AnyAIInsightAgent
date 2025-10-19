@@ -85,6 +85,7 @@ async def score_with_fallback(
     timeout_sec: int,
     max_retries: int,
     prefer: Provider,
+    ssr_enabled: bool = True,
     file_parts: Optional[List[dict]] = None,
     model_override: Optional[str] = None,
     cache: Optional[ScoreCache] = None,
@@ -118,6 +119,7 @@ async def score_with_fallback(
             timeout_sec=timeout_sec,
             file_parts=file_parts if p == Provider.gemini else None,
             model_override=model_override if p == Provider.gemini else None,
+            ssr_enabled=ssr_enabled,
         )
         if p == Provider.gemini:
             return await call_gemini(req)
@@ -133,6 +135,7 @@ async def score_with_fallback(
             system_prompt=system_prompt,
             provider=p,
             model=model_name,
+            ssr_enabled=ssr_enabled,
         )
         cached = await cache.get(key)
         return cached
@@ -147,6 +150,7 @@ async def score_with_fallback(
             system_prompt=system_prompt,
             provider=p,
             model=model_name,
+            ssr_enabled=ssr_enabled,
         )
         await cache.set(key, result)
 
@@ -166,7 +170,7 @@ async def score_with_fallback(
                     if cached:
                         return cached, errors, True
                 res, status = await try_call(provider)
-                if res.analyses:
+                if ssr_enabled and res.analyses:
                     converted_scores = await _convert_analyses_to_scores(
                         utterance=utterance,
                         categories=categories,
@@ -230,6 +234,7 @@ def cache_key(
     system_prompt: str,
     provider: Provider,
     model: str,
+    ssr_enabled: bool,
 ) -> str:
     payload = {
         "utterance": utterance,
@@ -240,6 +245,7 @@ def cache_key(
         "system_prompt": system_prompt,
         "provider": provider.value,
         "model": model,
+        "ssr_enabled": bool(ssr_enabled),
     }
     serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
