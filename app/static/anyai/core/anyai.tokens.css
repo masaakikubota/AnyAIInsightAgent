@@ -12,6 +12,9 @@
   --anyai-warning: hsl(38 90% 50%);
   --anyai-danger: hsl(0 75% 55%);
 
+  --anyai-primary-surface-04: color-mix(in srgb, var(--anyai-primary) 4%, transparent);
+  --anyai-primary-surface-08: color-mix(in srgb, var(--anyai-primary) 8%, transparent);
+
   /* サーフェス */
   --anyai-bg: hsl(0 0% 100%);
   --anyai-bg-subtle: hsl(220 20% 98%);
@@ -51,6 +54,18 @@
   --anyai-radius-3: 14px;
   --anyai-ring: 0 0 0 3px color-mix(in oklab, var(--anyai-primary), white 70%);
 
+  /* ナビゲーション */
+  --anyai-sidebar-width-expanded: 224px;
+  --anyai-sidebar-width-collapsed: 80px;
+  --anyai-sidebar-transition: var(--anyai-fast);
+
+  /* ツールチップ */
+  --anyai-tooltip-bg: color-mix(in srgb, var(--anyai-text) 85%, var(--anyai-bg) 15%);
+  --anyai-tooltip-color: var(--anyai-bg);
+  --anyai-tooltip-radius: 8px;
+  --anyai-tooltip-delay: 0.12s;
+  --anyai-tooltip-duration: 0.12s;
+
   /* フォントサイズ */
   --anyai-fs-1: 12px;
   --anyai-fs-2: 14px;
@@ -83,6 +98,11 @@
   --anyai-text: hsl(0 0% 96%);
   --anyai-text-subtle: hsl(0 0% 70%);
   --anyai-shadow: 0 1px 2px rgba(0,0,0,.35), 0 12px 32px rgba(0,0,0,.35);
+
+  --anyai-primary-surface-04: color-mix(in srgb, var(--anyai-primary) 18%, transparent);
+  --anyai-primary-surface-08: color-mix(in srgb, var(--anyai-primary) 28%, transparent);
+  --anyai-tooltip-bg: color-mix(in srgb, var(--anyai-bg), black 35%);
+  --anyai-tooltip-color: var(--anyai-text);
 }
 
 /* ベースリセット */
