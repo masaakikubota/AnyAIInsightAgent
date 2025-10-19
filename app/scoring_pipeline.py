@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .models import Category, RunConfig, ScoreResult
-from .services.google_sheets import GoogleSheetsError, batch_update_values, column_index_to_a1
+from .services.google_sheets import GoogleSheetsError, batch_update_values
 from .services.scoring import cache_key, clamp_and_round, score_with_fallback
 from .services.clients import GEMINI_MODEL_VIDEO
 from .services.video import download_video_to_path, upload_video_to_gemini
@@ -500,17 +500,27 @@ class ScoringPipeline:
             snapshot_score_buffer = buffer_scores
             snapshot_analysis_buffer = buffer_analyses
             snapshot_updates = list(pending_updates)
-            payload: List[dict] = []
+            payload_batches: List[List[dict]] = []
             if snapshot_analysis_buffer:
-                payload.extend(
-                    _convert_updates(self.cfg, self.sheet_name, snapshot_analysis_buffer)
+                payload_batches.extend(
+                    build_batched_value_ranges(
+                        category_start_col=self.cfg.category_start_col,
+                        sheet_name=self.sheet_name,
+                        update_buffer=snapshot_analysis_buffer,
+                        max_rows_per_batch=self.sheet_batch_row_size,
+                    )
                 )
             target_score_sheet = self.score_sheet_name or self.sheet_name
             if snapshot_score_buffer:
-                payload.extend(
-                    _convert_updates(self.cfg, target_score_sheet, snapshot_score_buffer)
+                payload_batches.extend(
+                    build_batched_value_ranges(
+                        category_start_col=self.cfg.category_start_col,
+                        sheet_name=target_score_sheet,
+                        update_buffer=snapshot_score_buffer,
+                        max_rows_per_batch=self.sheet_batch_row_size,
+                    )
                 )
-            if not payload:
+            if not payload_batches:
                 last_flush = time.monotonic()
                 self._stats.flush_count += 1
                 buffer_scores = {}
@@ -531,7 +541,9 @@ class ScoringPipeline:
                     for updates in payload_batches:
                         if not updates:
                             continue
-                        await asyncio.to_thread(batch_update_values, self.spreadsheet_id, updates)
+                        await asyncio.to_thread(
+                            batch_update_values, self.spreadsheet_id, updates
+                        )
                     last_flush = time.monotonic()
                     self._stats.flush_count += 1
                     buffer_scores = {}
@@ -629,37 +641,3 @@ class ScoringPipeline:
                         pass
         except Exception:
             pass
-
-
-def _convert_updates(
-    cfg: RunConfig, sheet_name: str, update_buffer: Dict[int, Dict[int, Any]]
-) -> List[dict]:
-    if not update_buffer:
-        return []
-    sorted_rows = sorted(update_buffer.items())
-    value_ranges: List[dict] = []
-    for row_number, columns in sorted_rows:
-        offsets = sorted(columns.keys())
-        if not offsets:
-            continue
-        grouped: List[List[int]] = []
-        current: List[int] = [offsets[0]]
-        for offset in offsets[1:]:
-            if offset == current[-1] + 1:
-                current.append(offset)
-            else:
-                grouped.append(current)
-                current = [offset]
-        grouped.append(current)
-        for group in grouped:
-            start_offset = group[0]
-            end_offset = group[-1]
-            start_idx = cfg.category_start_col - 1 + start_offset
-            end_idx = cfg.category_start_col - 1 + end_offset
-            start_col = column_index_to_a1(start_idx)
-            end_col = column_index_to_a1(end_idx)
-            sheet_label = sheet_name.replace("'", "''")
-            rng = f"'{sheet_label}'!{start_col}{row_number}:{end_col}{row_number}"
-            values = [[columns[offset] for offset in group]]
-            value_ranges.append({"range": rng, "values": values})
-    return value_ranges
