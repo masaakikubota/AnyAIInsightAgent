@@ -17,30 +17,8 @@
     <script defer src="/static/anyai/sidebar.js"></script>
     
     <style>
-      .form-grid { display: grid; grid-template-columns: 1fr; gap: var(--anyai-space-4); }
-      @media (min-width: 960px) { .form-grid { grid-template-columns: 1fr 1fr; } }
-      .card { padding: var(--anyai-space-4); }
-      .field { display: grid; gap: 6px; }
-      label { font-weight: 600; font-size: var(--anyai-fs-2); }
-      input[type="number"], input[type="text"], textarea, input[type="file"] {
-        width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--anyai-border);
-        background: var(--anyai-panel);
-      }
-      .stack-sm { display:flex; flex-direction:column; gap: 8px; }
-      .muted { color: var(--anyai-text-subtle); font-size: var(--anyai-fs-2); }
-      progress { width: 100%; height: 12px; }
-      /* Enlarge logo to nearly header height */
       .anyai-header .brand img { height: calc(64px - 8px); width: auto; }
-      /* Layout stability tweaks */
-      .anyai-content { min-width: 0; }
-      .anyai-content .container { min-width: 0; width: 100%; max-width: none; }
-      .scoring-shell { display: grid; grid-template-columns: minmax(320px, 1.1fr) minmax(320px, 0.9fr); gap: var(--anyai-space-5); align-items: flex-start; width: 100%; }
-      .scoring-panel { display:flex; flex-direction:column; gap: var(--anyai-space-4); }
-      .scoring-panel .card { padding: var(--anyai-space-4); }
-      .scoring-shell .anyai-content > .container { min-width: 0; width: 100%; }
-      @media (max-width: 1080px) { .scoring-shell { grid-template-columns: 1fr; } }
-      pre { max-width: 100%; white-space: pre-wrap; word-break: break-word; }
-      .nav { display:flex; gap: 12px; align-items:center; }
+      .nav { display: flex; gap: var(--anyai-space-3); align-items: center; flex-wrap: wrap; }
       .nav-link {
         font-weight: 600;
         text-decoration: none;
@@ -49,22 +27,91 @@
         border-radius: 999px;
         transition: background 0.2s ease;
       }
-      .nav-link:hover { background: rgba(0,0,0,0.06); }
-      .nav-link.active { background: rgba(0,0,0,0.12); }
-      /* ログUIは廃止 */
-      .actions-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-      .grid-2 { display:grid; gap:12px; grid-template-columns: 1fr; }
-      @media (min-width: 880px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
-      /* Toggle caret */
-      details > summary { list-style: none; }
-      details summary::-webkit-details-marker { display: none; }
-      .caret { font-size: 18px; opacity: .8; }
-      details .caret::before { content: '▸'; }
-      details[open] .caret::before { content: '▾'; }
-      .caret.right { margin-left: auto; }
-      .queue-running { font-weight: 700; }
-      .mode-options { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-      .mode-options .spacer { flex:1 1 auto; }
+      .nav-link:hover { background: rgba(0, 0, 0, 0.06); }
+      .nav-link.active { background: rgba(0, 0, 0, 0.12); }
+
+      .mode-options { display: flex; flex-wrap: wrap; gap: var(--anyai-space-3); align-items: center; }
+      .mode-options label { display: inline-flex; align-items: center; gap: var(--anyai-space-2); font-weight: 600; }
+      .mode-options .spacer { flex: 1 1 auto; }
+
+      .stack-sm { display: flex; flex-direction: column; gap: var(--anyai-space-3); }
+      .muted { color: var(--anyai-text-subtle); font-size: var(--anyai-fs-2); }
+
+      input[type="number"],
+      input[type="text"],
+      input[type="password"],
+      input[type="file"],
+      textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: var(--anyai-radius-2);
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 30%);
+        background: var(--anyai-panel);
+        font: inherit;
+      }
+
+      textarea { min-height: 160px; resize: vertical; }
+
+      progress {
+        width: 100%;
+        height: 12px;
+        border-radius: var(--anyai-radius-2);
+        overflow: hidden;
+      }
+
+      .validation-banner {
+        display: none;
+        padding: var(--anyai-space-3) var(--anyai-space-4);
+        border-radius: var(--anyai-radius-2);
+        font-size: var(--anyai-fs-2);
+        font-weight: 600;
+      }
+
+      .validation-banner[data-state] { display: block; }
+      .validation-banner[data-state="error"] {
+        background: color-mix(in srgb, var(--anyai-danger), transparent 80%);
+        color: var(--anyai-danger);
+      }
+      .validation-banner[data-state="success"] {
+        background: color-mix(in srgb, var(--anyai-success), transparent 82%);
+        color: var(--anyai-success);
+      }
+      .validation-banner[data-state="info"] {
+        background: color-mix(in srgb, var(--anyai-primary), transparent 88%);
+        color: var(--anyai-primary-700);
+      }
+
+      .actions-row { display: flex; gap: var(--anyai-space-3); flex-wrap: wrap; align-items: center; }
+      .band-title { margin: 0; font-size: var(--anyai-fs-3); font-weight: 600; }
+      .callout {
+        border-radius: var(--anyai-radius-2);
+        padding: var(--anyai-space-3) var(--anyai-space-4);
+        background: color-mix(in srgb, var(--anyai-primary), transparent 88%);
+        font-size: var(--anyai-fs-2);
+      }
+
+      .support-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--anyai-space-3);
+      }
+
+      .support-header h2 { margin: 0; font-size: var(--anyai-fs-4); }
+
+      details.section-toggle > summary {
+        display: flex;
+        align-items: center;
+        gap: var(--anyai-space-3);
+        cursor: pointer;
+        list-style: none;
+      }
+
+      details.section-toggle > summary::-webkit-details-marker { display: none; }
+      .caret { font-size: 18px; opacity: 0.8; margin-left: auto; transition: transform 0.2s ease; }
+      details[open] .caret { transform: rotate(90deg); }
+
+      pre { max-width: 100%; white-space: pre-wrap; word-break: break-word; }
     </style>
   </head>
   <body>
@@ -88,101 +135,115 @@
 
     <div class="anyai-layout">
       <aside class="anyai-sidebar" data-active-tool="scoring"></aside>
-      <div class="scoring-shell">
-        <section class="scoring-panel">
-        <div class="section">
-          <h3>モード設定</h3>
-          <form id="mode-form" class="card" style="padding:var(--anyai-space-4);">
-            <div class="field">
-              <label>実行モード</label>
-              <div class="mode-options">
-                <label><input type="radio" name="mode" value="csv" checked /> Textモード</label>
-                <label><input type="radio" name="mode" value="video" /> Videoモード</label>
-                <span class="spacer"></span>
-                <label class="ssr-toggle" style="display:flex; align-items:center; gap:8px;">
-                  <input type="checkbox" id="enable_ssr" name="enable_ssr" checked />
-                  <span>SSRモードを有効化（推奨）</span>
-                </label>
-              </div>
-            </div>
-          </form>
+      <main class="anyai-content">
+        <div class="anyai-app">
+          <section class="anyai-app-primary" aria-labelledby="scoring-heading">
+            <h1 id="scoring-heading" class="mt-0">スコアリング実行</h1>
+            <p class="field-hint">スプレッドシートから概念ごとのスコアを一括で生成します。</p>
 
-          <h3>入力設定</h3>
-          <form id="job-form" class="stack">
-            <div class="card">
-              <div class="field">
-                <label>スプレッドシートURL</label>
-                <input type="text" id="spreadsheet_url" name="spreadsheet_url" placeholder="https://docs.google.com/spreadsheets/d/..." required />
-              </div>
-              <div class="field">
-                <label>分析テキスト シートキーワード</label>
-                <input type="text" id="sheet_keyword" name="sheet_keyword" value="Link" placeholder="Link" />
-                <div class="muted" id="sheet-keyword-help">自然言語の分析結果を書き込むシート名に含まれるキーワード。該当シートが1つのみである必要があります。</div>
-              </div>
-              <div class="field">
-                <label>スコア出力 シートキーワード</label>
-                <input type="text" id="score_sheet_keyword" name="score_sheet_keyword" value="Embedding" placeholder="Embedding" />
-                <div class="muted" id="score-sheet-keyword-help">Linkシートで得た分析テキストを数値化した結果を保存するシート名に含まれるキーワード。</div>
-              </div>
-              <div class="actions-row">
-                <button type="button" class="btn btn-outline" id="btn-check-status">CheckTheStatus</button>
-              </div>
-              <div id="validation-banner" class="validation-banner" role="status" aria-live="polite"></div>
-            </div>
+            <div class="anyai-form" aria-labelledby="scoring-config-heading">
+              <section class="anyai-form-section" aria-labelledby="mode-heading">
+                <header>
+                  <h2 id="mode-heading" class="mt-0">モード設定</h2>
+                  <p class="field-hint">処理対象のメディアとSSRモードを切り替えます。</p>
+                </header>
+                <form id="mode-form">
+                  <fieldset class="field">
+                    <legend>実行モード</legend>
+                    <div class="mode-options">
+                      <label><input type="radio" name="mode" value="csv" checked /> Textモード</label>
+                      <label><input type="radio" name="mode" value="video" /> Videoモード</label>
+                      <span class="spacer"></span>
+                    </div>
+                  </fieldset>
+                  <div class="field field-inline">
+                    <input type="checkbox" id="enable_ssr" name="enable_ssr" checked />
+                    <label for="enable_ssr">SSRモードを有効化（推奨）</label>
+                  </div>
+                </form>
+              </section>
 
-            <div class="card">
-              <h3 class="mt-0">マッピング設定（1始まり）</h3>
-              <div class="grid-2">
-                <div class="field"><label id="utterance-label">発話列番号</label><input type="number" name="utterance_col" value="3" min="1" /></div>
-                <div class="field"><label>カテゴリ開始列番号</label><input type="number" name="category_start_col" value="4" min="1" /></div>
-                <div class="field"><label>カテゴリ名 行番号</label><input type="number" name="name_row" value="2" min="1" /></div>
-                <div class="field"><label>定義 行番号</label><input type="number" name="def_row" value="3" min="1" /></div>
-                <div class="field"><label>Detail 行番号</label><input type="number" name="detail_row" value="4" min="1" /></div>
-                <div class="field"><label>処理開始行番号</label><input type="number" name="start_row" value="5" min="1" /></div>
-              </div>
-            </div>
+              <section class="anyai-form-section" aria-labelledby="input-heading">
+                <header>
+                  <h2 id="input-heading" class="mt-0">入力設定</h2>
+                  <p class="field-hint">スコアリング対象となるスプレッドシートと列情報を設定します。</p>
+                </header>
+                <form id="job-form">
+                  <div class="anyai-form-fields">
+                    <div class="field">
+                      <label for="spreadsheet_url">スプレッドシートURL</label>
+                      <p class="field-hint">共有リンクをそのまま貼り付けます。</p>
+                      <input type="text" id="spreadsheet_url" name="spreadsheet_url" placeholder="https://docs.google.com/spreadsheets/d/..." required />
+                    </div>
+                    <div class="field">
+                      <label for="sheet_keyword">分析テキスト シートキーワード</label>
+                      <p class="field-hint">分析テキストを書き込むシート名のキーワード。</p>
+                      <input type="text" id="sheet_keyword" name="sheet_keyword" value="Link" placeholder="Link" />
+                      <details class="field-info">
+                        <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
+                        <div class="info-panel" id="sheet-keyword-help">自然言語の分析結果を書き込むシート名に含まれるキーワード。該当シートが1つのみである必要があります。</div>
+                      </details>
+                    </div>
+                    <div class="field">
+                      <label for="score_sheet_keyword">スコア出力 シートキーワード</label>
+                      <p class="field-hint">スコアを書き込むシート名に含まれるキーワード。</p>
+                      <input type="text" id="score_sheet_keyword" name="score_sheet_keyword" value="Embedding" placeholder="Embedding" />
+                      <details class="field-info">
+                        <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
+                        <div class="info-panel" id="score-sheet-keyword-help">Linkシートで得た分析テキストを数値化した結果を保存するシート名に含まれるキーワード。</div>
+                      </details>
+                    </div>
+                  </div>
+                  <div id="validation-banner" class="validation-banner" role="status" aria-live="polite"></div>
 
-            <div class="card">
-              <h3 class="mt-0">実行設定</h3>
-              <div class="grid-2">
-                <div class="field"><label>カテゴリ同梱数 N</label><input type="number" name="batch_size" value="10" min="1" max="50" /></div>
-                <div class="field"><label>最大カテゴリ列数</label><input type="number" name="max_category_cols" value="200" min="1" max="10000" /></div>
-                <div class="field"><label>同時実行数</label><input type="number" name="concurrency" value="50" min="1" max="200" id="concurrency-input" /></div>
-                <div class="field"><label>最大リトライ回数</label><input type="number" name="max_retries" value="10" min="0" max="50" /></div>
-                <div class="field"><label>タイムアウト秒</label><input type="number" name="timeout_sec" value="60" min="10" max="600" id="timeout-input" /></div>
-                <div class="field" style="grid-column: 1 / -1; display:flex; align-items:center; gap:8px;">
-                  <input type="checkbox" name="auto_slowdown" id="auto_slowdown" checked />
-                  <label for="auto_slowdown" style="margin:0;">429自動降速</label>
-                </div>
-              </div>
-            </div>
+                  <div class="anyai-form-group" aria-labelledby="mapping-heading">
+                    <h3 id="mapping-heading" class="band-title">マッピング設定（1始まり）</h3>
+                    <div class="anyai-form-fields is-two-column">
+                      <div class="field"><label id="utterance-label" for="utterance_col">発話列番号</label><input type="number" name="utterance_col" id="utterance_col" value="3" min="1" /></div>
+                      <div class="field"><label for="category_start_col">カテゴリ開始列番号</label><input type="number" name="category_start_col" id="category_start_col" value="4" min="1" /></div>
+                      <div class="field"><label for="name_row">カテゴリ名 行番号</label><input type="number" name="name_row" id="name_row" value="2" min="1" /></div>
+                      <div class="field"><label for="def_row">定義 行番号</label><input type="number" name="def_row" id="def_row" value="3" min="1" /></div>
+                      <div class="field"><label for="detail_row">Detail 行番号</label><input type="number" name="detail_row" id="detail_row" value="4" min="1" /></div>
+                      <div class="field"><label for="start_row">処理開始行番号</label><input type="number" name="start_row" id="start_row" value="5" min="1" /></div>
+                    </div>
+                  </div>
 
-            <div class="card">
-              <h3 class="mt-0">SSR設定</h3>
-              <div class="field" style="flex-direction:row; align-items:center; gap:8px;">
-                <input type="checkbox" id="enable_ssr" name="enable_ssr" checked />
-                <label for="enable_ssr" style="margin:0;">SSRモードを有効化（推奨）</label>
-              </div>
-              <div id="ssr-settings-body" class="stack" style="margin-top:12px; gap:12px;">
-                <div class="callout" data-ssr-mode="on">
-                  <strong>SSRオン:</strong> カテゴリごとに短い英語の根拠文を生成し、内部でベクトル化してスコアします。
-                </div>
-                <div class="callout" data-ssr-mode="off" style="display:none;">
-                  <strong>SSRオフ:</strong> LLMに直接 0.0〜1.0 の数値配列を出力させます（根拠文は省略されます）。
-                </div>
-              </div>
-            </div>
+                  <div class="anyai-form-group" aria-labelledby="execution-heading">
+                    <h3 id="execution-heading" class="band-title">実行設定</h3>
+                    <div class="anyai-form-fields is-two-column">
+                      <div class="field"><label for="batch_size">カテゴリ同梱数 N</label><input type="number" name="batch_size" id="batch_size" value="10" min="1" max="50" /></div>
+                      <div class="field"><label for="max_category_cols">最大カテゴリ列数</label><input type="number" name="max_category_cols" id="max_category_cols" value="200" min="1" max="10000" /></div>
+                      <div class="field"><label for="concurrency-input">同時実行数</label><input type="number" name="concurrency" value="50" min="1" max="200" id="concurrency-input" /></div>
+                      <div class="field"><label for="max_retries">最大リトライ回数</label><input type="number" name="max_retries" id="max_retries" value="10" min="0" max="50" /></div>
+                      <div class="field"><label for="timeout-input">タイムアウト秒</label><input type="number" name="timeout_sec" value="60" min="10" max="600" id="timeout-input" /></div>
+                      <div class="field field-inline"><input type="checkbox" name="auto_slowdown" id="auto_slowdown" checked /><label for="auto_slowdown">429自動降速</label></div>
+                    </div>
+                  </div>
 
-            <div class="card">
-              <details id="sys-section">
-                <summary class="row" style="cursor:pointer;">
-                  <h3 class="mt-0" style="margin:0;">System Prompts</h3>
-                  <span class="caret right" aria-hidden="true"></span>
-                </summary>
-                <div class="stack" style="gap:12px;">
-                  <div>
-                    <label for="system_prompt_ssr" class="muted">SSRオン時（定性根拠を英語で生成）</label>
-                    <textarea name="system_prompt_ssr" id="system_prompt_ssr" rows="12"><prompt>
+                  <div class="anyai-form-group" aria-labelledby="ssr-heading">
+                    <h3 id="ssr-heading" class="band-title">SSR設定</h3>
+                    <div id="ssr-settings-body" class="stack">
+                      <div class="callout" data-ssr-mode="on">
+                        <strong>SSRオン:</strong> カテゴリごとに短い英語の根拠文を生成し、内部でベクトル化してスコアします。
+                      </div>
+                      <div class="callout" data-ssr-mode="off" style="display:none;">
+                        <strong>SSRオフ:</strong> LLMに直接 0.0〜1.0 の数値配列を出力させます（根拠文は省略されます）。
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              </section>
+
+              <section class="anyai-form-section" aria-labelledby="prompt-heading">
+                <details id="sys-section" class="section-toggle">
+                  <summary>
+                    <h2 id="prompt-heading" class="mt-0">System Prompts</h2>
+                    <span class="caret" aria-hidden="true">▸</span>
+                  </summary>
+                  <div class="stack">
+                    <div>
+                      <label for="system_prompt_ssr" class="muted">SSRオン時（定性根拠を英語で生成）</label>
+                      <textarea name="system_prompt_ssr" id="system_prompt_ssr" rows="12"><prompt>
     <role id="Semantic Inference Engine & Latent Intent Decoder">
         <spec>Noisy text (SNS, UGC, transcripts) analysis. Infer user's true goals, emotions, and unstated assumptions from fragmented data.</spec>
         <ban>Surface-level keyword matching is strictly forbidden.</ban>
@@ -217,13 +278,13 @@
     </output>
 
     <example>
-        <out>{"analyses": ["Strong: Mentions planning a cafe visit matching the concept...", "Weak: Only tangential reference..."]}</out>
+        <out>{"analyses": ["Strong: Mentions planning a cafe visit matching the concept...", "Weak: Only tangential references..."]}</out>
     </example>
 </prompt></textarea>
-                  </div>
-                  <div>
-                    <label for="system_prompt_numeric" class="muted">SSRオフ時（直接スコアを算出）</label>
-                    <textarea name="system_prompt_numeric" id="system_prompt_numeric" rows="12"><prompt>
+                    </div>
+                    <div>
+                      <label for="system_prompt_numeric" class="muted">SSRオフ時（直接スコアを算出）</label>
+                      <textarea name="system_prompt_numeric" id="system_prompt_numeric" rows="12"><prompt>
     <role id="Semantic Inference Engine & Latent Intent Decoder">
         <spec>Noisy text (SNS, UGC, transcripts) analysis. Infer user's true goals, emotions, and unstated assumptions from fragmented data.</spec>
         <ban>Surface-level keyword matching is strictly forbidden.</ban>
@@ -274,69 +335,66 @@
         <out>[0.85, 0.1, 0.65]</out>
     </example>
 </prompt></textarea>
+                    </div>
                   </div>
-                </div>
-              </details>
-            </div>
-            <div class="actions-row" style="justify-content:flex-end;">
-              <button class="btn btn-outline" id="btn-queue-add" type="button">キューに追加</button>
-              <button class="btn btn-primary" id="btn-queue-add-start" type="button">今すぐ追加して即開始</button>
-            </div>
-          </form>
+                </details>
+              </section>
 
-          <div class="card" style="margin-top:12px;">
-            <details id="keys-section">
-              <summary class="row" style="cursor:pointer;">
-                <h3 class="mt-0" style="margin:0;">APIキー設定</h3>
-                <span class="caret right" aria-hidden="true"></span>
-              </summary>
-              <form id="keys-form" class="stack">
-                <div class="field"><label>Gemini API Key</label><input type="password" name="gemini_api_key" placeholder="GEMINI_API_KEY" /></div>
-                <div class="field"><label>OpenAI API Key</label><input type="password" name="openai_api_key" placeholder="OPENAI_API_KEY" /></div>
-                <div style="display:flex;align-items:center;gap:8px;">
-                  <input type="checkbox" id="persist" name="persist" />
-                  <label for="persist" style="margin:0;">.envに保存（ローカル）</label>
-                  <button class="btn btn-outline right" type="submit">保存</button>
-                </div>
-              </form>
-            </details>
-          </div>
-        </div>
-        </section>
-
-      <main class="anyai-content">
-        <div class="container">
-          <h1 class="mt-0">スコアリング実行</h1>
-          <div class="card" style="margin-bottom:12px;">
-            <div class="row" style="align-items:center;">
-              <h3 class="mt-0" style="margin:0;">キュー</h3>
-              <button id="btn-queue-start" class="btn btn-primary right" type="button">キュー開始</button>
-            </div>
-            <div id="queue-status" class="muted"></div>
-            <div id="queue-list" class="stack-sm"></div>
-          </div>
-
-          <section id="result" class="card" style="display:none;">
-            <div class="stack-sm">
-              <div>ジョブID: <code id="job-id"></code></div>
-              <progress id="prog" value="0" max="100"></progress>
-              <div class="row"><span id="stat" class="text-subtle"></span><span class="right" id="eta" class="text-subtle"></span></div>
-              <div id="links" class="actions-row" style="display:none;">
-                <a id="dl-meta" class="btn btn-outline" href="#">run_meta.json</a>
-              </div>
-              <div class="actions-row" style="justify-content:flex-end;">
-                <button id="btn-cancel-job" class="btn btn-danger" type="button" style="display:none;">強制終了</button>
-              </div>
+              <section class="anyai-form-section" aria-labelledby="keys-heading">
+                <details id="keys-section" class="section-toggle">
+                  <summary>
+                    <h2 id="keys-heading" class="mt-0">APIキー設定</h2>
+                    <span class="caret" aria-hidden="true">▸</span>
+                  </summary>
+                  <form id="keys-form" class="stack">
+                    <div class="field"><label for="gemini_api_key">Gemini API Key</label><input type="password" name="gemini_api_key" id="gemini_api_key" placeholder="GEMINI_API_KEY" /></div>
+                    <div class="field"><label for="openai_api_key">OpenAI API Key</label><input type="password" name="openai_api_key" id="openai_api_key" placeholder="OPENAI_API_KEY" /></div>
+                    <div class="field field-inline">
+                      <input type="checkbox" id="persist" name="persist" />
+                      <label for="persist">.envに保存（ローカル）</label>
+                      <button class="btn btn-outline right" type="submit">保存</button>
+                    </div>
+                  </form>
+                </details>
+              </section>
             </div>
           </section>
 
-          <!-- ログUI廃止 -->
+          <aside class="anyai-app-support">
+            <div class="anyai-support-card support-metrics">
+              <div class="support-header">
+                <h2 class="mt-0">ジョブキュー</h2>
+                <button id="btn-queue-start" class="btn btn-primary" type="button">キュー開始</button>
+              </div>
+              <div id="queue-status" class="muted"></div>
+              <div class="actions-row">
+                <button class="btn btn-outline" id="btn-queue-add" type="button">キューに追加</button>
+              </div>
+              <div id="queue-list" class="stack-sm"></div>
+            </div>
+
+            <section id="result" class="anyai-support-card" style="display:none;">
+              <div class="stack-sm">
+                <div>ジョブID: <code id="job-id"></code></div>
+                <progress id="prog" value="0" max="100"></progress>
+                <div class="row"><span id="stat" class="text-subtle"></span><span class="right" id="eta"></span></div>
+                <div id="links" class="actions-row" style="display:none;">
+                  <a id="dl-meta" class="btn btn-outline" href="#">run_meta.json</a>
+                </div>
+                <div class="actions-row" style="justify-content:flex-end;">
+                  <button id="btn-cancel-job" class="btn btn-danger" type="button" style="display:none;">強制終了</button>
+                </div>
+              </div>
+            </section>
+          </aside>
         </div>
       </main>
-      </div>
     </div>
 
-    
+    <div class="anyai-action-bar" role="region" aria-label="スコアリング操作">
+      <button type="button" class="btn btn-outline" id="btn-check-status">再取得</button>
+      <button type="button" class="btn btn-primary" id="btn-queue-add-start">実行</button>
+    </div>
 
     <script>
       const modeForm = document.getElementById('mode-form');
@@ -523,7 +581,7 @@
       document.getElementById('btn-queue-add').addEventListener('click', async (e) => {
         e.preventDefault();
         if(!isValidationCurrent()){
-          showValidationBanner('error', 'スプレッドシート設定の検証を完了してください (CheckTheStatus)。');
+          showValidationBanner('error', 'スプレッドシート設定の検証を完了してください（右下の「再取得」）。');
           return;
         }
         const fd = new FormData(form);
@@ -541,7 +599,7 @@
       document.getElementById('btn-queue-add-start').addEventListener('click', async (e) => {
         e.preventDefault();
         if(!isValidationCurrent()){
-          showValidationBanner('error', 'スプレッドシート設定の検証を完了してください (CheckTheStatus)。');
+          showValidationBanner('error', 'スプレッドシート設定の検証を完了してください（右下の「再取得」）。');
           return;
         }
         const fd = new FormData(form);
@@ -643,7 +701,7 @@
                 alert('フォームに読み込みました。下の「編集を保存」で反映できます。');
                 validationState.ok = false;
                 validationState.payload = null;
-                showValidationBanner('info', '読み込んだ設定です。CheckTheStatus を押して検証してください。');
+                showValidationBanner('info', '読み込んだ設定です。右下の「再取得」で検証してください。');
                 updateQueueActionState();
               }catch{}
             };

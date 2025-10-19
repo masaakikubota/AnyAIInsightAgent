@@ -16,28 +16,29 @@
     <script defer src="/static/anyai/vendor/lucide.js"></script>
     <script defer src="/static/anyai/sidebar.js"></script>
     <style>
-      body { font-family: 'Noto Sans JP', sans-serif; }
-      .layout { display:flex; flex-direction:column; min-height:100vh; }
-      .anyai-content { flex:1; display:flex; justify-content:center; padding: var(--anyai-space-5); }
-      .container { width: min(720px, 100%); display:flex; flex-direction:column; gap: var(--anyai-space-4); }
-      .card { padding: var(--anyai-space-4); border-radius: 18px; background: var(--anyai-panel); box-shadow: var(--anyai-shadow-sm); }
-      .stack { display:flex; flex-direction:column; gap: var(--anyai-space-4); }
-      .stack-sm { display:flex; flex-direction:column; gap: 8px; }
-      .field { display:flex; flex-direction:column; gap: 6px; }
-      label { font-weight: 600; font-size: var(--anyai-fs-2); }
-      input[type="text"] { width:100%; padding: 10px; border-radius: 10px; border: 1px solid var(--anyai-border); background: var(--anyai-panel); }
-      progress { width:100%; height:12px; }
+      .anyai-header .brand img { height: calc(64px - 8px); width: auto; }
+      .nav { display: flex; gap: var(--anyai-space-3); align-items: center; flex-wrap: wrap; }
+      .nav-link { font-weight: 600; text-decoration: none; color: var(--anyai-text); padding: 6px 12px; border-radius: 999px; transition: background 0.2s ease; }
+      .nav-link:hover { background: rgba(0, 0, 0, 0.06); }
+      .nav-link.active { background: rgba(0, 0, 0, 0.12); }
+
+      input[type="text"] {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: var(--anyai-radius-2);
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 30%);
+        background: var(--anyai-panel);
+        font: inherit;
+      }
+
+      .stack-sm { display: flex; flex-direction: column; gap: var(--anyai-space-3); }
       .muted { color: var(--anyai-text-subtle); font-size: var(--anyai-fs-2); }
-      .nav { display:flex; gap: 12px; align-items:center; }
-      .nav-link { font-weight:600; text-decoration:none; color: var(--anyai-text); padding: 6px 12px; border-radius: 999px; transition: background 0.2s ease; }
-      .nav-link:hover { background: rgba(0,0,0,0.06); }
-      .nav-link.active { background: rgba(0,0,0,0.12); }
-      ul.error-list { margin:0; padding-left: 18px; }
+      progress { width: 100%; height: 12px; border-radius: var(--anyai-radius-2); overflow: hidden; }
+      ul.error-list { margin: 0; padding-left: 18px; }
       ul.error-list li { word-break: break-word; }
-      @media (max-width: 720px) { .anyai-content { padding: var(--anyai-space-3); } }
     </style>
   </head>
-  <body class="layout">
+  <body>
     <header class="anyai-header">
       <a class="brand" href="/" aria-label="AnyAI Cleansing">
         <img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ">
@@ -59,46 +60,71 @@
     <div class="anyai-layout">
       <aside class="anyai-sidebar" data-active-tool="cleansing"></aside>
       <main class="anyai-content">
-        <div class="container">
-        <h1 class="mt-0" style="margin:0;">スプレッドシートのRelated列を自動クレンジング</h1>
-        <div class="card">
-          <form id="cleansing-form" class="stack">
-            <div class="field">
-              <label for="sheet">SheetID / SheetURL</label>
-              <input type="text" id="sheet" name="sheet" placeholder="https://docs.google.com/spreadsheets/d/..." required />
-            </div>
-            <div class="field">
-              <label for="country">Country</label>
-              <input type="text" id="country" name="country" placeholder="例: 日本" required />
-            </div>
-            <div class="field">
-              <label for="product_category">Product Category</label>
-              <input type="text" id="product_category" name="product_category" placeholder="例: ガム" required />
-            </div>
-            <div class="field">
-              <label for="sheet_name">Sheet Name</label>
-              <input type="text" id="sheet_name" name="sheet_name" value="RawData_Master" required />
-              <div class="muted">ヘッダーに <code>content</code> と <code>Related</code> が含まれているシートを指定してください。</div>
-            </div>
-            <button class="btn btn-primary" type="submit">クレンジング開始</button>
-          </form>
-        </div>
+        <div class="anyai-app">
+          <section class="anyai-app-primary" aria-labelledby="cleansing-heading">
+            <h1 id="cleansing-heading" class="mt-0">Related列を自動クレンジング</h1>
+            <p class="field-hint">content と Related 列を含むシートを指定すると、重複や欠損を整理した関連語リストを生成します。</p>
 
-        <section id="job-section" class="card" style="display:none;">
-          <div class="stack-sm">
-            <div>ジョブID: <code id="job-id"></code></div>
-            <div class="muted" id="job-status"></div>
-            <progress id="job-progress" value="0" max="100"></progress>
-            <div class="muted" id="job-counts"></div>
-            <div id="job-message"></div>
-            <div id="job-errors" style="display:none;">
-              <h3 class="mt-0" style="margin:0 0 6px 0; font-size: var(--anyai-fs-2);">エラー詳細</h3>
-              <ul class="error-list" id="job-error-list"></ul>
+            <div class="anyai-form" aria-labelledby="cleansing-config-heading">
+              <section class="anyai-form-section" aria-labelledby="input-heading">
+                <header>
+                  <h2 id="input-heading" class="mt-0">入力設定</h2>
+                  <p class="field-hint">処理対象のシート情報とクリーニング条件を入力します。</p>
+                </header>
+                <form id="cleansing-form">
+                  <div class="anyai-form-fields">
+                    <div class="field">
+                      <label for="sheet">SheetID / SheetURL</label>
+                      <p class="field-hint">対象GoogleスプレッドシートのURLまたはID。</p>
+                      <input type="text" id="sheet" name="sheet" placeholder="https://docs.google.com/spreadsheets/d/..." required />
+                    </div>
+                    <div class="field">
+                      <label for="country">Country</label>
+                      <p class="field-hint">クリーニングに利用する地域コード。</p>
+                      <input type="text" id="country" name="country" placeholder="例: 日本" required />
+                    </div>
+                    <div class="field">
+                      <label for="product_category">Product Category</label>
+                      <p class="field-hint">商材カテゴリを一語で記入します。</p>
+                      <input type="text" id="product_category" name="product_category" placeholder="例: ガム" required />
+                    </div>
+                    <div class="field">
+                      <label for="sheet_name">Sheet Name</label>
+                      <p class="field-hint">content と Related 列を含むシート名。</p>
+                      <input type="text" id="sheet_name" name="sheet_name" value="RawData_Master" required />
+                      <details class="field-info">
+                        <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
+                        <div class="info-panel">ヘッダーに <code>content</code> と <code>Related</code> が含まれているシートを指定してください。</div>
+                      </details>
+                    </div>
+                  </div>
+                </form>
+              </section>
             </div>
-          </div>
-        </section>
+          </section>
+
+          <aside class="anyai-app-support">
+            <section id="job-section" class="anyai-support-card" style="display:none;">
+              <div class="stack-sm">
+                <div>ジョブID: <code id="job-id"></code></div>
+                <div class="muted" id="job-status"></div>
+                <progress id="job-progress" value="0" max="100"></progress>
+                <div class="muted" id="job-counts"></div>
+                <div id="job-message"></div>
+                <div id="job-errors" style="display:none;">
+                  <h2 class="mt-0" style="margin:0; font-size: var(--anyai-fs-3);">エラー詳細</h2>
+                  <ul class="error-list" id="job-error-list"></ul>
+                </div>
+              </div>
+            </section>
+          </aside>
         </div>
       </main>
+    </div>
+
+    <div class="anyai-action-bar" role="region" aria-label="クレンジング操作">
+      <button type="button" class="btn btn-outline" id="btn-refresh-status">再取得</button>
+      <button type="submit" class="btn btn-primary" form="cleansing-form">実行</button>
     </div>
 
     <script>
@@ -178,6 +204,14 @@
           stopPolling();
         }
       }
+
+      document.getElementById('btn-refresh-status').addEventListener('click', () => {
+        if (currentJobId) {
+          pollStatus(currentJobId);
+        } else {
+          alert('現在アクティブなジョブはありません');
+        }
+      });
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
