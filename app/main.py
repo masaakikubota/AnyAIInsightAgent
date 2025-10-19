@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import os
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -10,8 +12,38 @@ from fastapi.staticfiles import StaticFiles
 from .dependencies import get_base_dir
 from .routers import cleansing, interview, jobs, persona, settings, video_suite
 
+logger = logging.getLogger(__name__)
+
 APP_TITLE = "AnyAIMarketingSolutionAgent - Scoring"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+def ensure_api_keys_interactive() -> None:
+    """Prompt for missing API keys when running interactively.
+
+    If either GEMINI_API_KEY or OPENAI_API_KEY is not set and stdin is a TTY,
+    prompt the user to provide the value and populate ``os.environ``.
+    When stdin is not interactive, a warning is logged and the environment
+    variables are left unchanged.
+    """
+
+    required_keys = ("GEMINI_API_KEY", "OPENAI_API_KEY")
+    missing_keys = [key for key in required_keys if not os.environ.get(key)]
+
+    if not missing_keys:
+        return
+
+    if not sys.stdin or not sys.stdin.isatty():
+        logger.warning(
+            "Missing API keys (%s) and cannot prompt because stdin is non-interactive.",
+            ", ".join(missing_keys),
+        )
+        return
+
+    for key in missing_keys:
+        value = input(f"Enter value for {key}: ").strip()
+        if value:
+            os.environ[key] = value
 
 
 def _load_static_page(filename: str) -> str:
@@ -64,6 +96,8 @@ def create_app() -> FastAPI:
 
 def run() -> None:
     """Run the application using uvicorn."""
+    ensure_api_keys_interactive()
+
     import uvicorn
 
     host = os.getenv("HOST", "0.0.0.0")
@@ -73,4 +107,9 @@ def run() -> None:
 
 app = create_app()
 
+
+if __name__ == "__main__":
+    ensure_api_keys_interactive()
+
 __all__ = ["app", "create_app", "run"]
+
