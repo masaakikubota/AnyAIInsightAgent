@@ -476,6 +476,7 @@ class ScoringPipeline:
                 system_prompt=self.cfg.active_system_prompt,
                 provider=result.provider,
                 model=result.model,
+                ssr_enabled=self.cfg.enable_ssr,
             )
 
         return ValidationOutcome(

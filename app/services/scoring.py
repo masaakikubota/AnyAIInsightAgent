@@ -135,6 +135,7 @@ async def score_with_fallback(
             system_prompt=system_prompt,
             provider=p,
             model=model_name,
+            ssr_enabled=ssr_enabled,
         )
         cached = await cache.get(key)
         return cached
@@ -149,6 +150,7 @@ async def score_with_fallback(
             system_prompt=system_prompt,
             provider=p,
             model=model_name,
+            ssr_enabled=ssr_enabled,
         )
         await cache.set(key, result)
 
@@ -232,6 +234,7 @@ def cache_key(
     system_prompt: str,
     provider: Provider,
     model: str,
+    ssr_enabled: bool,
 ) -> str:
     payload = {
         "utterance": utterance,
@@ -242,6 +245,7 @@ def cache_key(
         "system_prompt": system_prompt,
         "provider": provider.value,
         "model": model,
+        "ssr_enabled": bool(ssr_enabled),
     }
     serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
