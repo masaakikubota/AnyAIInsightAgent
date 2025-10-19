@@ -54,16 +54,17 @@ body {
   padding: 0 var(--anyai-space-2, 8px);
 }
 
+
 .sidebar-brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--anyai-space-2, 8px);
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--anyai-radius-2, 10px);
   text-decoration: none;
   color: inherit;
-  font-weight: 700;
-  font-size: var(--anyai-fs-3, 16px);
-  line-height: 1;
-  transition: color var(--anyai-fast, 0.15s) var(--anyai-ease, ease);
+  transition: background var(--anyai-fast, 0.15s) var(--anyai-ease, ease);
 }
 
 .sidebar-brand img {
@@ -72,8 +73,14 @@ body {
   display: block;
 }
 
-.sidebar-brand .brand-text {
-  white-space: nowrap;
+.sidebar-brand:hover,
+.sidebar-brand:focus-visible {
+  background: var(--anyai-primary-surface-08, rgba(74, 99, 255, 0.08));
+}
+
+.sidebar-brand:focus-visible {
+  outline: none;
+  box-shadow: var(--anyai-ring);
 }
 
 .sidebar-toggle {
@@ -227,12 +234,6 @@ body.sidebar-collapsed .sidebar-top {
   justify-content: center;
 }
 
-body.sidebar-collapsed .sidebar-brand .brand-text {
-  opacity: 0;
-  transform: translateX(-8px);
-  pointer-events: none;
-}
-
 body.sidebar-collapsed .sidebar-toggle {
   position: absolute;
   top: var(--anyai-space-5, 20px);
@@ -331,8 +332,11 @@ body.sidebar-collapsed .footer-item:focus-visible::after {
 .anyai-app-support {
   grid-column: span var(--anyai-app-support-span, 4);
   position: sticky;
-  top: calc(64px + var(--anyai-space-7, 32px));
-  max-height: calc(100dvh - 64px - var(--anyai-app-padding-block, var(--anyai-space-8, 32px)) - var(--anyai-space-7, 32px));
+  top: var(--anyai-app-padding-block, var(--anyai-space-8, 40px));
+  max-height: calc(
+    100dvh - var(--anyai-app-padding-block, var(--anyai-space-8, 40px)) -
+    var(--anyai-app-padding-block-end, var(--anyai-space-9, 48px))
+  );
   overflow: auto;
   padding-right: 2px;
 }

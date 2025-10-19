@@ -17,19 +17,6 @@
     <script defer src="/static/anyai/sidebar.js"></script>
     
     <style>
-      .anyai-header .brand img { height: calc(64px - 8px); width: auto; }
-      .nav { display: flex; gap: var(--anyai-space-3); align-items: center; flex-wrap: wrap; }
-      .nav-link {
-        font-weight: 600;
-        text-decoration: none;
-        color: var(--anyai-text);
-        padding: 6px 12px;
-        border-radius: 999px;
-        transition: background 0.2s ease;
-      }
-      .nav-link:hover { background: rgba(0, 0, 0, 0.06); }
-      .nav-link.active { background: rgba(0, 0, 0, 0.12); }
-
       .mode-options { display: flex; flex-wrap: wrap; gap: var(--anyai-space-3); align-items: center; }
       .mode-options label { display: inline-flex; align-items: center; gap: var(--anyai-space-2); font-weight: 600; }
       .mode-options .spacer { flex: 1 1 auto; }
@@ -115,24 +102,6 @@
     </style>
   </head>
   <body>
-    <header class="anyai-header">
-      <a class="brand" href="#" aria-label="AnyAI ホーム">
-        <img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ">
-        <span>AnyAI Scoring</span>
-      </a>
-      <nav class="nav">
-        <a class="nav-link active" href="/">AnyAI Scoring</a>
-        <a class="nav-link" href="/cleansing">AnyAI Cleansing</a>
-        <a class="nav-link" href="/interview">AnyAI Interview</a>
-        <a class="nav-link" href="/persona">Persona Seeds</a>
-        <a class="nav-link" href="/dashboard">Persona Dashboard</a>
-        <a class="nav-link" href="/video-analysis">Video Analysis</a>
-        <a class="nav-link" href="/comment-enhancer">Comment Enhancer</a>
-        <a class="nav-link" href="/video-comment-review">Video Comment Review</a>
-        <a class="nav-link" href="/kol-reviewer">KOL Reviewer</a>
-      </nav>
-    </header>
-
     <div class="anyai-layout">
       <aside class="anyai-sidebar" data-active-tool="scoring"></aside>
       <main class="anyai-content">
