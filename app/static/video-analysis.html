@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="/static/anyai/core/anyai.components.css">
 <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css">
 <link rel="stylesheet" href="/static/anyai/tool-layout.css">
+<script src="/static/anyai/loading-overlay.js"></script>
 <script defer src="/static/anyai/vendor/lucide.js"></script>
 <script defer src="/static/anyai/sidebar.js"></script>
 <script defer src="/static/anyai/core/anyai.js"></script>
@@ -180,6 +181,12 @@
 </div>
 
 <script>
+  const loadingOverlay = window.AnyAILoading || {
+    run: async (task) => task(),
+    show: () => {},
+    hide: () => {},
+  };
+
   const form = document.getElementById('runner-form');
   const logContainer = document.getElementById('log-container');
   const runButton = document.getElementById('run-button');
@@ -321,11 +328,13 @@
     stopButton.disabled = false;
 
     try {
-      const response = await fetch('/run-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const response = await loadingOverlay.run(() =>
+        fetch('/run-analysis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      );
       const result = await response.json();
       if (!response.ok) {
         appendLog(`Error: ${result.error || 'Unknown error'}`, true);

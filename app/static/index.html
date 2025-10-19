@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="/static/anyai/core/anyai.components.css" />
     <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css" />
     <link rel="stylesheet" href="/static/anyai/tool-layout.css" />
+    <script src="/static/anyai/loading-overlay.js"></script>
     <script defer src="/static/anyai/vendor/lucide.js"></script>
     <script defer src="/static/anyai/sidebar.js"></script>
     
@@ -366,6 +367,13 @@
     </div>
 
     <script>
+      const loadingOverlay = window.AnyAILoading || {
+        run: async (task) => task(),
+        show: () => {},
+        hide: () => {},
+        wrap: (promise) => promise,
+      };
+
       const modeForm = document.getElementById('mode-form');
       const jobForm = document.getElementById('job-form');
       const batchSizeInput = jobForm.querySelector('input[name="batch_size"]');
@@ -374,6 +382,10 @@
       const sheetKeywordHelp = document.getElementById('sheet-keyword-help');
       const scoreSheetKeywordHelp = document.getElementById('score-sheet-keyword-help');
       const utteranceLabel = document.getElementById('utterance-label');
+      const MODE_DEFAULTS = {
+        csv: { batchSize: '10', concurrency: '50', timeout: '60' },
+        video: { batchSize: '10', concurrency: '15', timeout: '300' }
+      };
       const spreadsheetUrlInput = document.getElementById('spreadsheet_url');
       const sheetKeywordInput = document.getElementById('sheet_keyword');
       const scoreSheetKeywordInput = document.getElementById('score_sheet_keyword');
@@ -571,20 +583,22 @@
           showValidationBanner('error', 'スプレッドシート設定の検証を完了してください（右下の「再取得」）。');
           return;
         }
-        const fd = new FormData(form);
-        fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
-        const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
-        fd.set('mode', selectedMode);
-        appendPromptFields(fd);
-        fd.set('action', 'start');
-        const res = await fetch('/jobs', { method: 'POST', body: fd });
+        await loadingOverlay.run(async () => {
+          const fd = new FormData(form);
+          fd.set('auto_slowdown', document.getElementById('auto_slowdown').checked ? 'true' : 'false');
+          const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
+          fd.set('mode', selectedMode);
+          appendPromptFields(fd);
+          fd.set('action', 'start');
+          const res = await fetch('/jobs', { method: 'POST', body: fd });
           if (!res.ok) { alert('開始に失敗'); return; }
-        const data = await res.json();
-        currentJobId = data.job_id;
-        resultSection.style.display = 'block';
-        document.getElementById('job-id').textContent = currentJobId;
+          const data = await res.json();
+          currentJobId = data.job_id;
+          resultSection.style.display = 'block';
+          document.getElementById('job-id').textContent = currentJobId;
           startPolling(currentJobId);
-        await refreshQueue();
+          await refreshQueue();
+        });
       });
 
       document.getElementById('btn-queue-start').addEventListener('click', async ()=>{

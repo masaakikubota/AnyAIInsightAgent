@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/static/anyai/core/anyai.components.css">
   <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css">
   <link rel="stylesheet" href="/static/anyai/tool-layout.css">
+  <script src="/static/anyai/loading-overlay.js"></script>
   <script defer src="/static/anyai/vendor/lucide.js"></script>
   <script defer src="/static/anyai/sidebar.js"></script>
   <script defer src="/static/anyai/core/anyai.js"></script>
@@ -183,6 +184,12 @@
   </div>
 
   <script>
+    const loadingOverlay = window.AnyAILoading || {
+      run: async (task) => task(),
+      show: () => {},
+      hide: () => {},
+    };
+
     const form = document.getElementById('enhancer-form');
     const logContainer = document.getElementById('log-container');
     const runButton = document.getElementById('run-button');
@@ -322,11 +329,13 @@
       stopButton.disabled = false;
 
       try {
-        const resp = await fetch('/run-comment-enhancer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+        const resp = await loadingOverlay.run(() =>
+          fetch('/run-comment-enhancer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+        );
         const result = await resp.json();
         if (!resp.ok) {
           log(`Error: ${result.error || 'Unknown error'}`, true);

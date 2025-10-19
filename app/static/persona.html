@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="/static/anyai/core/anyai.components.css" />
     <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css" />
     <link rel="stylesheet" href="/static/anyai/tool-layout.css" />
+    <script src="/static/anyai/loading-overlay.js"></script>
     <script defer src="/static/anyai/vendor/lucide.js"></script>
     <script defer src="/static/anyai/sidebar.js"></script>
     <style>
@@ -399,6 +400,12 @@
     </div>
 
     <script>
+      const loadingOverlay = window.AnyAILoading || {
+        run: async (task) => task(),
+        show: () => {},
+        hide: () => {},
+      };
+
       const form = document.getElementById('persona-form');
       const buildForm = document.getElementById('persona-build-form');
       const responseForm = document.getElementById('persona-response-form');
@@ -632,7 +639,7 @@
         }
 
         try {
-          const res = await fetch('/persona/jobs', { method: 'POST', body: fd });
+          const res = await loadingOverlay.run(() => fetch('/persona/jobs', { method: 'POST', body: fd }));
           if (!res.ok) {
             const text = await res.text();
             throw new Error(text || '取込ジョブの作成に失敗しました');
@@ -663,7 +670,7 @@
           fd.set('persona_prompt_column', sanitizeColumn(fd.get('persona_prompt_column'), 'C'));
 
           try {
-            const res = await fetch('/persona/build/jobs', { method: 'POST', body: fd });
+            const res = await loadingOverlay.run(() => fetch('/persona/build/jobs', { method: 'POST', body: fd }));
             if (!res.ok) {
               const text = await res.text();
               throw new Error(text || 'ペルソナ生成ジョブの作成に失敗しました');
@@ -695,7 +702,7 @@
           fd.set('ssr_model_name', (fd.get('ssr_model_name') || 'sentence-transformers/all-MiniLM-L6-v2').trim() || 'sentence-transformers/all-MiniLM-L6-v2');
 
           try {
-            const res = await fetch('/persona/respond/jobs', { method: 'POST', body: fd });
+            const res = await loadingOverlay.run(() => fetch('/persona/respond/jobs', { method: 'POST', body: fd }));
             if (!res.ok) {
               const text = await res.text();
               throw new Error(text || '大量回答ジョブの作成に失敗しました');

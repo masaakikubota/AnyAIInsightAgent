@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="/static/anyai/core/anyai.components.css" />
     <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css" />
     <link rel="stylesheet" href="/static/anyai/tool-layout.css" />
+    <script src="/static/anyai/loading-overlay.js"></script>
     <script defer src="/static/anyai/vendor/lucide.js"></script>
     <script defer src="/static/anyai/sidebar.js"></script>
     <style>
@@ -76,6 +77,7 @@
                         <div class="info-panel">ヘッダーに <code>content</code> と <code>Related</code> が含まれているシートを指定してください。</div>
                       </details>
                     </div>
+                    <input type="hidden" id="concurrency" name="concurrency" value="50" />
                   </div>
                 </form>
               </section>
@@ -107,6 +109,12 @@
     </div>
 
     <script>
+      const loadingOverlay = window.AnyAILoading || {
+        run: async (task) => task(),
+        show: () => {},
+        hide: () => {},
+      };
+
       const form = document.getElementById('cleansing-form');
       const jobSection = document.getElementById('job-section');
       const jobIdEl = document.getElementById('job-id');
@@ -195,22 +203,39 @@
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         stopPolling();
-        const fd = new FormData(form);
-        const res = await fetch('/cleansing/jobs', { method: 'POST', body: fd });
-        if (!res.ok) {
-          alert('ジョブの作成に失敗しました');
-          return;
-        }
-        const data = await res.json();
-        currentJobId = data.job_id;
-        jobSection.style.display = 'block';
-        progressEl.value = 0;
-        jobStatusEl.textContent = 'ステータス: pending';
-        jobMessageEl.textContent = 'ジョブを開始しました。';
-        jobCountsEl.textContent = '';
-        errorList.innerHTML = '';
-        errorBox.style.display = 'none';
-        pollStatus(currentJobId);
+        await loadingOverlay.run(async () => {
+          const fd = new FormData(form);
+          if (!fd.get('concurrency')) {
+            fd.set('concurrency', '50');
+          }
+          const res = await fetch('/cleansing/jobs', { method: 'POST', body: fd });
+          if (!res.ok) {
+            let message = 'ジョブの作成に失敗しました';
+            try {
+              const detail = await res.json();
+              if (detail?.detail) {
+                message = detail.detail;
+              }
+            } catch (_) {
+              try {
+                const text = await res.text();
+                if (text) message = text;
+              } catch (__) {}
+            }
+            alert(message);
+            return;
+          }
+          const data = await res.json();
+          currentJobId = data.job_id;
+          jobSection.style.display = 'block';
+          progressEl.value = 0;
+          jobStatusEl.textContent = 'ステータス: pending';
+          jobMessageEl.textContent = 'ジョブを開始しました。';
+          jobCountsEl.textContent = '';
+          errorList.innerHTML = '';
+          errorBox.style.display = 'none';
+          pollStatus(currentJobId);
+        });
       });
     </script>
   </body>
