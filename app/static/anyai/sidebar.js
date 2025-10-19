@@ -50,8 +50,8 @@
   brand.href = '/';
   brand.setAttribute('aria-label', 'AnyAI ホーム');
   brand.innerHTML = `
-    <span class="brand-icon"><img src="/static/anyai/assets/AnyAI_logo.png" alt="AnyAI ロゴ"></span>
-    <span class="brand-text">AnyAI</span>
+    <span class="brand-icon" aria-hidden="true"><img src="/static/anyai/assets/AnyAI_logo.png" alt=""></span>
+    <span class="sr-only">AnyAI ホーム</span>
   `;
 
   const toggle = document.createElement('button');
