@@ -8,9 +8,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, List, Optional
 
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+try:
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
+except Exception:  # pragma: no cover - optional dependency guard
+    service_account = None  # type: ignore[assignment]
+    build = None  # type: ignore[assignment]
+    HttpError = Exception  # type: ignore[assignment]
+
+
+def _require_google_clients() -> None:
+    if service_account is None or build is None:
+        raise GoogleSheetsError(
+            "Google API client libraries are not installed."
+            " Install 'google-api-python-client' and 'google-auth' to enable sheet access."
+        )
 
 
 SCOPES = [
@@ -103,6 +116,7 @@ def _service_account_path() -> Path:
 
 
 def _load_credentials() -> service_account.Credentials:
+    _require_google_clients()
     path = _service_account_path()
     if not path.exists():
         if path == SERVICE_ACCOUNT_FILE_DEFAULT:
@@ -133,6 +147,7 @@ def get_service_account_email() -> str:
 
 @contextmanager
 def sheets_service() -> Generator:
+    _require_google_clients()
     creds = _load_credentials()
     service = build("sheets", "v4", credentials=creds, cache_discovery=False)
     try:
@@ -145,6 +160,7 @@ def sheets_service() -> Generator:
 
 
 def find_sheet(spreadsheet_id: str, keyword: str) -> SheetMatch:
+    _require_google_clients()
     with sheets_service() as service:
         try:
             meta = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
@@ -176,6 +192,7 @@ def find_sheet(spreadsheet_id: str, keyword: str) -> SheetMatch:
 
 
 def fetch_sheet_values(spreadsheet_id: str, sheet_name: str) -> List[List[str]]:
+    _require_google_clients()
     with sheets_service() as service:
         try:
             resp = (
@@ -198,6 +215,7 @@ def batch_update_values(
     spreadsheet_id: str,
     updates: List[dict],
 ) -> None:
+    _require_google_clients()
     if not updates:
         return
     with sheets_service() as service:
