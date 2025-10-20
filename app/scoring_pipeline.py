@@ -502,27 +502,25 @@ class ScoringPipeline:
             snapshot_score_buffer = buffer_scores
             snapshot_analysis_buffer = buffer_analyses
             snapshot_updates = list(pending_updates)
-            payload_batches: List[List[dict]] = []
+            payload: List[dict] = []
             if snapshot_analysis_buffer:
-                payload_batches.extend(
-                    build_batched_value_ranges(
-                        category_start_col=self.cfg.category_start_col,
-                        sheet_name=self.sheet_name,
-                        update_buffer=snapshot_analysis_buffer,
-                        max_rows_per_batch=self.sheet_batch_row_size,
-                    )
-                )
+                for batch in build_batched_value_ranges(
+                    category_start_col=self.cfg.category_start_col,
+                    sheet_name=self.sheet_name,
+                    update_buffer=snapshot_analysis_buffer,
+                    max_rows_per_batch=self.sheet_batch_row_size,
+                ):
+                    payload.extend(batch)
             target_score_sheet = self.score_sheet_name or self.sheet_name
             if snapshot_score_buffer:
-                payload_batches.extend(
-                    build_batched_value_ranges(
-                        category_start_col=self.cfg.category_start_col,
-                        sheet_name=target_score_sheet,
-                        update_buffer=snapshot_score_buffer,
-                        max_rows_per_batch=self.sheet_batch_row_size,
-                    )
-                )
-            if not payload_batches:
+                for batch in build_batched_value_ranges(
+                    category_start_col=self.cfg.category_start_col,
+                    sheet_name=target_score_sheet,
+                    update_buffer=snapshot_score_buffer,
+                    max_rows_per_batch=self.sheet_batch_row_size,
+                ):
+                    payload.extend(batch)
+            if not payload:
                 last_flush = time.monotonic()
                 self._stats.flush_count += 1
                 buffer_scores = {}
@@ -538,14 +536,12 @@ class ScoringPipeline:
             attempts = 0
             delay = self.writer_retry_initial_delay
             last_error: Optional[Exception] = None
+            snapshot_payload = list(payload)
             while attempts < self.writer_retry_limit:
                 try:
-                    for updates in payload_batches:
-                        if not updates:
-                            continue
-                        await asyncio.to_thread(
-                            batch_update_values, self.spreadsheet_id, updates
-                        )
+                    await asyncio.to_thread(
+                        batch_update_values, self.spreadsheet_id, snapshot_payload
+                    )
                     last_flush = time.monotonic()
                     self._stats.flush_count += 1
                     buffer_scores = {}
