@@ -226,6 +226,9 @@ class ScoreResult(BaseModel):
     raw_text: Optional[str] = None
     request_text: Optional[str] = None
     pre_scores: Optional[List[Optional[float]]] = None
+    absolute_scores: Optional[List[Optional[float]]] = None
+    relative_rank_scores: Optional[List[Optional[float]]] = None
+    anchor_labels: Optional[List[Optional[str]]] = None
     missing_indices: Optional[List[int]] = None
     partial: bool = False
 

@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import logging
+
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -19,6 +21,9 @@ from ..services.google_sheets import (
     find_sheet,
 )
 from ..worker import JobManager
+
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -115,6 +120,10 @@ async def create_job(
             )
         batch_size_value = 1
         max_category_cols_value = 1
+
+    if enable_ssr and batch_size_value != 1:
+        logger.debug("evt=ssr_concurrency_forced value=1 scope=request")
+        batch_size_value = 1
 
     cfg = RunConfig(
         spreadsheet_url=spreadsheet_url,

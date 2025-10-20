@@ -891,8 +891,9 @@
         applyModeContent(mode);
         const defaults = MODE_DEFAULTS[mode] || MODE_DEFAULTS.csv;
         const isVideoMode = mode === 'video';
+        const ssrEnabled = enableSSR.checked;
 
-        if (enableSSR.checked) {
+        if (ssrEnabled) {
           batchSizeInput.disabled = false;
           concurrencyInput.disabled = false;
           if (isVideoMode) {
@@ -955,6 +956,16 @@
         }
 
         updateSSREnabled();
+        if (ssrEnabled) {
+          batchSizeInput.value = '1';
+          batchSizeInput.disabled = true;
+          batchSizeInput.setAttribute('title', 'SSR forces N=1');
+          batchSizeInput.setAttribute('aria-disabled', 'true');
+        } else {
+          batchSizeInput.disabled = false;
+          batchSizeInput.removeAttribute('title');
+          batchSizeInput.removeAttribute('aria-disabled');
+        }
       }
 
       function handleSSRChange() {
@@ -981,6 +992,9 @@
         }
         const selectedMode = modeForm.querySelector('input[name="mode"]:checked').value;
         fd.set('mode', selectedMode);
+        if (enableSSR.checked) {
+          fd.set('batch_size', '1');
+        }
         if (selectedMode === 'video') {
           fd.set('batch_size', MODE_DEFAULTS.video.batchSize);
           fd.set('max_category_cols', MODE_DEFAULTS.video.maxCategoryCols);

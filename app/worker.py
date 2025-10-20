@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import time
+import logging
 import shutil
+import time
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Callable
 from datetime import datetime
+from pathlib import Path
+from typing import Callable, Dict, List, Optional, Tuple
 
+from .logging_config import configure_logging
 from .models import Category, JobStatus, Provider, RunConfig, ScoreResult
 from .services.clients import GEMINI_MODEL, GEMINI_MODEL_VIDEO, OPENAI_MODEL
 from .services.google_sheets import (
@@ -21,7 +22,11 @@ from .services.google_sheets import (
 )
 from .services.sheet_updates import build_batched_value_ranges
 from .services.scoring_cache import CachePolicy, ScoreCache
-from .scoring_pipeline import ScoringPipeline, PipelineUnit
+from .scoring_pipeline import PipelineUnit, ScoringPipeline
+
+
+configure_logging()
+logger = logging.getLogger(__name__)
 
 
 def _safe_cell(rows: List[List[str]], row_idx: int, col_idx: int) -> str:
@@ -254,6 +259,8 @@ class JobManager:
         job_dir = self._job_dir(job_id)
         job_log = self._job_logger(job_id)
         job_log("Job started")
+        job_fail_reason: str | None = None
+        logger.debug("evt=job_start job_id=%s", job_id)
 
         # Fetch sheet data
         try:
@@ -277,6 +284,13 @@ class JobManager:
         except GoogleSheetsError as exc:
             job.status = JobStatus.failed
             job_log(f"Failed to fetch sheet: {exc}")
+            job_fail_reason = f"sheets:{exc}"
+            logger.debug(
+                "evt=job_fail job_id=%s status=%s reason=%s",
+                job_id,
+                job.status.value,
+                job_fail_reason,
+            )
             raise
 
         start_idx = job.cfg.start_row - 1
@@ -287,6 +301,11 @@ class JobManager:
             job.processed_rows = 0
             job.status = JobStatus.completed
             job.finished_at = time.time()
+            logger.debug(
+                "evt=job_done job_id=%s status=%s reason=start_row_out_of_range",
+                job_id,
+                job.status.value,
+            )
             return
 
         data_rows = rows[start_idx:]
@@ -304,6 +323,11 @@ class JobManager:
             job.status = JobStatus.completed
             job.finished_at = time.time()
             job_log("No active utterances found")
+            logger.debug(
+                "evt=job_done job_id=%s status=%s reason=no_active_rows",
+                job_id,
+                job.status.value,
+            )
             return
 
         chunk_row_limit = max(1, job.cfg.chunk_row_limit)
@@ -387,6 +411,11 @@ class JobManager:
             job.status = JobStatus.completed
             job.finished_at = time.time()
             job_log("No scoring units generated")
+            logger.debug(
+                "evt=job_done job_id=%s status=%s reason=no_units",
+                job_id,
+                job.status.value,
+            )
             return
 
         progress_lock = asyncio.Lock()
@@ -556,6 +585,7 @@ class JobManager:
                         continue
                     job.status = JobStatus.failed
                     job_log("Job failed due to unrecoverable chunk error")
+                    job_fail_reason = str(exc)
                     raise
                 else:
                     if chunk_record:
@@ -662,9 +692,10 @@ class JobManager:
 
             job.status = JobStatus.cancelled if job.cancel_flag else JobStatus.completed
             job_log(f"Job finished status={job.status.value}")
-        except Exception:
+        except Exception as exc:
             job.status = JobStatus.failed
             job_log("Job failed with unexpected exception")
+            job_fail_reason = str(exc)
             raise
         finally:
             job.finished_at = time.time()
@@ -705,6 +736,17 @@ class JobManager:
             job.run_meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
             self._prune_old_runs()
             self._job_logs.pop(job_id, None)
+            if job.status in (JobStatus.completed, JobStatus.cancelled):
+                logger.debug(
+                    "evt=job_done job_id=%s status=%s", job_id, job.status.value
+                )
+            else:
+                logger.debug(
+                    "evt=job_fail job_id=%s status=%s reason=%s",
+                    job_id,
+                    job.status.value,
+                    job_fail_reason or "unknown",
+                )
 
     async def cancel_job(self, job_id: str, reason: str | None = None) -> None:
         job = self.jobs.get(job_id)
@@ -719,6 +761,11 @@ class JobManager:
             job.cfg.chunk_row_limit = chunk_rows
             job.cfg.writer_flush_batch_size = chunk_rows
 
+        if job.cfg.enable_ssr and job.cfg.batch_size != 1:
+            job.cfg.batch_size = 1
+            logger.debug(
+                "evt=ssr_concurrency_forced value=1 scope=worker job_id=%s", job.job_id
+            )
         if job.cfg.mode == "video":
             # VideoモードはGeminiのみを使用（ファイルベース推論のため）
             job.cfg.batch_size = 1
