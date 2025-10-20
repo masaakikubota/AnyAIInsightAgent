@@ -7,12 +7,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
+import logging
+
 from .models import Category, RunConfig, ScoreResult
 from .services.google_sheets import GoogleSheetsError, batch_update_values
 from .services.scoring import cache_key, clamp_and_round, score_with_fallback
 from .services.clients import GEMINI_MODEL_VIDEO
 from .services.video import download_video_to_path, upload_video_to_gemini
 from .services.sheet_updates import build_batched_value_ranges
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -559,6 +564,13 @@ class ScoringPipeline:
                     score_cells = sum(
                         len(columns) for columns in snapshot_score_buffer.values()
                     ) if snapshot_score_buffer else 0
+                    logger.debug(
+                        "evt=write_outcome target=%s rows=%d score_cells=%d analysis_cells=%d",
+                        target_score_sheet,
+                        len(distinct_rows),
+                        score_cells,
+                        analysis_cells,
+                    )
                     self._log(
                         "Writer flush success: rows={} entries={} attempts={} cells(text={} score={})".format(
                             len(distinct_rows),
