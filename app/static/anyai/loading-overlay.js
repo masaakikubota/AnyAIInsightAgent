@@ -37,7 +37,7 @@
     logo.addEventListener('error', () => {
       if (logo.dataset.fallbackApplied === 'true') return;
       logo.dataset.fallbackApplied = 'true';
-      logo.src = '/static/anyai/assets/AnyAI_logo.png';
+      logo.src = '/static/anyai/assets/AnyAI_Logo_For_Loading.png';
     });
 
     const text = document.createElement('div');
