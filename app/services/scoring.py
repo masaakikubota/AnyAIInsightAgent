@@ -6,7 +6,7 @@ import json
 import logging
 import math
 import numbers
-from typing import List, Optional, Sequence, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 from ..models import Category, Provider, ScoreRequest, ScoreResult
 from .clients import GEMINI_MODEL, GEMINI_MODEL_VIDEO, OPENAI_MODEL, call_gemini, call_openai
@@ -78,6 +78,14 @@ def clamp_and_round(x: float) -> float:
     return max(0.0, min(1.0, round(float(x), 2)))
 
 
+def _clamp_scores(values: Iterable[float]) -> List[float]:
+    clamped: List[float] = []
+    for value in values:
+        float_val = float(value)
+        clamped.append(max(0.0, min(1.0, float_val)))
+    return clamped
+
+
 async def score_with_fallback(
     utterance: str,
     categories: List[Category],
@@ -107,10 +115,63 @@ async def score_with_fallback(
             return GEMINI_MODEL
         return OPENAI_MODEL
 
+    def _cache_key_for(provider: Provider, result: Optional[ScoreResult] = None) -> str:
+        model_name = (result.model if result and result.model else _determine_model(provider))
+        return cache_key(
+            utterance=utterance,
+            categories=categories,
+            system_prompt=system_prompt,
+            provider=provider,
+            model=model_name,
+            ssr_enabled=ssr_enabled,
+        )
+
+    async def _prepare_result(result: ScoreResult) -> List[float]:
+        if ssr_enabled and result.analyses:
+            converted_scores = await _convert_analyses_to_scores(
+                utterance=utterance,
+                categories=categories,
+                analyses=result.analyses,
+            )
+            result.pre_scores = list(converted_scores)
+            result.likert_pmfs = None
+            if result.scores is None or any(value is None for value in result.scores):
+                result.scores = list(converted_scores)
+                result.missing_indices = None
+                result.partial = False
+
+        if result.pre_scores is None and result.scores is not None:
+            result.pre_scores = list(result.scores)
+
+        scores = result.scores or []
+        if len(scores) != len(categories):
+            raise ValueError(
+                "Validation failed: wrong length",
+                {"expected": len(categories), "received": len(scores)},
+            )
+
+        validated: List[float] = []
+        for idx, score in enumerate(scores):
+            if score is None:
+                raise ValueError(f"Validation failed: missing score at index {idx}")
+            if not isinstance(score, numbers.Real):
+                raise ValueError(f"Validation failed: non-numeric score at index {idx}: {score}")
+            float_score = float(score)
+            if math.isnan(float_score):
+                raise ValueError(f"Validation failed: NaN score at index {idx}")
+            validated.append(float_score)
+
+        clamped_scores = _clamp_scores(validated)
+        if clamped_scores:
+            result.scores = clamped_scores
+            if result.pre_scores is None:
+                result.pre_scores = list(clamped_scores)
+
+        return clamped_scores
+
     async def try_call(p: Provider) -> Tuple[ScoreResult, int]:
         if file_parts and p != Provider.gemini:
             raise RuntimeError("File-based scoring is only supported by Gemini provider")
-        model_name = _determine_model(p)
         req = ScoreRequest(
             utterance=utterance,
             categories=categories,
@@ -128,31 +189,13 @@ async def score_with_fallback(
     async def try_cache(p: Provider) -> Optional[ScoreResult]:
         if cache is None:
             return None
-        model_name = _determine_model(p)
-        key = cache_key(
-            utterance=utterance,
-            categories=categories,
-            system_prompt=system_prompt,
-            provider=p,
-            model=model_name,
-            ssr_enabled=ssr_enabled,
-        )
-        cached = await cache.get(key)
+        cached = await cache.get(_cache_key_for(p))
         return cached
 
     async def store_cache(p: Provider, result: ScoreResult) -> None:
         if cache is None or not cache_write:
             return
-        model_name = result.model or _determine_model(p)
-        key = cache_key(
-            utterance=utterance,
-            categories=categories,
-            system_prompt=system_prompt,
-            provider=p,
-            model=model_name,
-            ssr_enabled=ssr_enabled,
-        )
-        await cache.set(key, result)
+        await cache.set(_cache_key_for(p, result=result), result)
 
     # Determine provider order
     if file_parts:
@@ -170,42 +213,7 @@ async def score_with_fallback(
                     if cached:
                         return cached, errors, True
                 res, status = await try_call(provider)
-                if ssr_enabled and res.analyses:
-                    converted_scores = await _convert_analyses_to_scores(
-                        utterance=utterance,
-                        categories=categories,
-                        analyses=res.analyses,
-                    )
-                    res.pre_scores = list(converted_scores)
-                    res.likert_pmfs = None
-                    if res.scores is None or any(value is None for value in res.scores):
-                        res.scores = list(converted_scores)
-                        res.missing_indices = None
-                        res.partial = False
-                if res.pre_scores is None and res.scores is not None:
-                    res.pre_scores = list(res.scores)
-                scores = res.scores or []
-                if len(scores) != len(categories):
-                    raise ValueError(
-                        "Validation failed: wrong length",
-                        {"expected": len(categories), "received": len(scores)},
-                    )
-                for idx, score in enumerate(scores):
-                    if score is None:
-                        raise ValueError(f"Validation failed: missing score at index {idx}")
-                    if not isinstance(score, numbers.Real):
-                        raise ValueError(f"Validation failed: non-numeric score at index {idx}: {score}")
-                    if math.isnan(float(score)):
-                        raise ValueError(f"Validation failed: NaN score at index {idx}")
-                clamped_scores: List[float] = []
-                for value in scores:
-                    float_val = float(value)
-                    clamped = max(0.0, min(1.0, float_val))
-                    clamped_scores.append(clamped)
-                if clamped_scores and res.scores is not None:
-                    res.scores = clamped_scores
-                if res.pre_scores is None and clamped_scores:
-                    res.pre_scores = list(clamped_scores)
+                clamped_scores = await _prepare_result(res)
                 await store_cache(provider, res)
                 return res, errors, False
             except Exception as e:  # noqa: BLE001

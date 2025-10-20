@@ -14,12 +14,6 @@ from .models import (
     InterviewJobResponse,
     InterviewJobStatus,
 )
-from .services.interview_llm import (
-    generate_direction_brief,
-    generate_interview_batch,
-    generate_persona_batch,
-    generate_tribe_categories,
-)
 from .services.google_sheets import (
     GoogleSheetsError,
     batch_update_values,
@@ -55,6 +49,12 @@ DEFAULT_TRIBE_HEADERS = [
     "Notes",
     "SessionID",
 ]
+
+
+def _interview_llm():
+    from .services import interview_llm
+
+    return interview_llm
 
 
 @dataclass
@@ -181,7 +181,8 @@ class InterviewJobManager:
     async def _generate_direction_brief(self, job: InterviewJob, job_dir: Path, extra_notes: Optional[str] = None) -> None:
         job.stage = "direction_design"
         job.message = "方向性ブリーフを生成しています…"
-        result = await generate_direction_brief(job.config, extra_notes=extra_notes)
+        llm = _interview_llm()
+        result = await llm.generate_direction_brief(job.config, extra_notes=extra_notes)
         path = job_dir / "direction.yaml"
         path.write_text(result.yaml_text, encoding="utf-8")
         meta_path = job_dir / "direction_meta.json"
@@ -228,7 +229,8 @@ class InterviewJobManager:
         session_plan = self._build_session_plan(job, cfg.tribe_count)
 
         try:
-            categories, questions, usage = await generate_tribe_categories(
+            llm = _interview_llm()
+            categories, questions, usage = await llm.generate_tribe_categories(
                 cfg,
                 utterances,
                 headers=headers,
@@ -552,7 +554,13 @@ class InterviewJobManager:
             else:
                 job.message = f"ペルソナ生成中 {completed}" + (f" ({descriptor})" if descriptor else "")
 
-        result = await generate_persona_batch(job.config, direction_text, tribes=job.tribes, progress_cb=_on_progress)
+        llm = _interview_llm()
+        result = await llm.generate_persona_batch(
+            job.config,
+            direction_text,
+            tribes=job.tribes,
+            progress_cb=_on_progress,
+        )
         personas = result.personas
         job.generated_personas = len(personas)
         path = job_dir / "persona_catalog.json"
@@ -599,7 +607,8 @@ class InterviewJobManager:
             else:
                 job.message = f"インタビュー生成中 {completed}" + (f" ({descriptor})" if descriptor else "")
 
-        result = await generate_interview_batch(
+        llm = _interview_llm()
+        result = await llm.generate_interview_batch(
             job.config,
             personas,
             stimuli,

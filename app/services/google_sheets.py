@@ -8,9 +8,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, List, Optional
 
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+try:  # pragma: no cover - optional dependency
+    from google.oauth2 import service_account as _service_account
+    from googleapiclient.discovery import build as _build
+    from googleapiclient.errors import HttpError as _HttpError
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    _service_account = None
+    _build = None
+
+    class _HttpError(Exception):
+        pass
+
+service_account = _service_account
+build = _build
+HttpError = _HttpError
 
 
 SCOPES = [
@@ -71,6 +82,13 @@ class GoogleSheetsError(Exception):
     """Raised when sheet operations fail."""
 
 
+def _require_google() -> None:
+    if service_account is None or build is None:
+        raise GoogleSheetsError(
+            "Google API client libraries are not installed. Install google-api-python-client to enable sheet operations."
+        )
+
+
 @dataclass
 class SheetMatch:
     spreadsheet_id: str
@@ -102,7 +120,8 @@ def _service_account_path() -> Path:
     return SERVICE_ACCOUNT_FILE_DEFAULT
 
 
-def _load_credentials() -> service_account.Credentials:
+def _load_credentials() -> "service_account.Credentials":
+    _require_google()
     path = _service_account_path()
     if not path.exists():
         if path == SERVICE_ACCOUNT_FILE_DEFAULT:
@@ -133,6 +152,7 @@ def get_service_account_email() -> str:
 
 @contextmanager
 def sheets_service() -> Generator:
+    _require_google()
     creds = _load_credentials()
     service = build("sheets", "v4", credentials=creds, cache_discovery=False)
     try:

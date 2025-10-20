@@ -2,12 +2,22 @@ from __future__ import annotations
 
 import math
 import os
-from typing import List, Sequence
+from typing import List, Sequence, TYPE_CHECKING
 
-import httpx
+if TYPE_CHECKING:  # pragma: no cover - only for typing
+    import httpx  # noqa: F401
 
 
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+
+
+def _require_httpx():
+    try:
+        import httpx  # type: ignore
+
+        return httpx
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+        raise RuntimeError("httpx is required for embedding operations") from exc
 
 
 async def embed_texts(
@@ -28,6 +38,7 @@ async def embed_texts(
     headers = {"Authorization": f"Bearer {api_key}"}
     payload = {"model": model, "input": list(texts)}
 
+    httpx = _require_httpx()
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post("https://api.openai.com/v1/embeddings", json=payload, headers=headers)
         response.raise_for_status()

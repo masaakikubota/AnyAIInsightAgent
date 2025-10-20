@@ -5,9 +5,10 @@ import json
 import numbers
 import os
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TYPE_CHECKING
 
-import httpx
+if TYPE_CHECKING:  # pragma: no cover - only for type checkers
+    import httpx  # noqa: F401
 
 from ..models import Provider, ScoreRequest, ScoreResult
 
@@ -20,6 +21,15 @@ OPENAI_DASHBOARD_IMPLEMENT_MODEL = "gpt-5-codex"
 
 TEMP_DIR = Path(os.getenv("AAIM_VIDEO_TEMP_DIR", "./.video_cache"))
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _require_httpx():
+    try:
+        import httpx  # type: ignore
+
+        return httpx
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+        raise RuntimeError("httpx is required for network client operations") from exc
 
 
 def payload_hash(utterance: str, categories: List[dict], system_prompt: str, provider: Provider, model: str) -> str:
@@ -101,6 +111,7 @@ async def call_gemini(req: ScoreRequest) -> Tuple[ScoreResult, int]:
     if not req.file_parts:
         payload["generationConfig"]["responseSchema"] = response_schema
 
+    httpx = _require_httpx()
     async with httpx.AsyncClient(timeout=req.timeout_sec) as client:
         r = await client.post(url, json=payload)
         status = r.status_code
@@ -266,6 +277,7 @@ async def call_openai(req: ScoreRequest) -> Tuple[ScoreResult, int]:
         "response_format": {"type": "json_schema", "json_schema": schema},
     }
 
+    httpx = _require_httpx()
     async with httpx.AsyncClient(timeout=req.timeout_sec) as client:
         r = await client.post(url, json=payload, headers=headers)
         status = r.status_code

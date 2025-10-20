@@ -5,13 +5,35 @@ import time
 from pathlib import Path
 from typing import Optional, Tuple
 
-import httpx
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover - only for typing
+    import httpx  # noqa: F401
+    from googleapiclient.discovery import build  # noqa: F401
+    from googleapiclient.http import MediaIoBaseDownload  # noqa: F401
 
 from .google_sheets import _load_credentials
 
 DOWNLOAD_CHUNK_SIZE = 8 * 1024 * 1024
+
+
+def _require_httpx():
+    try:
+        import httpx  # type: ignore
+
+        return httpx
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+        raise RuntimeError("httpx is required for video transfers") from exc
+
+
+def _require_drive_client():
+    try:
+        from googleapiclient.discovery import build  # type: ignore
+        from googleapiclient.http import MediaIoBaseDownload  # type: ignore
+
+        return build, MediaIoBaseDownload
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+        raise RuntimeError("google-api-python-client is required for Drive downloads") from exc
 
 
 def get_temp_video_path(prefix: str = "video_", *, dest_dir: Optional[str] = None) -> Path:
@@ -49,6 +71,7 @@ def download_video_to_path(url: str, timeout: int, dest_dir: Optional[str] = Non
         # Try Drive API with existing OAuth
         try:
             creds = _load_credentials()
+            build, MediaIoBaseDownload = _require_drive_client()
             service = build("drive", "v3", credentials=creds, cache_discovery=False)
             request = service.files().get_media(fileId=drive_id)
             with target.open("wb") as fh:
@@ -72,6 +95,7 @@ def download_video_to_path(url: str, timeout: int, dest_dir: Optional[str] = Non
                 pass
 
     # Anonymous HTTP GET with basic retries
+    httpx = _require_httpx()
     attempts = 0
     last_exc: Exception | None = None
     while attempts < 3:
@@ -111,6 +135,7 @@ def upload_video_to_gemini(path: Path, timeout: int) -> Tuple[str, str]:
     query = {"key": api_key}
     headers = {"Content-Type": mime_type}
 
+    httpx = _require_httpx()
     attempts = 0
     last_exc: Exception | None = None
     file_name: Optional[str] = None
