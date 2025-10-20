@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-import asyncio
-import hashlib
 import json
 import logging
 import math
 import numbers
+import os
 from typing import List, Optional, Sequence, Tuple
 
 from ..models import Category, Provider, ScoreRequest, ScoreResult
 from .clients import GEMINI_MODEL, GEMINI_MODEL_VIDEO, OPENAI_MODEL, call_gemini, call_openai
-from .embeddings import embed_texts, cosine_similarity, normalize_similarity
+from .has_scoring import score_utterance
 from .scoring_cache import ScoreCache
 
 
@@ -112,6 +111,8 @@ async def score_with_fallback(
     )
     errors: List[Tuple[str, int, str]] = []
 
+    logger.debug("evt=%s", "ssr_on" if ssr_enabled else "ssr_off")
+
     def _determine_model(p: Provider) -> str:
         if p == Provider.gemini:
             if model_override:
@@ -204,17 +205,38 @@ async def score_with_fallback(
                     len(res.scores or []) if res.scores else 0,
                 )
                 if ssr_enabled and res.analyses:
-                    converted_scores = await _convert_analyses_to_scores(
+                    has_result = await score_utterance(
                         utterance=utterance,
                         categories=categories,
                         analyses=res.analyses,
                     )
-                    res.pre_scores = list(converted_scores)
+                    res.pre_scores = list(has_result.absolute_scores)
                     res.likert_pmfs = None
+                    res.absolute_scores = list(has_result.absolute_scores)
+                    res.relative_rank_scores = list(has_result.relative_scores)
+                    res.anchor_labels = [c.anchor for c in has_result.components]
                     if res.scores is None or any(value is None for value in res.scores):
-                        res.scores = list(converted_scores)
+                        res.scores = list(has_result.absolute_scores)
                         res.missing_indices = None
                         res.partial = False
+                    for idx_component, component in enumerate(has_result.components):
+                        concept = categories[idx_component]
+                        concept_label = (
+                            concept.name.strip() if (ALLOW_TEXT_LOG and concept.name) else f"concept_{idx_component}"
+                        )
+                        logger.debug(
+                            "evt=anchor_parsed concept=%s anchor=%s", concept_label, component.anchor
+                        )
+                        logger.debug(
+                            "evt=score_components concept=%s anchor_w=%.2f similarity=%.6f r=%.6f p=%.6f lambda=%.2f final=%.6f",  # noqa: G004
+                            concept_label,
+                            component.anchor_weight,
+                            component.similarity,
+                            component.relative_score,
+                            component.amplified_score,
+                            HAS_LAMBDA,
+                            component.final_score,
+                        )
                 if res.pre_scores is None and res.scores is not None:
                     res.pre_scores = list(res.scores)
                 scores = res.scores or []

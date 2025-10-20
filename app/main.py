@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import logging
 import os
 import sys
 from pathlib import Path
@@ -57,6 +58,7 @@ def _load_static_page(filename: str) -> str:
 def create_app() -> FastAPI:
     """Create the FastAPI application with all routers and assets."""
     # Ensure the base directory exists before the application starts handling requests.
+    configure_logging()
     get_base_dir()
 
     app = FastAPI(title=APP_TITLE)

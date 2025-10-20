@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import csv
 import json
+import logging
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -13,8 +15,12 @@ from .models import (
     InterviewJobProgress,
     InterviewJobResponse,
     InterviewJobStatus,
+    Category,
 )
 from .services.interview_llm import (
+    AGE_BANDS,
+    INCOME_BANDS,
+    REGIONS,
     generate_direction_brief,
     generate_interview_batch,
     generate_persona_batch,
@@ -28,6 +34,7 @@ from .services.google_sheets import (
     find_sheet,
 )
 from .services.embeddings import DEFAULT_EMBEDDING_MODEL, embed_texts
+from .services.has_scoring import score_utterance
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -55,6 +62,10 @@ DEFAULT_TRIBE_HEADERS = [
     "Notes",
     "SessionID",
 ]
+
+
+logger = logging.getLogger(__name__)
+HAS_LAMBDA = float(os.getenv("ANYAI_HAS_LAMBDA", "0.7"))
 
 
 @dataclass
@@ -608,6 +619,7 @@ class InterviewJobManager:
         )
         transcripts = result.transcripts
         job.processed_transcripts = len(transcripts)
+        await self._apply_hybrid_scores(job, transcripts)
         path = job_dir / "interview_transcripts.json"
         path.write_text(json.dumps(transcripts, indent=2, ensure_ascii=False), encoding="utf-8")
         job.artifacts["transcripts"] = str(path.relative_to(self.base_dir))
@@ -919,6 +931,93 @@ class InterviewJobManager:
             f"{embedded_sheet_name}!{start_col_letter}{start_row}:{end_col_letter}{start_row + persona_count - 1}"
         )
         job.message = f"QA結果をGoogle Sheets ({answer_sheet_name}, {embedded_sheet_name}) に書き込みました"
+
+    async def _apply_hybrid_scores(self, job: InterviewJob, transcripts: List[dict]) -> None:
+        if not transcripts:
+            return
+        for transcript in transcripts:
+            concepts_data = transcript.get("concepts")
+            analyses = transcript.get("analyses")
+            if not concepts_data or not analyses:
+                continue
+            categories: List[Category] = []
+            for entry in concepts_data:
+                if isinstance(entry, dict):
+                    name = str(entry.get("name") or entry.get("title") or entry.get("label") or "Concept").strip()
+                    definition = str(
+                        entry.get("definition")
+                        or entry.get("detail")
+                        or entry.get("text")
+                        or name
+                    ).strip()
+                    detail = str(entry.get("detail") or entry.get("definition") or "").strip()
+                else:
+                    name = str(entry).strip()
+                    definition = name
+                    detail = ""
+                categories.append(Category(name=name, definition=definition, detail=detail))
+            if len(categories) != len(analyses):
+                continue
+            utterance_text = self._transcript_utterance_text(transcript)
+            if not utterance_text:
+                continue
+            try:
+                has_result = await score_utterance(utterance_text, categories, analyses)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(
+                    "evt=interview_scoring_skipped persona_id=%s reason=%s",
+                    transcript.get("persona_id"),
+                    exc,
+                )
+                continue
+            scoring_payload: Dict[str, Any] = {
+                "absolute_scores": has_result.absolute_scores,
+                "relative_rank_scores": has_result.relative_scores,
+                "anchor_labels": [component.anchor for component in has_result.components],
+                "concepts": [],
+            }
+            for idx, component in enumerate(has_result.components):
+                concept_label = categories[idx].name or f"concept_{idx}"
+                logger.debug(
+                    "evt=anchor_parsed concept=%s anchor=%s context=interview",
+                    concept_label,
+                    component.anchor,
+                )
+                logger.debug(
+                    "evt=score_components concept=%s anchor_w=%.2f similarity=%.6f r=%.6f p=%.6f lambda=%.2f final=%.6f context=interview",  # noqa: G004
+                    concept_label,
+                    component.anchor_weight,
+                    component.similarity,
+                    component.relative_score,
+                    component.amplified_score,
+                    HAS_LAMBDA,
+                    component.final_score,
+                )
+                scoring_payload["concepts"].append(
+                    {
+                        "name": concept_label,
+                        "anchor": component.anchor,
+                        "anchor_weight": component.anchor_weight,
+                        "similarity": component.similarity,
+                        "relative_score": component.relative_score,
+                        "amplified_score": component.amplified_score,
+                        "absolute_score": has_result.absolute_scores[idx],
+                        "relative_rank_score": has_result.relative_scores[idx],
+                    }
+                )
+            transcript["scoring"] = scoring_payload
+
+    def _transcript_utterance_text(self, transcript: Dict[str, Any]) -> str:
+        summary = str(transcript.get("summary") or "").strip()
+        if summary:
+            return summary
+        persona_turns = [
+            str(turn.get("text") or "").strip()
+            for turn in transcript.get("turns", [])
+            if turn.get("role") == "persona"
+        ]
+        combined = "\n".join(text for text in persona_turns if text)
+        return combined.strip()
 
     def _column_letter_to_index(self, column: str) -> int:
         col = (column or "A").strip().upper()

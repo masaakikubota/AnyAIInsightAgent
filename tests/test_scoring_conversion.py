@@ -1,6 +1,10 @@
 import math
 import pytest
 
+import math
+
+import pytest
+
 from app.models import Category, Provider, ScoreResult
 from app.services.scoring import likert_pmf_to_score, score_with_fallback
 
@@ -46,12 +50,12 @@ async def test_score_with_fallback_skips_embeddings_for_numeric(monkeypatch: pyt
     async def fake_call_openai(req):
         raise AssertionError("Fallback provider should not be invoked")
 
-    async def fake_convert(**kwargs):
-        raise AssertionError("Embeddings conversion should be skipped for numeric mode")
+    async def fake_score(*args, **kwargs):
+        raise AssertionError("Hybrid scoring should be skipped for numeric mode")
 
     monkeypatch.setattr("app.services.scoring.call_gemini", fake_call_gemini)
     monkeypatch.setattr("app.services.scoring.call_openai", fake_call_openai)
-    monkeypatch.setattr("app.services.scoring._convert_analyses_to_scores", fake_convert)
+    monkeypatch.setattr("app.services.has_scoring.score_utterance", fake_score)
 
     result, errors, from_cache = await score_with_fallback(
         utterance="hello world",

@@ -670,6 +670,13 @@ class ScoringPipeline:
                     score_cells = sum(
                         len(columns) for columns in snapshot_score_buffer.values()
                     ) if snapshot_score_buffer else 0
+                    logger.debug(
+                        "evt=write_outcome target=%s rows=%d score_cells=%d analysis_cells=%d",
+                        target_score_sheet,
+                        len(distinct_rows),
+                        score_cells,
+                        analysis_cells,
+                    )
                     self._log(
                         "Writer flush success: rows={} entries={} attempts={} cells(text={} score={})".format(
                             len(distinct_rows),
