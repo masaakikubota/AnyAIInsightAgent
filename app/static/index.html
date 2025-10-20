@@ -436,12 +436,12 @@
               <div id="validation-status-meta" class="validation-meta"></div>
             </div>
 
-            <div id="job-log-card" class="anyai-support-card" style="display:none;">
+            <div id="job-log-card" class="anyai-support-card">
               <div class="support-header">
                 <h2 class="mt-0">実行ログ</h2>
                 <button type="button" class="btn btn-outline" id="btn-log-refresh">更新</button>
               </div>
-              <pre id="job-log-content" class="log-viewer" tabindex="0"></pre>
+              <pre id="job-log-content" class="log-viewer" tabindex="0">ジョブを開始するとログが表示されます。</pre>
             </div>
 
             <section id="result" class="anyai-support-card" style="display:none;">
@@ -510,6 +510,7 @@
       const logCard = document.getElementById('job-log-card');
       const logContent = document.getElementById('job-log-content');
       const logRefreshButton = document.getElementById('btn-log-refresh');
+      const defaultLogMessage = 'ジョブを開始するとログが表示されます。';
       const validation = (() => {
         const state = { ok: false, payload: null, cacheKey: '', message: '', status: 'info' };
 
@@ -630,8 +631,7 @@
 
       function resetLogView() {
         if (!logCard || !logContent) return;
-        logCard.style.display = 'none';
-        logContent.textContent = '';
+        logContent.textContent = defaultLogMessage;
       }
 
       async function refreshJobLog(jobId, { manual = false } = {}) {
@@ -644,14 +644,12 @@
           const res = await fetch(`/jobs/${jobId}/log?lines=400`);
           if (!res.ok) {
             if (res.status === 404) {
-              logCard.style.display = '';
               logContent.textContent = 'ログはまだ生成されていません。';
               return;
             }
             throw new Error(`status ${res.status}`);
           }
           const data = await res.json();
-          logCard.style.display = '';
           const logText = data.log || '';
           logContent.textContent = logText || 'ログはまだ記録されていません。';
           logContent.scrollTop = logContent.scrollHeight;
