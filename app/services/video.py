@@ -6,8 +6,13 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 import httpx
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
+
+try:  # pragma: no cover - optional dependency guard
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaIoBaseDownload
+except Exception:  # noqa: BLE001
+    build = None  # type: ignore[assignment]
+    MediaIoBaseDownload = None  # type: ignore[assignment]
 
 from .google_sheets import _load_credentials
 
@@ -45,7 +50,7 @@ def download_video_to_path(url: str, timeout: int, dest_dir: Optional[str] = Non
     drive_id = _extract_drive_file_id(url)
     target = get_temp_video_path(dest_dir=dest_dir)
 
-    if drive_id:
+    if drive_id and build and MediaIoBaseDownload:
         # Try Drive API with existing OAuth
         try:
             creds = _load_credentials()
