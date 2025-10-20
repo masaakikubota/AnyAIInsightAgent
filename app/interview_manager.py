@@ -18,6 +18,9 @@ from .models import (
     Category,
 )
 from .services.interview_llm import (
+    AGE_BANDS,
+    INCOME_BANDS,
+    REGIONS,
     generate_direction_brief,
     generate_interview_batch,
     generate_persona_batch,
