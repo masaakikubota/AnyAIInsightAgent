@@ -23,6 +23,11 @@ async def _convert_analyses_to_scores(
     categories: List[Category],
     analyses: List[str],
 ) -> List[float]:
+    logger.debug(
+        "Converting analyses to scores categories=%d utterance_preview=%s",
+        len(categories),
+        utterance[:80],
+    )
     if len(analyses) != len(categories):
         raise ValueError(
             "Analysis count does not match categories",
@@ -96,6 +101,15 @@ async def score_with_fallback(
     Returns a tuple of (ScoreResult, error trail, from_cache flag).
     Error trail entries are tuples of (provider, http_status, reason).
     """
+    logger.debug(
+        "score_with_fallback start categories=%d prefer=%s timeout=%s retries=%s file_parts=%s cache=%s",
+        len(categories),
+        prefer.value,
+        timeout_sec,
+        max_retries,
+        bool(file_parts),
+        bool(cache),
+    )
     errors: List[Tuple[str, int, str]] = []
 
     def _determine_model(p: Provider) -> str:
@@ -138,6 +152,10 @@ async def score_with_fallback(
             ssr_enabled=ssr_enabled,
         )
         cached = await cache.get(key)
+        if cached:
+            logger.debug("Cache hit provider=%s key=%s", p.value, key)
+        else:
+            logger.debug("Cache miss provider=%s key=%s", p.value, key)
         return cached
 
     async def store_cache(p: Provider, result: ScoreResult) -> None:
@@ -153,6 +171,7 @@ async def score_with_fallback(
             ssr_enabled=ssr_enabled,
         )
         await cache.set(key, result)
+        logger.debug("Cache stored provider=%s key=%s", p.value, key)
 
     # Determine provider order
     if file_parts:
@@ -168,8 +187,22 @@ async def score_with_fallback(
                 if tries == 0:
                     cached = await try_cache(provider)
                     if cached:
+                        logger.debug("Using cached result provider=%s", provider.value)
                         return cached, errors, True
+                logger.debug(
+                    "Calling provider=%s attempt=%d model=%s",
+                    provider.value,
+                    tries + 1,
+                    _determine_model(provider),
+                )
                 res, status = await try_call(provider)
+                logger.debug(
+                    "Provider=%s responded status=%s analyses=%d scores=%s",
+                    provider.value,
+                    status,
+                    len(res.analyses or []),
+                    len(res.scores or []) if res.scores else 0,
+                )
                 if ssr_enabled and res.analyses:
                     converted_scores = await _convert_analyses_to_scores(
                         utterance=utterance,
@@ -207,15 +240,34 @@ async def score_with_fallback(
                 if res.pre_scores is None and clamped_scores:
                     res.pre_scores = list(clamped_scores)
                 await store_cache(provider, res)
+                logger.debug(
+                    "score_with_fallback success provider=%s tries=%d",
+                    provider.value,
+                    tries + 1,
+                )
                 return res, errors, False
             except Exception as e:  # noqa: BLE001
                 status = getattr(e, "response", None).status_code if hasattr(e, "response") else None
                 reason = str(e)
                 errors.append((provider.value, status or 0, reason))
+                logger.debug(
+                    "Provider failure provider=%s tries=%d status=%s reason=%s",
+                    provider.value,
+                    tries + 1,
+                    status,
+                    reason,
+                )
                 last_exc = e
                 tries += 1
                 if tries <= max_retries:
                     await asyncio.sleep(backoff)
+                    logger.debug(
+                        "Retrying provider=%s in %.2fs (attempt %d/%d)",
+                        provider.value,
+                        backoff,
+                        tries + 1,
+                        max_retries + 1,
+                    )
                     backoff = min(2.0, backoff * 2)
         # fallback to next provider
     # If both failed, attach error trail for logging
@@ -224,6 +276,7 @@ async def score_with_fallback(
         setattr(last_exc, "_trail", errors)
     except Exception:  # noqa: BLE001
         pass
+    logger.error("All providers failed errors=%s", errors)
     raise last_exc
 
 

@@ -6,6 +6,7 @@ import os
 import time
 import shutil
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Callable
 from datetime import datetime
@@ -22,6 +23,9 @@ from .services.google_sheets import (
 from .services.sheet_updates import build_batched_value_ranges
 from .services.scoring_cache import CachePolicy, ScoreCache
 from .scoring_pipeline import ScoringPipeline, PipelineUnit
+
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_cell(rows: List[List[str]], row_idx: int, col_idx: int) -> str:
@@ -108,6 +112,12 @@ class JobManager:
         self.queue_path: Path = self.base_dir / "queue.json"
         self._load_queue()
         self._job_logs: Dict[str, Callable[[str], None]] = {}
+        logger.debug(
+            "JobManager initialised base_dir=%s queue_path=%s existing_jobs=%d",
+            self.base_dir,
+            self.queue_path,
+            len(self.jobs),
+        )
 
     # Queue persistence helpers
     def _persist_queue(self) -> None:
@@ -135,12 +145,16 @@ class JobManager:
             if job_id not in self.queue:
                 self.queue.append(job_id)
                 self._persist_queue()
+                logger.debug("Job %s enqueued (queue_length=%d)", job_id, len(self.queue))
+            else:
+                logger.debug("Job %s already present in queue", job_id)
 
     async def remove_from_queue(self, job_id: str) -> None:
         async with self._lock:
             if job_id in self.queue:
                 self.queue.remove(job_id)
                 self._persist_queue()
+                logger.debug("Job %s removed from queue (remaining=%d)", job_id, len(self.queue))
 
     async def move_in_queue(self, job_id: str, new_index: int) -> None:
         async with self._lock:
@@ -150,6 +164,7 @@ class JobManager:
             self.queue.remove(job_id)
             self.queue.insert(new_index, job_id)
             self._persist_queue()
+            logger.debug("Job %s moved to index %d", job_id, new_index)
 
     async def get_queue_snapshot(self) -> List[str]:
         async with self._lock:
@@ -158,6 +173,7 @@ class JobManager:
     async def process_queue(self) -> None:
         # Single runner
         if self.queue_running:
+            logger.debug("Queue runner already active; skipping additional start request")
             return
         self.queue_running = True
         try:
@@ -167,6 +183,7 @@ class JobManager:
                         break
                     job_id = self.queue[0]
                     self.current_job_id = job_id
+                logger.debug("Queue runner picked job %s", job_id)
                 # Ensure job object
                 job = self.jobs.get(job_id)
                 if not job:
@@ -174,18 +191,25 @@ class JobManager:
                         job = await self.load_existing_job(job_id)
                     except Exception:
                         # Unable to load; drop from queue
+                        logger.exception("Failed to load job %s from disk; removing from queue", job_id)
                         await self.remove_from_queue(job_id)
                         continue
                 # Only process pending
                 if job.status not in (JobStatus.pending,):
+                    logger.debug(
+                        "Job %s skipped because status=%s (removing from queue)",
+                        job_id,
+                        job.status,
+                    )
                     await self.remove_from_queue(job_id)
                     continue
                 try:
                     await self.run_job(job_id)
                 except Exception as exc:
                     job = self.jobs.get(job_id)
-                    logger = self._job_logger(job_id)
-                    logger(f"Job failed with exception: {exc!r}")
+                    job_log = self._job_logger(job_id)
+                    job_log(f"Job failed with exception: {exc!r}")
+                    logging.getLogger(__name__).exception("Job %s failed", job_id, exc_info=exc)
                     if job:
                         job.status = JobStatus.failed
                 finally:
@@ -194,6 +218,7 @@ class JobManager:
         finally:
             self.queue_running = False
             self.current_job_id = None
+            logger.debug("Queue runner finished")
 
     def _job_dir(self, job_id: str) -> Path:
         p = self.base_dir / job_id
@@ -222,6 +247,14 @@ class JobManager:
         async with self._lock:
             job = Job(job_id=job_id, cfg=cfg)
             self.jobs[job_id] = job
+        logger.debug(
+            "Job %s created mode=%s concurrency=%s batch_size=%s enable_ssr=%s",
+            job_id,
+            cfg.mode,
+            cfg.concurrency,
+            cfg.batch_size,
+            cfg.enable_ssr,
+        )
         job_dir = self._job_dir(job_id)
         (job_dir / "config.json").write_text(cfg.model_dump_json(indent=2), encoding="utf-8")
         job.run_meta_path = job_dir / "run_meta.json"
@@ -241,6 +274,7 @@ class JobManager:
         async with self._lock:
             job = Job(job_id=job_id, cfg=cfg)
             self.jobs[job_id] = job
+        logger.debug("Job %s loaded from disk", job_id)
         job.run_meta_path = job_dir / "run_meta.json"
         job.checkpoint_path = job_dir / "checkpoint.json"
         job.chunk_meta_path = job_dir / "chunk_meta.json"
@@ -248,6 +282,14 @@ class JobManager:
 
     async def run_job(self, job_id: str) -> None:
         job = self.jobs[job_id]
+        logger.debug(
+            "run_job start job_id=%s mode=%s enable_ssr=%s concurrency=%s sheet=%s",
+            job_id,
+            job.cfg.mode,
+            job.cfg.enable_ssr,
+            job.cfg.concurrency,
+            job.cfg.sheet_name or job.cfg.sheet_keyword,
+        )
         self._adjust_mode_defaults(job)
         job.status = JobStatus.running
         job.started_at = time.time()
@@ -261,16 +303,16 @@ class JobManager:
             primary_keyword = job.cfg.sheet_keyword or "Link"
             sheet_name = job.cfg.sheet_name
             if not sheet_name:
-                match = find_sheet(spreadsheet_id, primary_keyword)
+                match = await asyncio.to_thread(find_sheet, spreadsheet_id, primary_keyword)
                 sheet_name = match.sheet_name
                 job.cfg.sheet_name = sheet_name
             score_sheet_keyword = job.cfg.score_sheet_keyword or primary_keyword
             score_sheet_name = job.cfg.score_sheet_name
             if not score_sheet_name:
-                score_match = find_sheet(spreadsheet_id, score_sheet_keyword)
+                score_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_sheet_keyword)
                 score_sheet_name = score_match.sheet_name
                 job.cfg.score_sheet_name = score_sheet_name
-            rows = fetch_sheet_values(spreadsheet_id, sheet_name)
+            rows = await asyncio.to_thread(fetch_sheet_values, spreadsheet_id, sheet_name)
             job_log(
                 f"Fetched sheet '{sheet_name}' rows={len(rows)} (scores -> '{score_sheet_name}')"
             )
@@ -452,120 +494,128 @@ class JobManager:
                             retry_count=retries_used,
                         )
 
-                try:
-                    pipeline_units = [
-                        PipelineUnit(row_index=u[0], block_index=u[1], col_offset=u[2])
-                        for u in chunk_remaining
-                    ]
-                    job_log(
-                        f"Chunk {chunk_idx + 1} pass start pending_units={len(pipeline_units)} "
-                        f"concurrency={min(current_conc, max(1, len(pipeline_units)))}"
-                    )
+                    try:
+                        pipeline_units = [
+                            PipelineUnit(row_index=u[0], block_index=u[1], col_offset=u[2])
+                            for u in chunk_remaining
+                        ]
+                        job_log(
+                            f"Chunk {chunk_idx + 1} pass start pending_units={len(pipeline_units)} "
+                            f"concurrency={min(current_conc, max(1, len(pipeline_units)))}"
+                        )
 
-                    async def mark_unit(unit: PipelineUnit, result: ScoreResult) -> None:
-                        if not count_progress:
-                            return
-                        async with progress_lock:
-                            key = f"{unit.row_index}:{unit.block_index}"
-                            if key in completed_blocks:
+                        async def mark_unit(unit: PipelineUnit, result: ScoreResult) -> None:
+                            if not count_progress:
                                 return
-                            completed_blocks.add(key)
-                            job.processed_rows += 1
-                            if job.checkpoint_path:
-                                import json as _json
-
-                                job.checkpoint_path.write_text(
-                                    _json.dumps({"completed_blocks": sorted(list(completed_blocks))}),
-                                    encoding="utf-8",
+                            async with progress_lock:
+                                key = f"{unit.row_index}:{unit.block_index}"
+                                if key in completed_blocks:
+                                    return
+                                completed_blocks.add(key)
+                                job.processed_rows += 1
+                                logger.debug(
+                                    "Job %s unit completed row=%s block=%s processed=%s/%s",
+                                    job.job_id,
+                                    unit.row_index,
+                                    unit.block_index,
+                                    job.processed_rows,
+                                    job.total_rows,
                                 )
+                                if job.checkpoint_path:
+                                    import json as _json
 
-                    pipeline = ScoringPipeline(
-                        cfg=job.cfg,
-                        spreadsheet_id=spreadsheet_id,
-                        sheet_name=sheet_name,
-                        score_sheet_name=score_sheet_name,
-                        invoke_concurrency=min(current_conc, max(1, len(pipeline_units))),
-                        rows=rows,
-                        utter_col_index=utter_col,
-                        category_reader=read_categories_from_sheet,
-                        score_cache=score_cache,
-                        mark_unit_completed=mark_unit,
-                        flush_interval=job.cfg.writer_flush_interval_sec,
-                        flush_unit_threshold=job.cfg.writer_flush_batch_size,
-                        invoke_queue_size=job.cfg.pipeline_queue_size,
-                        validation_max_workers=job.cfg.validation_max_workers,
-                        validation_timeout=job.cfg.validation_worker_timeout_sec,
-                        writer_retry_limit=job.cfg.writer_retry_limit,
-                        writer_retry_initial_delay=job.cfg.writer_retry_initial_delay_sec,
-                        writer_retry_backoff_multiplier=job.cfg.writer_retry_backoff_multiplier,
-                        sheet_batch_row_size=job.cfg.sheet_chunk_rows,
-                        video_mode=job.cfg.mode == "video",
-                        event_logger=lambda msg, cid=chunk_idx + 1: job_log(f"[chunk {cid}] {msg}"),
-                    )
-                    stats = await pipeline.run(pipeline_units)
-                    rate_429_batch = stats.rate_429_count
-                    rate_429_total += stats.rate_429_count
-                    batch_num += 1
-                    job_log(
-                        f"Chunk {chunk_idx + 1} pass done processed={stats.processed_units} "
-                        f"flushes={stats.flush_count} cache_hits={stats.cache_hits} 429={stats.rate_429_count}"
-                    )
-
-                    if job.cfg.auto_slowdown:
-                        if rate_429_batch > 0 and current_conc > 1:
-                            new_conc = max(1, int(max(1, round(current_conc * 0.7))))
-                            if new_conc != current_conc:
-                                slowdown_history.append({"batch": batch_num, "from": current_conc, "to": new_conc, "reason": "429"})
-                                current_conc = new_conc
-                            clean_batches = 0
-                        else:
-                            clean_batches += 1
-                            if clean_batches >= 3 and current_conc < initial_conc:
-                                new_conc = min(initial_conc, current_conc + 1)
-                                if new_conc != current_conc:
-                                    slowdown_history.append(
-                                        {"batch": batch_num, "from": current_conc, "to": new_conc, "reason": "recover"}
+                                    job.checkpoint_path.write_text(
+                                        _json.dumps({"completed_blocks": sorted(list(completed_blocks))}),
+                                        encoding="utf-8",
                                     )
+
+                        pipeline = ScoringPipeline(
+                            cfg=job.cfg,
+                            spreadsheet_id=spreadsheet_id,
+                            sheet_name=sheet_name,
+                            score_sheet_name=score_sheet_name,
+                            invoke_concurrency=min(current_conc, max(1, len(pipeline_units))),
+                            rows=rows,
+                            utter_col_index=utter_col,
+                            category_reader=read_categories_from_sheet,
+                            score_cache=score_cache,
+                            mark_unit_completed=mark_unit,
+                            flush_interval=job.cfg.writer_flush_interval_sec,
+                            flush_unit_threshold=job.cfg.writer_flush_batch_size,
+                            invoke_queue_size=job.cfg.pipeline_queue_size,
+                            validation_max_workers=job.cfg.validation_max_workers,
+                            validation_timeout=job.cfg.validation_worker_timeout_sec,
+                            writer_retry_limit=job.cfg.writer_retry_limit,
+                            writer_retry_initial_delay=job.cfg.writer_retry_initial_delay_sec,
+                            writer_retry_backoff_multiplier=job.cfg.writer_retry_backoff_multiplier,
+                            sheet_batch_row_size=job.cfg.sheet_chunk_rows,
+                            video_mode=job.cfg.mode == "video",
+                            event_logger=lambda msg, cid=chunk_idx + 1: job_log(f"[chunk {cid}] {msg}"),
+                        )
+                        stats = await pipeline.run(pipeline_units)
+                        rate_429_batch = stats.rate_429_count
+                        rate_429_total += stats.rate_429_count
+                        batch_num += 1
+                        job_log(
+                            f"Chunk {chunk_idx + 1} pass done processed={stats.processed_units} "
+                            f"flushes={stats.flush_count} cache_hits={stats.cache_hits} 429={stats.rate_429_count}"
+                        )
+
+                        if job.cfg.auto_slowdown:
+                            if rate_429_batch > 0 and current_conc > 1:
+                                new_conc = max(1, int(max(1, round(current_conc * 0.7))))
+                                if new_conc != current_conc:
+                                    slowdown_history.append({"batch": batch_num, "from": current_conc, "to": new_conc, "reason": "429"})
                                     current_conc = new_conc
                                 clean_batches = 0
-                except Exception as exc:
-                    retries_used += 1
-                    if chunk_record:
+                            else:
+                                clean_batches += 1
+                                if clean_batches >= 3 and current_conc < initial_conc:
+                                    new_conc = min(initial_conc, current_conc + 1)
+                                    if new_conc != current_conc:
+                                        slowdown_history.append(
+                                            {"batch": batch_num, "from": current_conc, "to": new_conc, "reason": "recover"}
+                                        )
+                                        current_conc = new_conc
+                                    clean_batches = 0
+                    except Exception as exc:
+                        retries_used += 1
+                        if chunk_record:
+                            if retries_used <= max_chunk_retries:
+                                _update_chunk_meta(
+                                    chunk_idx,
+                                    status="pending",
+                                    last_error=str(exc),
+                                    retry_count=retries_used,
+                                )
+                                job_log(
+                                    f"Chunk {chunk_idx + 1} error attempt={retries_used}/{max_chunk_retries}: {exc}"
+                                )
+                            else:
+                                _update_chunk_meta(
+                                    chunk_idx,
+                                    status="failed",
+                                    last_error=str(exc),
+                                    retry_count=retries_used,
+                                )
+                                job_log(
+                                    f"Chunk {chunk_idx + 1} exhausted retries ({retries_used}/{max_chunk_retries}) error={exc}"
+                                )
                         if retries_used <= max_chunk_retries:
+                            await asyncio.sleep(min(60, 2 ** retries_used))
+                            continue
+                        job.status = JobStatus.failed
+                        job_log("Job failed due to unrecoverable chunk error")
+                        raise
+                    else:
+                        if chunk_record:
                             _update_chunk_meta(
                                 chunk_idx,
-                                status="pending",
-                                last_error=str(exc),
+                                status="completed",
+                                last_error=None,
                                 retry_count=retries_used,
                             )
-                            job_log(
-                                f"Chunk {chunk_idx + 1} error attempt={retries_used}/{max_chunk_retries}: {exc}"
-                            )
-                        else:
-                            _update_chunk_meta(
-                                chunk_idx,
-                                status="failed",
-                                last_error=str(exc),
-                                retry_count=retries_used,
-                            )
-                            job_log(
-                                f"Chunk {chunk_idx + 1} exhausted retries ({retries_used}/{max_chunk_retries}) error={exc}"
-                            )
-                    if retries_used <= max_chunk_retries:
-                        await asyncio.sleep(min(60, 2 ** retries_used))
-                        continue
-                    job.status = JobStatus.failed
-                    job_log("Job failed due to unrecoverable chunk error")
-                    raise
-                else:
-                    if chunk_record:
-                        _update_chunk_meta(
-                            chunk_idx,
-                            status="completed",
-                            last_error=None,
-                            retry_count=retries_used,
-                        )
-                    break
+                        break
 
             # Retry passes for cells still blank (up to 4 additional passes)
             for retry_round in range(4):
@@ -735,6 +785,14 @@ class JobManager:
                 _apply_chunk_settings(100)
             else:
                 _apply_chunk_settings(500)
+        logger.debug(
+            "Mode defaults applied job_id=%s mode=%s chunks=%s concurrency=%s timeout=%s",
+            job.job_id,
+            job.cfg.mode,
+            job.cfg.sheet_chunk_rows,
+            job.cfg.concurrency,
+            job.cfg.timeout_sec,
+        )
 
     def _prune_old_runs(self, keep: int = 2) -> None:
         try:
