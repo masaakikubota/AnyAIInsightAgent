@@ -2,44 +2,66 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
-from typing import Optional
+from logging.config import dictConfig
 
-_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
-_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
 
 _CONFIGURED = False
 
 
-def _resolve_level(name: str) -> int:
-    normalized = (name or "").strip().upper()
-    if not normalized:
-        return logging.DEBUG
-    return getattr(logging, normalized, logging.DEBUG)
+def configure_logging() -> None:
+    """Configure verbose logging for debugging.
 
-
-def configure_logging(*, level: Optional[str] = None) -> None:
+    When ANYAI_LOG_LEVEL is set, that level is used; otherwise default to DEBUG.
+    The configuration ensures uvicorn access logs continue to appear while
+    application-specific loggers emit detailed context to the terminal.
+    """
     global _CONFIGURED
     if _CONFIGURED:
+        logging.getLogger(__name__).debug("Logging already configured; skipping reconfiguration")
         return
 
-    env_level = level or os.getenv("ANYAI_LOG_LEVEL", "DEBUG")
-    log_level = _resolve_level(env_level)
+    log_level = os.getenv("ANYAI_LOG_LEVEL", "DEBUG").upper()
 
-    logging.basicConfig(
-        level=log_level,
-        format=_LOG_FORMAT,
-        datefmt=_DATE_FORMAT,
-        stream=sys.stdout,
-        force=True,
+    dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "verbose": {
+                    "format": "%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                },
+                "uvicorn": {
+                    "format": "%(asctime)s [%(levelname)s] %(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                },
+            },
+            "handlers": {
+                "console": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "verbose",
+                },
+                "uvicorn": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "uvicorn",
+                },
+            },
+            "loggers": {
+                "": {  # root logger
+                    "handlers": ["console"],
+                    "level": log_level,
+                },
+                "uvicorn.error": {
+                    "level": "INFO",
+                },
+                "uvicorn.access": {
+                    "handlers": ["uvicorn"],
+                    "level": "INFO",
+                    "propagate": False,
+                },
+            },
+        }
     )
 
-    # Keep uvicorn/httpx logs visible but not overwhelming.
-    logging.getLogger("uvicorn").setLevel(logging.INFO)
-    logging.getLogger("uvicorn.access").setLevel(logging.INFO)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-
+    logging.getLogger(__name__).debug("Logging configured (level=%s)", log_level)
     _CONFIGURED = True
-
-
-__all__ = ["configure_logging"]

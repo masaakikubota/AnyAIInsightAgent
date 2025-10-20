@@ -16,6 +16,8 @@ from .routers import cleansing, interview, jobs, persona, settings, video_suite
 
 logger = logging.getLogger(__name__)
 
+configure_logging()
+
 APP_TITLE = "AnyAIMarketingSolutionAgent - Scoring"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -115,4 +117,3 @@ if __name__ == "__main__":
     ensure_api_keys_interactive()
 
 __all__ = ["app", "create_app", "run"]
-

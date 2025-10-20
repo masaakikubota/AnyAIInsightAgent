@@ -154,6 +154,18 @@ class ScoringPipeline:
             thread_name_prefix="scoring-validation",
         )
         self._log_callback = event_logger
+        logger.debug(
+            "ScoringPipeline init sheet=%s score_sheet=%s concurrency=%s queue_size=%s "
+            "validation_workers=%s flush_interval=%.2f batch_rows=%s video_mode=%s",
+            self.sheet_name,
+            self.score_sheet_name,
+            self.invoke_concurrency,
+            self.invoke_queue_size,
+            self.validation_max_workers,
+            self.flush_interval,
+            self.sheet_batch_row_size,
+            self.video_mode,
+        )
 
     def _log(self, message: str) -> None:
         if not self._log_callback:
@@ -173,6 +185,12 @@ class ScoringPipeline:
         writer_queue: asyncio.Queue[Optional[SheetUpdate]] = asyncio.Queue()
 
         units_list = list(units)
+        logger.debug(
+            "Pipeline run start units=%d concurrency=%d queue_max=%d",
+            len(units_list),
+            self.invoke_concurrency,
+            self.invoke_queue_size,
+        )
         self._log(f"Pipeline start: units={len(units_list)} concurrency={self.invoke_concurrency}")
 
         producer_task = asyncio.create_task(self._producer(units_list, invoke_queue))
@@ -197,6 +215,13 @@ class ScoringPipeline:
             await self._shutdown_validation_executor()
 
         self._log(f"Pipeline complete: processed_units={self._stats.processed_units} flushes={self._stats.flush_count} cache_hits={self._stats.cache_hits}")
+        logger.debug(
+            "Pipeline run complete processed=%d flushes=%d cache_hits=%d rate429=%d",
+            self._stats.processed_units,
+            self._stats.flush_count,
+            self._stats.cache_hits,
+            self._stats.rate_429_count,
+        )
         return self._stats
 
     async def _signal_termination(
@@ -255,6 +280,11 @@ class ScoringPipeline:
                     utterance = str(utter_row[self.utter_col_index])
                 categories = self.category_reader(self.rows, self.cfg, unit.row_index, unit.col_offset)
                 if not categories:
+                    logger.debug(
+                        "Producer skipping row=%s block=%s (no categories detected)",
+                        unit.row_index,
+                        unit.block_index,
+                    )
                     continue
                 cleanup_path: Optional[str] = None
                 file_parts: Optional[List[dict]] = None
@@ -263,8 +293,19 @@ class ScoringPipeline:
                 if self.video_mode:
                     video_link = utterance.strip()
                     if not video_link:
+                        logger.debug(
+                            "Producer skipping video row=%s block=%s (empty link)",
+                            unit.row_index,
+                            unit.block_index,
+                        )
                         continue
                     try:
+                        logger.debug(
+                            "Producer downloading video row=%s block=%s link=%s",
+                            unit.row_index,
+                            unit.block_index,
+                            video_link,
+                        )
                         video_path = await asyncio.to_thread(
                             download_video_to_path,
                             video_link,
@@ -294,11 +335,19 @@ class ScoringPipeline:
                     model_override=model_override,
                     cleanup_path=cleanup_path,
                 )
+                logger.debug(
+                    "Producer queued task row=%s block=%s categories=%d cache=%s",
+                    unit.row_index,
+                    unit.block_index,
+                    len(categories),
+                    bool(self.score_cache),
+                )
                 await invoke_queue.put(task)
         finally:
             for _ in range(self.invoke_concurrency):
                 await invoke_queue.put(None)
             self._log("Producer finished, sentinels dispatched")
+            logger.debug("Producer dispatched sentinels")
 
     async def _invoker(
         self,
@@ -315,6 +364,13 @@ class ScoringPipeline:
                     if task is None:
                         await validation_queue.put(None)
                         return
+                    logger.debug(
+                        "Invoker executing row=%s block=%s categories=%d file_parts=%s",
+                        task.unit.row_index,
+                        task.unit.block_index,
+                        len(task.categories),
+                        bool(task.file_parts),
+                    )
                     try:
                         result, error_trail, from_cache = await score_with_fallback(
                             utterance=task.utterance,
@@ -338,6 +394,14 @@ class ScoringPipeline:
                         raise
                     else:
                         score_len = len(result.scores or [])
+                        logger.debug(
+                            "Invoker succeeded row=%s block=%s provider=%s cache_hit=%s scores=%d",
+                            task.unit.row_index,
+                            task.unit.block_index,
+                            result.provider.value,
+                            from_cache,
+                            score_len,
+                        )
                         self._log(
                             f"Invoker success: row={task.unit.row_index} block={task.unit.block_index} "
                             f"cache_hit={from_cache} provider={result.provider.value} scores={score_len}"
@@ -365,6 +429,7 @@ class ScoringPipeline:
             self._terminate.set()
             await validation_queue.put(None)
             self._log("Invoker encountered fatal exception")
+            logger.exception("Invoker crashed; termination signal sent")
             raise
 
     async def _validator(
@@ -380,7 +445,14 @@ class ScoringPipeline:
                 try:
                     if payload is None:
                         pending_invokers -= 1
+                        logger.debug("Validator received sentinel (remaining_invokers=%d)", pending_invokers)
                         continue
+                    logger.debug(
+                        "Validator executing row=%s block=%s from_cache=%s",
+                        payload.task.unit.row_index,
+                        payload.task.unit.block_index,
+                        payload.from_cache,
+                    )
                     future = loop.run_in_executor(self._validation_executor, self._run_validation, payload)
                     if self.validation_timeout:
                         outcome = await asyncio.wait_for(future, timeout=self.validation_timeout)
@@ -390,10 +462,17 @@ class ScoringPipeline:
                         continue
                     self._stats.processed_units += 1
                     if outcome.should_cache and self.score_cache and outcome.cache_key:
+                        logger.debug("Validator caching result key=%s", outcome.cache_key)
                         await self.score_cache.set(outcome.cache_key, outcome.result)
                     self._log(
                         f"Validator accepted: row={payload.task.unit.row_index} block={payload.task.unit.block_index} "
                         f"len={outcome.expected_len} partial={outcome.result.partial}"
+                    )
+                    logger.debug(
+                        "Validator accepted row=%s block=%s partial=%s",
+                        payload.task.unit.row_index,
+                        payload.task.unit.block_index,
+                        outcome.result.partial,
                     )
                     await writer_queue.put(outcome.sheet_update)
                 finally:
@@ -403,6 +482,7 @@ class ScoringPipeline:
         except Exception:
             self._terminate.set()
             self._log("Validator encountered fatal exception")
+            logger.exception("Validator crashed")
             raise
         finally:
             await writer_queue.put(None)
@@ -412,6 +492,13 @@ class ScoringPipeline:
         categories = list(task.categories)
         expected_len = len(categories)
         result = payload.result
+        logger.debug(
+            "Validation thread start row=%s block=%s expected_len=%d analyses=%d",
+            task.unit.row_index,
+            task.unit.block_index,
+            expected_len,
+            len(result.analyses or []),
+        )
 
         source_scores: Sequence[Optional[float]] = []
         if result.pre_scores is not None:
@@ -483,7 +570,13 @@ class ScoringPipeline:
                 model=result.model,
                 ssr_enabled=self.cfg.enable_ssr,
             )
-
+        logger.debug(
+            "Validation thread done row=%s block=%s missing=%d should_cache=%s",
+            task.unit.row_index,
+            task.unit.block_index,
+            len(missing_indices),
+            should_cache,
+        )
         return ValidationOutcome(
             result=result,
             sheet_update=sheet_update,
@@ -503,6 +596,7 @@ class ScoringPipeline:
         async def flush() -> None:
             nonlocal buffer_scores, buffer_analyses, pending_units, last_flush, pending_updates
             if not buffer_scores and not buffer_analyses:
+                logger.debug("Writer flush skipped (no buffered values)")
                 return
             snapshot_score_buffer = buffer_scores
             snapshot_analysis_buffer = buffer_analyses
@@ -537,7 +631,19 @@ class ScoringPipeline:
                 self._log(
                     "Writer flush skipped Sheets update because no values were produced"
                 )
+                logger.debug(
+                    "Writer flush skipped Sheets update (score_rows=%d analysis_rows=%d)",
+                    len(snapshot_score_buffer),
+                    len(snapshot_analysis_buffer),
+                )
                 return
+            logger.debug(
+                "Writer flush start payload_entries=%d score_rows=%d analysis_rows=%d pending_updates=%d",
+                len(payload),
+                len(snapshot_score_buffer),
+                len(snapshot_analysis_buffer),
+                len(snapshot_updates),
+            )
             attempts = 0
             delay = self.writer_retry_initial_delay
             last_error: Optional[Exception] = None
@@ -580,6 +686,14 @@ class ScoringPipeline:
                             score_cells,
                         )
                     )
+                    logger.debug(
+                        "Writer flush success rows=%d entries=%d attempts=%d analysis_cells=%d score_cells=%d",
+                        len(distinct_rows),
+                        len(snapshot_updates),
+                        attempts + 1,
+                        analysis_cells,
+                        score_cells,
+                    )
                     return
                 except GoogleSheetsError as exc:
                     last_error = exc
@@ -587,16 +701,22 @@ class ScoringPipeline:
                     if attempts >= self.writer_retry_limit:
                         self._terminate.set()
                         self._log(f"Writer flush failed after retries: error={exc}")
+                        logger.exception("Writer flush failed after retries", exc_info=exc)
                         raise
                     await asyncio.sleep(delay)
                     delay *= self.writer_retry_backoff_multiplier
                     self._log(f"Writer retry scheduled: attempt={attempts + 1} delay={delay:.2f}")
+                    logger.debug(
+                        "Writer retry scheduled attempt=%d delay=%.2f", attempts + 1, delay
+                    )
                 except Exception as exc:
                     last_error = exc
                     self._terminate.set()
                     self._log(f"Writer flush fatal error: {exc}")
+                    logger.exception("Writer flush fatal error", exc_info=exc)
                     raise
             if last_error:
+                logger.debug("Writer flush raising last error %s", last_error)
                 raise last_error
 
         try:
@@ -620,6 +740,12 @@ class ScoringPipeline:
                             row_analysis_buffer[unit.col_offset + index] = analysis
                     pending_units += 1
                     pending_updates.append(entry)
+                    logger.debug(
+                        "Writer buffered row=%s block=%s units_buffered=%d",
+                        unit.row_index,
+                        unit.block_index,
+                        pending_units,
+                    )
                     now = time.monotonic()
                     if (
                         pending_units >= self.flush_unit_threshold
@@ -633,6 +759,7 @@ class ScoringPipeline:
         finally:
             await flush()
             await self._drain_cleanup_queue()
+            logger.debug("Writer shutdown complete (cleanup queue drained)")
 
     async def _drain_cleanup_queue(self) -> None:
         if self._cleanup_queue.empty():
