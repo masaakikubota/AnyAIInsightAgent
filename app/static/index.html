@@ -778,6 +778,17 @@
         }
       }
 
+      async function ensureQueueRunning() {
+        try {
+          const res = await fetch('/queue/start', { method: 'POST' });
+          if (!res.ok) {
+            console.warn('Queue runner start request failed', res.status);
+          }
+        } catch (err) {
+          console.warn('Unable to trigger queue runner', err);
+        }
+      }
+
       function markValidationDirty(showMessage = true){
         validation.markDirty(showMessage);
         updateQueueActionState();
@@ -1133,6 +1144,7 @@
               resultSection.style.display = 'block';
               document.getElementById('job-id').textContent = currentJobId;
               resetLogView();
+              await ensureQueueRunning();
               startPolling(currentJobId);
               showValidationBanner('success', 'ジョブを開始しました。右側の進捗を確認できます。');
               await refreshQueue();
