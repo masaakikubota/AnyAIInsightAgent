@@ -208,7 +208,7 @@ body {
 .anyai-app-support {
   display: flex;
   flex-direction: column;
-  gap: var(--anyai-space-6, 24px);
+  gap: var(--anyai-space-4, 16px);
   min-width: 0;
 }
 
@@ -292,7 +292,7 @@ body {
   padding: var(--anyai-space-6, 24px) var(--anyai-space-7, 32px);
   display: flex;
   flex-direction: column;
-  gap: var(--anyai-space-7, 32px);
+  gap: var(--anyai-space-4, 16px);
 }
 
 .anyai-form-section form {

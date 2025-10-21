@@ -18,9 +18,32 @@
     <script defer src="/static/anyai/sidebar.js"></script>
     
     <style>
-      .mode-options { display: flex; flex-wrap: wrap; gap: var(--anyai-space-3); align-items: center; }
+      .mode-options { display: flex; flex-wrap: nowrap; gap: var(--anyai-space-3); align-items: center; }
       .mode-options label { display: inline-flex; align-items: center; gap: var(--anyai-space-2); font-weight: 600; }
       .mode-options .spacer { flex: 1 1 auto; }
+      .mode-divider {
+        width: 1px;
+        align-self: stretch;
+        background: color-mix(in srgb, var(--anyai-border), transparent 20%);
+      }
+      .mode-ssr {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--anyai-space-2);
+        font-weight: 600;
+      }
+
+      #scoring-heading {
+        margin-bottom: 0;
+      }
+
+      .anyai-form-section > header {
+        margin-bottom: 0;
+      }
+
+      .anyai-form-section > header > h2.mt-0 {
+        margin-bottom: 0;
+      }
 
       .field-with-action {
         display: flex;
@@ -36,6 +59,37 @@
         flex: 0 0 auto;
         white-space: nowrap;
       }
+
+.sheet-selection-grid {
+  grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr);
+  gap: var(--anyai-space-4);
+  align-items: start;
+}
+
+      .sheet-selection-grid > .field:first-of-type {
+        grid-column: 1 / -1;
+      }
+
+      .sheet-selection-grid details.field-info-inline {
+        margin-top: var(--anyai-space-2);
+        display: block;
+      }
+
+      #analysis-sheet-field .field-hint {
+        margin-bottom: var(--anyai-space-6);
+      }
+
+.sheet-selection-grid details.field-info-inline .info-panel {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: var(--anyai-fs-1);
+}
+
+.mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--anyai-space-3);
+}
 
       .stack-sm { display: flex; flex-direction: column; gap: var(--anyai-space-3); }
       .muted { color: var(--anyai-text-subtle); font-size: var(--anyai-fs-2); }
@@ -214,17 +268,15 @@
                 </header>
                 <form id="mode-form">
                   <fieldset class="field">
-                    <legend>実行モード</legend>
+                    <legend class="sr-only">実行モード</legend>
                     <div class="mode-options">
                       <label><input type="radio" name="mode" value="csv" checked /> Textモード</label>
                       <label><input type="radio" name="mode" value="video" /> Videoモード</label>
+                      <span class="mode-divider" aria-hidden="true"></span>
+                      <label class="mode-ssr"><input type="checkbox" id="enable_ssr" name="enable_ssr" checked /> SSRモードを有効化（推奨）</label>
                       <span class="spacer"></span>
                     </div>
                   </fieldset>
-                  <div class="field field-inline">
-                    <input type="checkbox" id="enable_ssr" name="enable_ssr" checked />
-                    <label for="enable_ssr">SSRモードを有効化（推奨）</label>
-                  </div>
                 </form>
               </section>
 
@@ -234,7 +286,7 @@
                   <p class="field-hint">スコアリング対象となるスプレッドシートと列情報を設定します。</p>
                 </header>
                 <form id="job-form">
-                  <div class="anyai-form-fields">
+                  <div class="anyai-form-fields sheet-selection-grid">
                     <div class="field">
                       <label for="spreadsheet_url">スプレッドシートURL / ID</label>
                       <p class="field-hint">対象のGoogleシートURLまたはIDを入力し、Setでシート一覧を読み込みます。</p>
@@ -249,9 +301,9 @@
                       <select id="sheet_keyword" name="sheet_keyword" disabled>
                         <option value="">Setで読み込んでください</option>
                       </select>
-                      <details class="field-info">
+                      <details class="field-info field-info-inline">
                         <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
-                        <div class="info-panel" id="sheet-keyword-help">自然言語の分析結果を書き込むシートを選択してください。</div>
+                        <div class="info-panel" id="sheet-keyword-help">Setで取得したシート一覧から選択します。自然言語の分析結果を書き込むシートを選択してください。</div>
                       </details>
                     </div>
                     <div class="field" id="score-sheet-field">
@@ -260,9 +312,9 @@
                       <select id="score_sheet_keyword" name="score_sheet_keyword" disabled>
                         <option value="">Setで読み込んでください</option>
                       </select>
-                      <details class="field-info">
+                      <details class="field-info field-info-inline">
                         <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
-                        <div class="info-panel" id="score-sheet-keyword-help">分析結果のスコアを書き込むシートを選択してください。</div>
+                        <div class="info-panel" id="score-sheet-keyword-help">Setで取得したシート一覧からスコアを書き込むシートを選択します。分析結果のスコアを書き込むシートを選択してください。</div>
                       </details>
                     </div>
                     <input type="hidden" id="sheet_gid" name="sheet_gid" value="" />
@@ -272,13 +324,13 @@
 
                   <div class="anyai-form-group" aria-labelledby="mapping-heading">
                     <h3 id="mapping-heading" class="band-title">マッピング設定（1始まり）</h3>
-                    <div class="anyai-form-fields is-two-column">
+                    <div class="mapping-grid">
                       <div class="field"><label id="utterance-label" for="utterance_col">発話列番号</label><input type="number" name="utterance_col" id="utterance_col" value="3" min="1" /></div>
                       <div class="field"><label for="category_start_col">カテゴリ開始列番号</label><input type="number" name="category_start_col" id="category_start_col" value="4" min="1" /></div>
-                      <div class="field"><label for="name_row">カテゴリ名 行番号</label><input type="number" name="name_row" id="name_row" value="2" min="1" /></div>
-                      <div class="field"><label for="def_row">定義 行番号</label><input type="number" name="def_row" id="def_row" value="3" min="1" /></div>
-                      <div class="field"><label for="detail_row">Detail 行番号</label><input type="number" name="detail_row" id="detail_row" value="4" min="1" /></div>
                       <div class="field"><label for="start_row">処理開始行番号</label><input type="number" name="start_row" id="start_row" value="5" min="1" /></div>
+                      <div class="field"><label for="name_row">Name 行番号</label><input type="number" name="name_row" id="name_row" value="2" min="1" /></div>
+                      <div class="field"><label for="def_row">Definition 行番号</label><input type="number" name="def_row" id="def_row" value="3" min="1" /></div>
+                      <div class="field"><label for="detail_row">Detail 行番号</label><input type="number" name="detail_row" id="detail_row" value="4" min="1" /></div>
                     </div>
                   </div>
 

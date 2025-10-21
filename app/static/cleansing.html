@@ -46,6 +46,30 @@
       progress { width: 100%; height: 12px; border-radius: var(--anyai-radius-2); overflow: hidden; }
       ul.error-list { margin: 0; padding-left: 18px; }
       ul.error-list li { word-break: break-word; }
+
+      #cleansing-heading {
+        margin-bottom: 0;
+      }
+
+      .anyai-form-section > header {
+        margin-bottom: 0;
+      }
+
+      .anyai-form-section > header > h2.mt-0 {
+        margin-bottom: 0;
+      }
+
+      .cleansing-grid {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr);
+        gap: var(--anyai-space-4);
+        align-items: start;
+      }
+
+      .cleansing-grid .field.url-field,
+      .cleansing-grid .field.sheet-select-field {
+        grid-column: 1 / -1;
+      }
     </style>
   </head>
   <body>
@@ -67,14 +91,25 @@
                   <p class="field-hint">処理対象のシート情報とクリーニング条件を入力します。</p>
                 </header>
                 <form id="cleansing-form">
-                  <div class="anyai-form-fields">
-                    <div class="field">
+                  <div class="anyai-form-fields cleansing-grid">
+                    <div class="field url-field">
                       <label for="sheet">スプレッドシートURL / ID</label>
                       <p class="field-hint">対象スプレッドシートを指定し、Setボタンでシート一覧を読み込みます。</p>
                       <div class="field-with-action">
                         <input type="text" id="sheet" name="sheet" placeholder="https://docs.google.com/spreadsheets/d/..." required />
                         <button type="button" class="btn btn-outline" id="btn-sheet-set">Set</button>
                       </div>
+                    </div>
+                    <div class="field sheet-select-field">
+                      <label for="sheet_name">対象シート</label>
+                      <p class="field-hint">Setで読み込んだシート一覧から選択します。</p>
+                      <select id="sheet_name" name="sheet_name" disabled>
+                        <option value="">Setでシートを読み込んでください</option>
+                      </select>
+                      <details class="field-info">
+                        <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
+                        <div class="info-panel">ヘッダーに <code>content</code> と <code>Related</code> が含まれるシートを選択してください。</div>
+                      </details>
                     </div>
                     <div class="field">
                       <label for="country">Country</label>
@@ -85,17 +120,6 @@
                       <label for="product_category">Product Category</label>
                       <p class="field-hint">商材カテゴリを一語で記入します。</p>
                       <input type="text" id="product_category" name="product_category" placeholder="例: ガム" required />
-                    </div>
-                    <div class="field">
-                      <label for="sheet_name">対象シート</label>
-                      <p class="field-hint">Setで読み込んだシート一覧から選択します。</p>
-                      <select id="sheet_name" name="sheet_name" disabled>
-                        <option value="">Setでシートを読み込んでください</option>
-                      </select>
-                      <details class="field-info">
-                        <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
-                        <div class="info-panel">ヘッダーに <code>content</code> と <code>Related</code> が含まれるシートを選択してください。</div>
-                      </details>
                     </div>
                     <input type="hidden" id="concurrency" name="concurrency" value="50" />
                     <input type="hidden" id="sheet_gid" name="sheet_gid" value="" />
