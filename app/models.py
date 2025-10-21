@@ -47,6 +47,8 @@ class RunConfig(BaseModel):
     # Providers
     primary_provider: Provider = Provider.gemini
     fallback_provider: Provider = Provider.openai
+    primary_model: Optional[str] = "gemini-flash-lite-latest"
+    fallback_model: Optional[str] = "gpt-5-nano"
     enable_ssr: bool = True
     ssr_system_prompt: str = (
         "<prompt>\n"
@@ -158,6 +160,23 @@ class RunConfig(BaseModel):
     video_temp_dir: Optional[str] = None
 
     @model_validator(mode="after")
+    def _normalize_models(self) -> "RunConfig":
+        def _default_primary(mode: str) -> str:
+            return "gemini-flash-latest" if mode == "video" else "gemini-flash-lite-latest"
+
+        primary = (self.primary_model or "").strip()
+        if not primary:
+            primary = _default_primary(self.mode)
+        self.primary_model = primary
+
+        fallback = (self.fallback_model or "").strip()
+        if self.mode == "video":
+            self.fallback_model = None
+        else:
+            self.fallback_model = fallback or "gpt-5-nano"
+        return self
+
+    @model_validator(mode="after")
     def _apply_system_prompt(self) -> "RunConfig":
         if not self.system_prompt:
             self.system_prompt = (
@@ -246,6 +265,7 @@ class CleansingJobConfig(BaseModel):
     product_category: str = Field(..., min_length=1)
     sheet_name: str = Field(default="RawData_Master", min_length=1)
     concurrency: conint(ge=1, le=200) = 50
+    sheet_gid: Optional[int] = None
 
 
 class CleansingJobResponse(BaseModel):

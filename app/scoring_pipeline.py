@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,12 +8,12 @@ from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Seq
 
 import logging
 
-from .models import Category, RunConfig, ScoreResult
+from .models import Category, Provider, RunConfig, ScoreResult
 from .services.google_sheets import GoogleSheetsError, batch_update_values
 from .services.scoring import cache_key, clamp_and_round, score_with_fallback
 from .services.clients import GEMINI_MODEL_VIDEO
 from .services.video import download_video_to_path, upload_video_to_gemini
-from .services.sheet_updates import build_batched_value_ranges
+from .services.sheet_updates import build_row_value_ranges
 
 
 logger = logging.getLogger(__name__)
@@ -137,6 +136,9 @@ class ScoringPipeline:
             else float(cfg.writer_retry_backoff_multiplier)
         )
         self.writer_retry_backoff_multiplier = max(1.0, backoff_multiplier)
+        self.writer_max_concurrent_flushes = max(
+            1, int(getattr(cfg, "writer_max_flush_concurrency", 2))
+        )
         batch_rows_value = sheet_batch_row_size
         if batch_rows_value is None:
             batch_rows_value = getattr(cfg, "sheet_chunk_rows", None)
@@ -154,18 +156,16 @@ class ScoringPipeline:
             thread_name_prefix="scoring-validation",
         )
         self._log_callback = event_logger
-        logger.debug(
-            "ScoringPipeline init sheet=%s score_sheet=%s concurrency=%s queue_size=%s "
-            "validation_workers=%s flush_interval=%.2f batch_rows=%s video_mode=%s",
-            self.sheet_name,
-            self.score_sheet_name,
-            self.invoke_concurrency,
-            self.invoke_queue_size,
-            self.validation_max_workers,
-            self.flush_interval,
-            self.sheet_batch_row_size,
-            self.video_mode,
-        )
+        provider_model_map: Dict[Provider, str] = {}
+        if getattr(cfg, "primary_model", None):
+            provider_model_map[cfg.primary_provider] = str(cfg.primary_model)
+        if getattr(cfg, "fallback_model", None):
+            provider_model_map[cfg.fallback_provider] = str(cfg.fallback_model)
+        self._provider_model_map = provider_model_map or None
+        self._total_requests: int = 0
+        self._dispatched_requests: int = 0
+        self._completed_requests: int = 0
+        self._request_lock: Optional[asyncio.Lock] = None
 
     def _log(self, message: str) -> None:
         if not self._log_callback:
@@ -185,12 +185,10 @@ class ScoringPipeline:
         writer_queue: asyncio.Queue[Optional[SheetUpdate]] = asyncio.Queue()
 
         units_list = list(units)
-        logger.debug(
-            "Pipeline run start units=%d concurrency=%d queue_max=%d",
-            len(units_list),
-            self.invoke_concurrency,
-            self.invoke_queue_size,
-        )
+        self._total_requests = 0
+        self._dispatched_requests = 0
+        self._completed_requests = 0
+        self._request_lock = asyncio.Lock()
         self._log(f"Pipeline start: units={len(units_list)} concurrency={self.invoke_concurrency}")
 
         producer_task = asyncio.create_task(self._producer(units_list, invoke_queue))
@@ -215,13 +213,6 @@ class ScoringPipeline:
             await self._shutdown_validation_executor()
 
         self._log(f"Pipeline complete: processed_units={self._stats.processed_units} flushes={self._stats.flush_count} cache_hits={self._stats.cache_hits}")
-        logger.debug(
-            "Pipeline run complete processed=%d flushes=%d cache_hits=%d rate429=%d",
-            self._stats.processed_units,
-            self._stats.flush_count,
-            self._stats.cache_hits,
-            self._stats.rate_429_count,
-        )
         return self._stats
 
     async def _signal_termination(
@@ -265,6 +256,37 @@ class ScoringPipeline:
             return
         await asyncio.to_thread(executor.shutdown, True)
 
+    async def _reserve_request_index(self) -> tuple[int, int]:
+        if self._request_lock is None:
+            self._request_lock = asyncio.Lock()
+        async with self._request_lock:
+            self._dispatched_requests += 1
+            idx = self._dispatched_requests
+            total = max(self._total_requests, idx)
+            return idx, total
+
+    def _log_request_event(
+        self,
+        *,
+        stage: str,
+        index: int,
+        total: int,
+        unit: PipelineUnit,
+        provider: Optional[str] = None,
+    ) -> None:
+        row_number = unit.row_index + 1
+        message = f"kubotin request={index}/{total} stage={stage} row={row_number} block={unit.block_index}"
+        if provider:
+            message = f"{message} provider={provider}"
+        logger.debug(message)
+
+    def _log_sheet_update(self, *, start_row: int, end_row: int) -> None:
+        total = max(self._total_requests, 1)
+        message = (
+            f"kubotin sheet-update completed={self._completed_requests}/{total} rows={start_row}-{end_row}"
+        )
+        logger.debug(message)
+
     async def _producer(
         self,
         units: Iterable[PipelineUnit],
@@ -280,11 +302,6 @@ class ScoringPipeline:
                     utterance = str(utter_row[self.utter_col_index])
                 categories = self.category_reader(self.rows, self.cfg, unit.row_index, unit.col_offset)
                 if not categories:
-                    logger.debug(
-                        "Producer skipping row=%s block=%s (no categories detected)",
-                        unit.row_index,
-                        unit.block_index,
-                    )
                     continue
                 cleanup_path: Optional[str] = None
                 file_parts: Optional[List[dict]] = None
@@ -293,19 +310,8 @@ class ScoringPipeline:
                 if self.video_mode:
                     video_link = utterance.strip()
                     if not video_link:
-                        logger.debug(
-                            "Producer skipping video row=%s block=%s (empty link)",
-                            unit.row_index,
-                            unit.block_index,
-                        )
                         continue
                     try:
-                        logger.debug(
-                            "Producer downloading video row=%s block=%s link=%s",
-                            unit.row_index,
-                            unit.block_index,
-                            video_link,
-                        )
                         video_path = await asyncio.to_thread(
                             download_video_to_path,
                             video_link,
@@ -320,7 +326,7 @@ class ScoringPipeline:
                         )
                         self._stats.video_uploads += 1
                         file_parts = [{"file_uri": file_uri, "mime_type": mime_type}]
-                        model_override = GEMINI_MODEL_VIDEO
+                        model_override = self.cfg.primary_model or GEMINI_MODEL_VIDEO
                         cleanup_path = str(video_path)
                     except Exception:
                         if cleanup_path:
@@ -335,19 +341,12 @@ class ScoringPipeline:
                     model_override=model_override,
                     cleanup_path=cleanup_path,
                 )
-                logger.debug(
-                    "Producer queued task row=%s block=%s categories=%d cache=%s",
-                    unit.row_index,
-                    unit.block_index,
-                    len(categories),
-                    bool(self.score_cache),
-                )
+                self._total_requests += 1
                 await invoke_queue.put(task)
         finally:
             for _ in range(self.invoke_concurrency):
                 await invoke_queue.put(None)
             self._log("Producer finished, sentinels dispatched")
-            logger.debug("Producer dispatched sentinels")
 
     async def _invoker(
         self,
@@ -364,12 +363,12 @@ class ScoringPipeline:
                     if task is None:
                         await validation_queue.put(None)
                         return
-                    logger.debug(
-                        "Invoker executing row=%s block=%s categories=%d file_parts=%s",
-                        task.unit.row_index,
-                        task.unit.block_index,
-                        len(task.categories),
-                        bool(task.file_parts),
+                    request_idx, total_requests = await self._reserve_request_index()
+                    self._log_request_event(
+                        stage="dispatch",
+                        index=request_idx,
+                        total=total_requests,
+                        unit=task.unit,
                     )
                     try:
                         result, error_trail, from_cache = await score_with_fallback(
@@ -384,6 +383,7 @@ class ScoringPipeline:
                             model_override=task.model_override,
                             cache=self.score_cache,
                             cache_write=False,
+                            provider_model_map=self._provider_model_map,
                         )
                     except Exception as exc:
                         error_trail = getattr(exc, "_trail", []) or []
@@ -391,16 +391,22 @@ class ScoringPipeline:
                             for provider, status, _reason in error_trail:
                                 if status == 429:
                                     self._stats.rate_429_count += 1
+                        self._log_request_event(
+                            stage="error",
+                            index=request_idx,
+                            total=total_requests,
+                            unit=task.unit,
+                        )
                         raise
                     else:
                         score_len = len(result.scores or [])
-                        logger.debug(
-                            "Invoker succeeded row=%s block=%s provider=%s cache_hit=%s scores=%d",
-                            task.unit.row_index,
-                            task.unit.block_index,
-                            result.provider.value,
-                            from_cache,
-                            score_len,
+                        provider_label = result.provider.value if result.provider else "unknown"
+                        self._log_request_event(
+                            stage="response",
+                            index=request_idx,
+                            total=total_requests,
+                            unit=task.unit,
+                            provider=provider_label,
                         )
                         self._log(
                             f"Invoker success: row={task.unit.row_index} block={task.unit.block_index} "
@@ -445,14 +451,7 @@ class ScoringPipeline:
                 try:
                     if payload is None:
                         pending_invokers -= 1
-                        logger.debug("Validator received sentinel (remaining_invokers=%d)", pending_invokers)
                         continue
-                    logger.debug(
-                        "Validator executing row=%s block=%s from_cache=%s",
-                        payload.task.unit.row_index,
-                        payload.task.unit.block_index,
-                        payload.from_cache,
-                    )
                     future = loop.run_in_executor(self._validation_executor, self._run_validation, payload)
                     if self.validation_timeout:
                         outcome = await asyncio.wait_for(future, timeout=self.validation_timeout)
@@ -462,17 +461,10 @@ class ScoringPipeline:
                         continue
                     self._stats.processed_units += 1
                     if outcome.should_cache and self.score_cache and outcome.cache_key:
-                        logger.debug("Validator caching result key=%s", outcome.cache_key)
                         await self.score_cache.set(outcome.cache_key, outcome.result)
                     self._log(
                         f"Validator accepted: row={payload.task.unit.row_index} block={payload.task.unit.block_index} "
                         f"len={outcome.expected_len} partial={outcome.result.partial}"
-                    )
-                    logger.debug(
-                        "Validator accepted row=%s block=%s partial=%s",
-                        payload.task.unit.row_index,
-                        payload.task.unit.block_index,
-                        outcome.result.partial,
                     )
                     await writer_queue.put(outcome.sheet_update)
                 finally:
@@ -492,13 +484,6 @@ class ScoringPipeline:
         categories = list(task.categories)
         expected_len = len(categories)
         result = payload.result
-        logger.debug(
-            "Validation thread start row=%s block=%s expected_len=%d analyses=%d",
-            task.unit.row_index,
-            task.unit.block_index,
-            expected_len,
-            len(result.analyses or []),
-        )
 
         source_scores: Sequence[Optional[float]] = []
         if result.pre_scores is not None:
@@ -570,13 +555,6 @@ class ScoringPipeline:
                 model=result.model,
                 ssr_enabled=self.cfg.enable_ssr,
             )
-        logger.debug(
-            "Validation thread done row=%s block=%s missing=%d should_cache=%s",
-            task.unit.row_index,
-            task.unit.block_index,
-            len(missing_indices),
-            should_cache,
-        )
         return ValidationOutcome(
             result=result,
             sheet_update=sheet_update,
@@ -586,138 +564,185 @@ class ScoringPipeline:
         )
 
     async def _writer(self, writer_queue: asyncio.Queue[Optional[SheetUpdate]]) -> None:
-        buffer: Dict[int, Dict[int, float]] = {}
         pending_updates: List[SheetUpdate] = []
         pending_units = 0
-        last_flush = time.monotonic()
         buffer_scores: Dict[int, Dict[int, float]] = {}
         buffer_analyses: Dict[int, Dict[int, str]] = {}
+        active_flushes: set[asyncio.Task[None]] = set()
 
-        async def flush() -> None:
-            nonlocal buffer_scores, buffer_analyses, pending_units, last_flush, pending_updates
-            if not buffer_scores and not buffer_analyses:
-                logger.debug("Writer flush skipped (no buffered values)")
+        def prune_completed_flushes() -> None:
+            nonlocal active_flushes
+            if not active_flushes:
                 return
+            completed = {task for task in active_flushes if task.done()}
+            for task in completed:
+                task.result()
+            active_flushes.difference_update(completed)
+
+        async def ensure_flush_capacity() -> None:
+            nonlocal active_flushes
+            prune_completed_flushes()
+            while active_flushes and len(active_flushes) >= self.writer_max_concurrent_flushes:
+                done, pending = await asyncio.wait(active_flushes, return_when=asyncio.FIRST_COMPLETED)
+                for task in done:
+                    task.result()
+                active_flushes = set(pending)
+                prune_completed_flushes()
+
+        async def flush(*, force: bool = False) -> None:
+            nonlocal buffer_scores, buffer_analyses, pending_units, pending_updates, active_flushes
+            if not buffer_scores and not buffer_analyses:
+                return
+            if not force and pending_units < self.flush_unit_threshold:
+                return
+
             snapshot_score_buffer = buffer_scores
             snapshot_analysis_buffer = buffer_analyses
             snapshot_updates = list(pending_updates)
-            payload: List[dict] = []
-            if snapshot_analysis_buffer:
-                for batch in build_batched_value_ranges(
-                    category_start_col=self.cfg.category_start_col,
-                    sheet_name=self.sheet_name,
-                    update_buffer=snapshot_analysis_buffer,
-                    max_rows_per_batch=self.sheet_batch_row_size,
-                ):
-                    payload.extend(batch)
-            target_score_sheet = self.score_sheet_name or self.sheet_name
-            if snapshot_score_buffer:
-                for batch in build_batched_value_ranges(
-                    category_start_col=self.cfg.category_start_col,
-                    sheet_name=target_score_sheet,
-                    update_buffer=snapshot_score_buffer,
-                    max_rows_per_batch=self.sheet_batch_row_size,
-                ):
-                    payload.extend(batch)
-            if not payload:
-                last_flush = time.monotonic()
+            buffer_scores = {}
+            buffer_analyses = {}
+            pending_units = 0
+            pending_updates = []
+
+            if not snapshot_updates:
+                return
+
+            all_rows = sorted(
+                set(snapshot_score_buffer.keys()) | set(snapshot_analysis_buffer.keys())
+            )
+            if not all_rows:
                 self._stats.flush_count += 1
-                buffer_scores = {}
-                buffer_analyses = {}
-                pending_units = 0
-                pending_updates = []
+                self._completed_requests += len(snapshot_updates)
                 for entry in snapshot_updates:
                     await self.mark_unit_completed(entry.unit, entry.result)
                 self._log(
                     "Writer flush skipped Sheets update because no values were produced"
                 )
-                logger.debug(
-                    "Writer flush skipped Sheets update (score_rows=%d analysis_rows=%d)",
-                    len(snapshot_score_buffer),
-                    len(snapshot_analysis_buffer),
+                return
+
+            if self.sheet_batch_row_size and self.sheet_batch_row_size > 0:
+                row_chunks: List[List[int]] = [
+                    all_rows[i : i + self.sheet_batch_row_size]
+                    for i in range(0, len(all_rows), self.sheet_batch_row_size)
+                ]
+            else:
+                row_chunks = [all_rows]
+
+            payload_batches: List[List[dict]] = []
+
+            for chunk_rows in row_chunks:
+                analysis_subset = {
+                    row: snapshot_analysis_buffer[row]
+                    for row in chunk_rows
+                    if row in snapshot_analysis_buffer
+                }
+                if analysis_subset:
+                    analysis_payload = [
+                        payload
+                        for _, payload in build_row_value_ranges(
+                            category_start_col=self.cfg.category_start_col,
+                            sheet_name=self.sheet_name,
+                            update_buffer=analysis_subset,
+                        )
+                    ]
+                    if analysis_payload:
+                        payload_batches.append(analysis_payload)
+
+                score_subset = {
+                    row: snapshot_score_buffer[row]
+                    for row in chunk_rows
+                    if row in snapshot_score_buffer
+                }
+                if score_subset:
+                    score_payload = [
+                        payload
+                        for _, payload in build_row_value_ranges(
+                            category_start_col=self.cfg.category_start_col,
+                            sheet_name=self.score_sheet_name or self.sheet_name,
+                            update_buffer=score_subset,
+                        )
+                    ]
+                    if score_payload:
+                        payload_batches.append(score_payload)
+
+            if not payload_batches:
+                self._stats.flush_count += 1
+                self._completed_requests += len(snapshot_updates)
+                for entry in snapshot_updates:
+                    await self.mark_unit_completed(entry.unit, entry.result)
+                self._log(
+                    "Writer flush skipped Sheets update because no values were produced"
                 )
                 return
-            logger.debug(
-                "Writer flush start payload_entries=%d score_rows=%d analysis_rows=%d pending_updates=%d",
-                len(payload),
-                len(snapshot_score_buffer),
-                len(snapshot_analysis_buffer),
-                len(snapshot_updates),
+
+            await ensure_flush_capacity()
+
+            distinct_rows = set(snapshot_score_buffer.keys()) | set(
+                snapshot_analysis_buffer.keys()
             )
-            attempts = 0
-            delay = self.writer_retry_initial_delay
-            last_error: Optional[Exception] = None
-            snapshot_payload = list(payload)
-            while attempts < self.writer_retry_limit:
-                try:
-                    await asyncio.to_thread(
-                        batch_update_values, self.spreadsheet_id, snapshot_payload
-                    )
-                    last_flush = time.monotonic()
-                    self._stats.flush_count += 1
-                    buffer_scores = {}
-                    buffer_analyses = {}
-                    pending_units = 0
-                    for entry in snapshot_updates:
-                        await self.mark_unit_completed(entry.unit, entry.result)
-                    pending_updates = []
-                    distinct_rows = set(snapshot_score_buffer.keys()) | set(
-                        snapshot_analysis_buffer.keys()
-                    )
-                    analysis_cells = sum(
-                        len(columns) for columns in snapshot_analysis_buffer.values()
-                    ) if snapshot_analysis_buffer else 0
-                    score_cells = sum(
-                        len(columns) for columns in snapshot_score_buffer.values()
-                    ) if snapshot_score_buffer else 0
-                    logger.debug(
-                        "evt=write_outcome target=%s rows=%d score_cells=%d analysis_cells=%d",
-                        target_score_sheet,
-                        len(distinct_rows),
-                        score_cells,
-                        analysis_cells,
-                    )
-                    self._log(
-                        "Writer flush success: rows={} entries={} attempts={} cells(text={} score={})".format(
-                            len(distinct_rows),
-                            len(snapshot_updates),
-                            attempts + 1,
-                            analysis_cells,
-                            score_cells,
+            analysis_cells = (
+                sum(len(columns) for columns in snapshot_analysis_buffer.values())
+                if snapshot_analysis_buffer
+                else 0
+            )
+            score_cells = (
+                sum(len(columns) for columns in snapshot_score_buffer.values())
+                if snapshot_score_buffer
+                else 0
+            )
+
+            async def perform_flush() -> None:
+                attempts = 0
+                delay = self.writer_retry_initial_delay
+                last_error: Optional[Exception] = None
+                while attempts < self.writer_retry_limit:
+                    try:
+                        for batch_payload in payload_batches:
+                            await asyncio.to_thread(
+                                batch_update_values, self.spreadsheet_id, batch_payload
+                            )
+                        self._stats.flush_count += 1
+                        self._completed_requests += len(snapshot_updates)
+                        for entry in snapshot_updates:
+                            await self.mark_unit_completed(entry.unit, entry.result)
+                        self._log(
+                            "Writer flush success: rows={} entries={} attempts={} cells(text={} score={})".format(
+                                len(distinct_rows),
+                                len(snapshot_updates),
+                                attempts + 1,
+                                analysis_cells,
+                                score_cells,
+                            )
                         )
-                    )
-                    logger.debug(
-                        "Writer flush success rows=%d entries=%d attempts=%d analysis_cells=%d score_cells=%d",
-                        len(distinct_rows),
-                        len(snapshot_updates),
-                        attempts + 1,
-                        analysis_cells,
-                        score_cells,
-                    )
-                    return
-                except GoogleSheetsError as exc:
-                    last_error = exc
-                    attempts += 1
-                    if attempts >= self.writer_retry_limit:
+                        if distinct_rows:
+                            start_row = min(distinct_rows)
+                            end_row = max(distinct_rows)
+                            self._log_sheet_update(start_row=start_row, end_row=end_row)
+                        return
+                    except GoogleSheetsError as exc:
+                        last_error = exc
+                        attempts += 1
+                        if attempts >= self.writer_retry_limit:
+                            self._terminate.set()
+                            self._log(f"Writer flush failed after retries: error={exc}")
+                            logger.exception("Writer flush failed after retries", exc_info=exc)
+                            raise
+                        await asyncio.sleep(delay)
+                        delay *= self.writer_retry_backoff_multiplier
+                        self._log(
+                            f"Writer retry scheduled: attempt={attempts + 1} delay={delay:.2f}"
+                        )
+                    except Exception as exc:
+                        last_error = exc
                         self._terminate.set()
-                        self._log(f"Writer flush failed after retries: error={exc}")
-                        logger.exception("Writer flush failed after retries", exc_info=exc)
+                        self._log(f"Writer flush fatal error: {exc}")
+                        logger.exception("Writer flush fatal error", exc_info=exc)
                         raise
-                    await asyncio.sleep(delay)
-                    delay *= self.writer_retry_backoff_multiplier
-                    self._log(f"Writer retry scheduled: attempt={attempts + 1} delay={delay:.2f}")
-                    logger.debug(
-                        "Writer retry scheduled attempt=%d delay=%.2f", attempts + 1, delay
-                    )
-                except Exception as exc:
-                    last_error = exc
-                    self._terminate.set()
-                    self._log(f"Writer flush fatal error: {exc}")
-                    logger.exception("Writer flush fatal error", exc_info=exc)
-                    raise
-            if last_error:
-                logger.debug("Writer flush raising last error %s", last_error)
-                raise last_error
+                if last_error:
+                    raise last_error
+
+            task = asyncio.create_task(perform_flush())
+            active_flushes.add(task)
 
         try:
             while True:
@@ -740,26 +765,20 @@ class ScoringPipeline:
                             row_analysis_buffer[unit.col_offset + index] = analysis
                     pending_units += 1
                     pending_updates.append(entry)
-                    logger.debug(
-                        "Writer buffered row=%s block=%s units_buffered=%d",
-                        unit.row_index,
-                        unit.block_index,
-                        pending_units,
-                    )
-                    now = time.monotonic()
-                    if (
-                        pending_units >= self.flush_unit_threshold
-                        or now - last_flush >= self.flush_interval
-                    ):
+                    if pending_units >= self.flush_unit_threshold:
                         await flush()
                 finally:
                     writer_queue.task_done()
         except asyncio.CancelledError:
             raise
         finally:
-            await flush()
+            await flush(force=True)
+            prune_completed_flushes()
+            if active_flushes:
+                done, _ = await asyncio.wait(active_flushes)
+                for task in done:
+                    task.result()
             await self._drain_cleanup_queue()
-            logger.debug("Writer shutdown complete (cleanup queue drained)")
 
     async def _drain_cleanup_queue(self) -> None:
         if self._cleanup_queue.empty():

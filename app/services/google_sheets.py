@@ -159,7 +159,7 @@ def sheets_service() -> Generator:
             pass
 
 
-def find_sheet(spreadsheet_id: str, keyword: str) -> SheetMatch:
+def list_sheets(spreadsheet_id: str) -> List[SheetMatch]:
     _require_google_clients()
     with sheets_service() as service:
         try:
@@ -168,27 +168,39 @@ def find_sheet(spreadsheet_id: str, keyword: str) -> SheetMatch:
             raise GoogleSheetsError(f"スプレッドシートの取得に失敗しました: {exc}") from exc
 
     sheets = meta.get("sheets", [])
-    keyword_lower = (keyword or "").strip().lower()
-    matches = []
+    results: List[SheetMatch] = []
     for sheet in sheets:
         props = sheet.get("properties", {})
-        title = props.get("title", "")
-        if keyword_lower in title.lower():
-            matches.append(sheet)
+        results.append(
+            SheetMatch(
+                spreadsheet_id=spreadsheet_id,
+                sheet_id=props.get("sheetId", 0),
+                sheet_name=props.get("title", "Unnamed"),
+            )
+        )
+    return results
 
-    if not matches:
+
+def find_sheet(spreadsheet_id: str, keyword: str) -> SheetMatch:
+    keyword_lower = (keyword or "").strip().lower()
+    if not keyword_lower:
+        raise GoogleSheetsError("シートを特定するキーワードが空です")
+
+    sheets = list_sheets(spreadsheet_id)
+    exact_matches = [sheet for sheet in sheets if sheet.sheet_name.lower() == keyword_lower]
+    if exact_matches:
+        if len(exact_matches) > 1:
+            titles = ", ".join(match.sheet_name for match in exact_matches)
+            raise GoogleSheetsError(f"シート名 '{keyword}' が複数存在します: {titles}")
+        return exact_matches[0]
+
+    substring_matches = [sheet for sheet in sheets if keyword_lower in sheet.sheet_name.lower()]
+    if not substring_matches:
         raise GoogleSheetsError(f"キーワード '{keyword}' を含むシートが見つかりません")
-    if len(matches) > 1:
-        titles = ", ".join(sheet.get("properties", {}).get("title", "") for sheet in matches)
+    if len(substring_matches) > 1:
+        titles = ", ".join(match.sheet_name for match in substring_matches)
         raise GoogleSheetsError(f"キーワード '{keyword}' を含むシートが複数存在します: {titles}")
-
-    target = matches[0]
-    props = target.get("properties", {})
-    return SheetMatch(
-        spreadsheet_id=spreadsheet_id,
-        sheet_id=props.get("sheetId", 0),
-        sheet_name=props.get("title", "Unnamed"),
-    )
+    return substring_matches[0]
 
 
 def fetch_sheet_values(spreadsheet_id: str, sheet_name: str) -> List[List[str]]:

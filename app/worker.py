@@ -309,13 +309,22 @@ class JobManager:
         # Fetch sheet data
         try:
             spreadsheet_id = job.cfg.spreadsheet_id or extract_spreadsheet_id(job.cfg.spreadsheet_url)
-            primary_keyword = job.cfg.sheet_keyword or "Link"
+            primary_keyword = (job.cfg.sheet_keyword or "Link").strip() or "Link"
+            job.cfg.sheet_keyword = primary_keyword
             sheet_name = job.cfg.sheet_name
             if not sheet_name:
                 match = await asyncio.to_thread(find_sheet, spreadsheet_id, primary_keyword)
                 sheet_name = match.sheet_name
                 job.cfg.sheet_name = sheet_name
-            score_sheet_keyword = job.cfg.score_sheet_keyword or primary_keyword
+            raw_score_keyword = job.cfg.score_sheet_keyword
+            if raw_score_keyword is None:
+                score_sheet_keyword = primary_keyword
+                job.cfg.score_sheet_keyword = score_sheet_keyword
+            else:
+                score_sheet_keyword = raw_score_keyword.strip()
+                if not score_sheet_keyword:
+                    raise GoogleSheetsError("スコア出力シートのキーワードが空です。")
+                job.cfg.score_sheet_keyword = score_sheet_keyword
             score_sheet_name = job.cfg.score_sheet_name
             if not score_sheet_name:
                 score_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_sheet_keyword)
@@ -758,12 +767,17 @@ class JobManager:
             def _gemini_model_for_mode(mode: str) -> str:
                 return GEMINI_MODEL_VIDEO if mode == "video" else GEMINI_MODEL
 
-            if job.cfg.primary_provider == Provider.gemini:
-                _model_primary = _gemini_model_for_mode(job.cfg.mode)
-                _model_fallback = OPENAI_MODEL
-            else:
-                _model_primary = OPENAI_MODEL
-                _model_fallback = _gemini_model_for_mode(job.cfg.mode)
+            model_primary = job.cfg.primary_model or (
+                _gemini_model_for_mode(job.cfg.mode)
+                if job.cfg.primary_provider == Provider.gemini
+                else OPENAI_MODEL
+            )
+            model_fallback = job.cfg.fallback_model
+            if not model_fallback:
+                if job.cfg.fallback_provider == Provider.gemini:
+                    model_fallback = _gemini_model_for_mode(job.cfg.mode)
+                else:
+                    model_fallback = OPENAI_MODEL
 
             meta = {
                 "job_id": job.job_id,
@@ -771,8 +785,8 @@ class JobManager:
                 "finished_at": job.finished_at,
                 "provider_primary": job.cfg.primary_provider.value,
                 "provider_fallback": job.cfg.fallback_provider.value,
-                "model_primary": _model_primary,
-                "model_fallback": _model_fallback,
+                "model_primary": model_primary,
+                "model_fallback": model_fallback,
                 "concurrency_initial": job.cfg.concurrency,
                 "concurrency_final": current_conc,
                 "batch_size": job.cfg.batch_size,
@@ -822,6 +836,9 @@ class JobManager:
             job.cfg.batch_size = 1
             job.cfg.max_category_cols = max(1, min(job.cfg.max_category_cols, job.cfg.batch_size))
             job.cfg.primary_provider = Provider.gemini
+            job.cfg.primary_model = job.cfg.primary_model or GEMINI_MODEL_VIDEO
+            job.cfg.fallback_provider = Provider.gemini
+            job.cfg.fallback_model = None
             job.cfg.concurrency = job.cfg.concurrency or job.cfg.video_concurrency_default
             job.cfg.timeout_sec = job.cfg.timeout_sec or job.cfg.video_timeout_default
             if job.cfg.enable_ssr:
@@ -829,6 +846,8 @@ class JobManager:
             else:
                 _apply_chunk_settings(100)
         else:
+            job.cfg.primary_model = job.cfg.primary_model or GEMINI_MODEL
+            job.cfg.fallback_model = job.cfg.fallback_model or OPENAI_MODEL
             if job.cfg.enable_ssr:
                 _apply_chunk_settings(100)
             else:

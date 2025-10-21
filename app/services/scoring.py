@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
 import numbers
 import os
-from typing import List, Optional, Sequence, Tuple
+import asyncio
+
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from ..models import Category, Provider, ScoreRequest, ScoreResult
 from .clients import GEMINI_MODEL, GEMINI_MODEL_VIDEO, OPENAI_MODEL, call_gemini, call_openai
@@ -94,6 +97,7 @@ async def score_with_fallback(
     model_override: Optional[str] = None,
     cache: Optional[ScoreCache] = None,
     cache_write: bool = True,
+    provider_model_map: Optional[Dict[Provider, str]] = None,
 ) -> Tuple[ScoreResult, List[Tuple[str, int, str]], bool]:
     """Score via preferred provider with retries, then fallback.
 
@@ -113,14 +117,16 @@ async def score_with_fallback(
 
     logger.debug("evt=%s", "ssr_on" if ssr_enabled else "ssr_off")
 
+    model_map = provider_model_map or {}
+
     def _determine_model(p: Provider) -> str:
         if p == Provider.gemini:
             if model_override:
                 return model_override
             if file_parts:
-                return GEMINI_MODEL_VIDEO
-            return GEMINI_MODEL
-        return OPENAI_MODEL
+                return model_map.get(p, GEMINI_MODEL_VIDEO)
+            return model_map.get(p, GEMINI_MODEL)
+        return model_map.get(p, OPENAI_MODEL)
 
     async def try_call(p: Provider) -> Tuple[ScoreResult, int]:
         if file_parts and p != Provider.gemini:
@@ -133,7 +139,7 @@ async def score_with_fallback(
             provider=p,
             timeout_sec=timeout_sec,
             file_parts=file_parts if p == Provider.gemini else None,
-            model_override=model_override if p == Provider.gemini else None,
+            model_override=model_name,
             ssr_enabled=ssr_enabled,
         )
         if p == Provider.gemini:
@@ -180,6 +186,7 @@ async def score_with_fallback(
     else:
         provider_order = [prefer, Provider.openai if prefer == Provider.gemini else Provider.gemini]
     last_exc: Exception | None = None
+    openai_pause_pending = False
     for idx, provider in enumerate(provider_order):
         tries = 0
         backoff = 0.5
@@ -196,6 +203,9 @@ async def score_with_fallback(
                     tries + 1,
                     _determine_model(provider),
                 )
+                if openai_pause_pending and provider == Provider.openai:
+                    await asyncio.sleep(60)
+                    openai_pause_pending = False
                 res, status = await try_call(provider)
                 logger.debug(
                     "Provider=%s responded status=%s analyses=%d scores=%s",
@@ -281,6 +291,8 @@ async def score_with_fallback(
                 )
                 last_exc = e
                 tries += 1
+                if provider == Provider.openai:
+                    openai_pause_pending = True
                 if tries <= max_retries:
                     await asyncio.sleep(backoff)
                     logger.debug(

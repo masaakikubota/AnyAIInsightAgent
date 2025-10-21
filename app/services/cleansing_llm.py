@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -9,8 +10,14 @@ import httpx
 
 
 PROMPT_GENERATOR_MODEL = "gemini-pro-latest"
-JUDGE_MODEL = "gpt-4.1"
+PROMPT_GENERATOR_SECONDARY_MODEL = "gemini-flash-latest"
+PROMPT_GENERATOR_FALLBACK_MODEL = "gpt-5"
+JUDGE_MODEL = "gemini-flash-lite-latest"
+JUDGE_FALLBACK_MODEL = "gpt-4.1"
 FALLBACK_MODEL = "gemini-flash-latest"
+
+
+logger = logging.getLogger(__name__)
 
 
 META_PROMPT = """<MetaPrompt>
@@ -298,45 +305,206 @@ async def generate_system_prompt(
     country: str,
     product_category: str,
     gemini_api_key: str,
+    openai_api_key: str,
     timeout: float = 60.0,
 ) -> str:
+    async def call_gemini(model_name: str) -> str:
+        if not gemini_api_key:
+            raise CleansingLLMError("GEMINI_API_KEY is not set")
+
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{model_name}:generateContent?key={gemini_api_key}"
+        )
+
+        payload = {
+            "systemInstruction": {"role": "system", "parts": [{"text": META_PROMPT}]},
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {"text": _quote_sheet_message(country, product_category)},
+                    ],
+                }
+            ],
+        }
+
+        data: Dict[str, Any] | None = None
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(url, json=payload)
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:  # noqa: BLE001
+            raise CleansingLLMError(f"Gemini prompt generation failed ({model_name}): {exc}") from exc
+        try:
+            data = response.json()
+        except Exception as exc:  # noqa: BLE001
+            raise CleansingLLMError(
+                f"Gemini prompt generation returned invalid JSON ({model_name})"
+            ) from exc
+        if not isinstance(data, dict):
+            raise CleansingLLMError(
+                f"Gemini returned unexpected payload ({model_name}): {data!r}"
+            )
+        try:
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception as exc:  # noqa: BLE001
+            raise CleansingLLMError(
+                f"Gemini returned unexpected payload ({model_name}): {data!r}"
+            ) from exc
+        system_prompt = text.strip()
+        if not system_prompt:
+            raise CleansingLLMError(f"Gemini returned empty system prompt ({model_name})")
+        return system_prompt
+
+    async def call_openai() -> str:
+        if not openai_api_key:
+            raise CleansingLLMError("OPENAI_API_KEY is not set")
+
+        url = "https://api.openai.com/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {openai_api_key}"}
+        payload = {
+            "model": PROMPT_GENERATOR_FALLBACK_MODEL,
+            "messages": [
+                {"role": "system", "content": META_PROMPT},
+                {"role": "user", "content": _quote_sheet_message(country, product_category)},
+            ],
+            "temperature": 0.2,
+        }
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(url, json=payload, headers=headers)
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:  # noqa: BLE001
+                raise CleansingLLMError(f"OpenAI prompt generation failed: {exc}") from exc
+            data = response.json()
+        try:
+            message = data["choices"][0]["message"]["content"]
+        except Exception as exc:  # noqa: BLE001
+            raise CleansingLLMError(f"OpenAI returned unexpected payload: {data}") from exc
+        return str(message).strip()
+
+    try:
+        return await call_gemini(PROMPT_GENERATOR_MODEL)
+    except CleansingLLMError as primary_exc:
+        logger.warning("Gemini prompt generation failed, trying secondary model: %s", primary_exc)
+        try:
+            return await call_gemini(PROMPT_GENERATOR_SECONDARY_MODEL)
+        except CleansingLLMError as secondary_exc:
+            logger.warning("Secondary Gemini model failed, falling back to OpenAI: %s", secondary_exc)
+            return await call_openai()
+
+
+async def _call_gemini(
+    *,
+    system_prompt: str,
+    content: str,
+    client: httpx.AsyncClient,
+    gemini_api_key: str,
+    timeout: float,
+    model_name: str,
+    provider_label: str,
+) -> Tuple[bool, str]:
     if not gemini_api_key:
         raise CleansingLLMError("GEMINI_API_KEY is not set")
 
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{PROMPT_GENERATOR_MODEL}:generateContent?key={gemini_api_key}"
+        f"{model_name}:generateContent?key={gemini_api_key}"
     )
-
+    user_text = (
+        f"{USER_PROMPT_TEMPLATE.format(content=content)}\n\n"
+        "出力は JSON で {\"related\": true|false} もしくは True/False のみ。"
+    )
     payload = {
-        "systemInstruction": {"role": "system", "parts": [{"text": META_PROMPT}]},
+        "systemInstruction": {"role": "system", "parts": [{"text": system_prompt}]},
         "contents": [
-            {
-                "role": "user",
-                "parts": [
-                    {"text": _quote_sheet_message(country, product_category)},
-                ],
-            }
+            {"role": "user", "parts": [{"text": user_text}]}
         ],
+        "generationConfig": {"responseMimeType": "application/json"},
     }
-
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(url, json=payload)
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as exc:  # noqa: BLE001
-            raise CleansingLLMError(f"Gemini prompt generation failed: {exc}") from exc
-        data = response.json()
+    response = await client.post(url, json=payload, timeout=timeout)
     try:
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:  # noqa: BLE001
+        raise CleansingLLMError(f"Gemini fallback failed: {exc}") from exc
+    data = response.json()
+    try:
+        parts = data["candidates"][0]["content"]["parts"]
+        text = "".join(part.get("text", "") for part in parts if isinstance(part, dict))
     except Exception as exc:  # noqa: BLE001
-        raise CleansingLLMError(f"Gemini returned unexpected payload: {data}") from exc
-    system_prompt = text.strip()
-    if not system_prompt:
-        raise CleansingLLMError("Gemini returned empty system prompt")
-    return system_prompt
+        raise CleansingLLMError(f"Gemini fallback unexpected payload: {data}") from exc
+    parsed = normalize_related(text)
+    if parsed is None:
+        try:
+            parsed = normalize_related(json.loads(text))
+        except json.JSONDecodeError:
+            parsed = None
+    if parsed is None:
+        raise CleansingLLMError(f"Gemini fallback returned non-boolean payload: {text}")
+    return parsed, provider_label
 
 
+async def classify_with_fallback(
+    *,
+    system_prompt: str,
+    content: str,
+    openai_client: httpx.AsyncClient,
+    gemini_client: httpx.AsyncClient,
+    openai_api_key: str,
+    gemini_api_key: str,
+    timeout: float = 60.0,
+) -> Tuple[bool, str]:
+    failures: List[ClassificationFailure] = []
+
+    async def call_gemini():
+        return await _call_gemini(
+            system_prompt=system_prompt,
+            content=content,
+            client=gemini_client,
+            gemini_api_key=gemini_api_key,
+            timeout=timeout,
+            model_name=JUDGE_MODEL,
+            provider_label="gemini-primary",
+        )
+
+    async def call_openai():
+        return await _call_openai(
+            system_prompt=system_prompt,
+            content=content,
+            client=openai_client,
+            openai_api_key=openai_api_key,
+            timeout=timeout,
+            model_name=JUDGE_FALLBACK_MODEL,
+        )
+
+    try:
+        return await _retry(call_gemini)
+    except Exception as exc:  # noqa: BLE001
+        failures.append(ClassificationFailure(provider="gemini-primary", reason=str(exc)))
+
+    try:
+        return await _retry(call_openai)
+    except Exception as exc:  # noqa: BLE001
+        failures.append(ClassificationFailure(provider="openai", reason=str(exc)))
+
+    async def call_gemini_fallback():
+        return await _call_gemini(
+            system_prompt=system_prompt,
+            content=content,
+            client=gemini_client,
+            gemini_api_key=gemini_api_key,
+            timeout=timeout,
+            model_name=FALLBACK_MODEL,
+            provider_label="gemini-fallback",
+        )
+
+    try:
+        return await _retry(call_gemini_fallback)
+    except Exception as exc:  # noqa: BLE001
+        failures.append(ClassificationFailure(provider="gemini-fallback", reason=str(exc)))
+        raise ClassificationFailed(failures) from exc
 async def _call_openai(
     *,
     system_prompt: str,
@@ -344,6 +512,7 @@ async def _call_openai(
     client: httpx.AsyncClient,
     openai_api_key: str,
     timeout: float,
+    model_name: str,
 ) -> Tuple[bool, str]:
     if not openai_api_key:
         raise CleansingLLMError("OPENAI_API_KEY is not set")
@@ -352,7 +521,7 @@ async def _call_openai(
     headers = {"Authorization": f"Bearer {openai_api_key}"}
     user_message = USER_PROMPT_TEMPLATE.format(content=content)
     payload = {
-        "model": JUDGE_MODEL,
+        "model": model_name,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
@@ -385,93 +554,3 @@ async def _call_openai(
     if parsed is None:
         raise CleansingLLMError(f"OpenAI returned non-boolean payload: {text}")
     return parsed, "openai"
-
-
-async def _call_gemini(
-    *,
-    system_prompt: str,
-    content: str,
-    client: httpx.AsyncClient,
-    gemini_api_key: str,
-    timeout: float,
-) -> Tuple[bool, str]:
-    if not gemini_api_key:
-        raise CleansingLLMError("GEMINI_API_KEY is not set")
-
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{FALLBACK_MODEL}:generateContent?key={gemini_api_key}"
-    )
-    user_text = (
-        f"{USER_PROMPT_TEMPLATE.format(content=content)}\n\n"
-        "出力は JSON で {\"related\": true|false} もしくは True/False のみ。"
-    )
-    payload = {
-        "systemInstruction": {"role": "system", "parts": [{"text": system_prompt}]},
-        "contents": [
-            {"role": "user", "parts": [{"text": user_text}]}
-        ],
-        "generationConfig": {"responseMimeType": "application/json"},
-    }
-    response = await client.post(url, json=payload, timeout=timeout)
-    try:
-        response.raise_for_status()
-    except httpx.HTTPStatusError as exc:  # noqa: BLE001
-        raise CleansingLLMError(f"Gemini fallback failed: {exc}") from exc
-    data = response.json()
-    try:
-        parts = data["candidates"][0]["content"]["parts"]
-        text = "".join(part.get("text", "") for part in parts if isinstance(part, dict))
-    except Exception as exc:  # noqa: BLE001
-        raise CleansingLLMError(f"Gemini fallback unexpected payload: {data}") from exc
-    parsed = normalize_related(text)
-    if parsed is None:
-        try:
-            parsed = normalize_related(json.loads(text))
-        except json.JSONDecodeError:
-            parsed = None
-    if parsed is None:
-        raise CleansingLLMError(f"Gemini fallback returned non-boolean payload: {text}")
-    return parsed, "gemini"
-
-
-async def classify_with_fallback(
-    *,
-    system_prompt: str,
-    content: str,
-    openai_client: httpx.AsyncClient,
-    gemini_client: httpx.AsyncClient,
-    openai_api_key: str,
-    gemini_api_key: str,
-    timeout: float = 60.0,
-) -> Tuple[bool, str]:
-    failures: List[ClassificationFailure] = []
-
-    async def call_openai():
-        return await _call_openai(
-            system_prompt=system_prompt,
-            content=content,
-            client=openai_client,
-            openai_api_key=openai_api_key,
-            timeout=timeout,
-        )
-
-    async def call_gemini():
-        return await _call_gemini(
-            system_prompt=system_prompt,
-            content=content,
-            client=gemini_client,
-            gemini_api_key=gemini_api_key,
-            timeout=timeout,
-        )
-
-    try:
-        return await _retry(call_openai)
-    except Exception as exc:  # noqa: BLE001
-        failures.append(ClassificationFailure(provider="openai", reason=str(exc)))
-
-    try:
-        return await _retry(call_gemini)
-    except Exception as exc:  # noqa: BLE001
-        failures.append(ClassificationFailure(provider="gemini", reason=str(exc)))
-        raise ClassificationFailed(failures) from exc

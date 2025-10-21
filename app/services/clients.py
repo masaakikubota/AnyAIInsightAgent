@@ -12,8 +12,8 @@ import httpx
 from ..models import Provider, ScoreRequest, ScoreResult
 
 
-GEMINI_MODEL = "gemini-flash-latest"
-GEMINI_MODEL_VIDEO = "gemini-pro-latest"
+GEMINI_MODEL = "gemini-flash-lite-latest"
+GEMINI_MODEL_VIDEO = "gemini-flash-latest"
 OPENAI_MODEL = "gpt-5-nano"
 OPENAI_DASHBOARD_PLAN_MODEL = "gpt-5-high"
 OPENAI_DASHBOARD_IMPLEMENT_MODEL = "gpt-5-codex"
@@ -67,7 +67,6 @@ async def call_gemini(req: ScoreRequest) -> Tuple[ScoreResult, int]:
                 }
             },
             "required": ["analyses"],
-            "additionalProperties": False,
         }
     else:
         response_schema = {
@@ -81,7 +80,6 @@ async def call_gemini(req: ScoreRequest) -> Tuple[ScoreResult, int]:
                 }
             },
             "required": ["scores"],
-            "additionalProperties": False,
         }
 
     parts: List[dict] = []
@@ -257,8 +255,10 @@ async def call_openai(req: ScoreRequest) -> Tuple[ScoreResult, int]:
             "strict": True,
         }
 
+    model_name = req.model_override or OPENAI_MODEL
+
     payload = {
-        "model": OPENAI_MODEL,
+        "model": model_name,
         "messages": [
             {"role": "system", "content": req.system_prompt},
             {"role": "user", "content": user_text},
@@ -298,12 +298,12 @@ async def call_openai(req: ScoreRequest) -> Tuple[ScoreResult, int]:
             analyses.append(item.strip())
 
         return (
-            ScoreResult(
-                scores=[None] * len(analyses),
-                analyses=analyses,
-                pre_scores=None,
-                provider=Provider.openai,
-                model=OPENAI_MODEL,
+        ScoreResult(
+            scores=[None] * len(analyses),
+            analyses=analyses,
+            pre_scores=None,
+            provider=Provider.openai,
+            model=model_name,
                 raw_text=text,
                 request_text=user_text,
             ),

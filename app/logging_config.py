@@ -8,6 +8,13 @@ from logging.config import dictConfig
 _CONFIGURED = False
 
 
+class _KubotinDebugFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno == logging.DEBUG:
+            return record.getMessage().startswith("kubotin")
+        return True
+
+
 def configure_logging() -> None:
     """Configure verbose logging for debugging.
 
@@ -63,5 +70,6 @@ def configure_logging() -> None:
         }
     )
 
+    logging.getLogger().addFilter(_KubotinDebugFilter())
     logging.getLogger(__name__).debug("Logging configured (level=%s)", log_level)
     _CONFIGURED = True

@@ -26,6 +26,21 @@
         font: inherit;
       }
 
+      .field-with-action {
+        display: flex;
+        gap: var(--anyai-space-3);
+        align-items: center;
+      }
+
+      .field-with-action input[type="text"] {
+        flex: 1 1 auto;
+      }
+
+      .field-with-action .btn {
+        flex: 0 0 auto;
+        white-space: nowrap;
+      }
+
       .stack-sm { display: flex; flex-direction: column; gap: var(--anyai-space-3); }
       .muted { color: var(--anyai-text-subtle); font-size: var(--anyai-fs-2); }
       progress { width: 100%; height: 12px; border-radius: var(--anyai-radius-2); overflow: hidden; }
@@ -54,9 +69,12 @@
                 <form id="cleansing-form">
                   <div class="anyai-form-fields">
                     <div class="field">
-                      <label for="sheet">SheetID / SheetURL</label>
-                      <p class="field-hint">対象GoogleスプレッドシートのURLまたはID。</p>
-                      <input type="text" id="sheet" name="sheet" placeholder="https://docs.google.com/spreadsheets/d/..." required />
+                      <label for="sheet">スプレッドシートURL / ID</label>
+                      <p class="field-hint">対象スプレッドシートを指定し、Setボタンでシート一覧を読み込みます。</p>
+                      <div class="field-with-action">
+                        <input type="text" id="sheet" name="sheet" placeholder="https://docs.google.com/spreadsheets/d/..." required />
+                        <button type="button" class="btn btn-outline" id="btn-sheet-set">Set</button>
+                      </div>
                     </div>
                     <div class="field">
                       <label for="country">Country</label>
@@ -69,17 +87,44 @@
                       <input type="text" id="product_category" name="product_category" placeholder="例: ガム" required />
                     </div>
                     <div class="field">
-                      <label for="sheet_name">Sheet Name</label>
-                      <p class="field-hint">content と Related 列を含むシート名。</p>
-                      <input type="text" id="sheet_name" name="sheet_name" value="RawData_Master" required />
+                      <label for="sheet_name">対象シート</label>
+                      <p class="field-hint">Setで読み込んだシート一覧から選択します。</p>
+                      <select id="sheet_name" name="sheet_name" disabled>
+                        <option value="">Setでシートを読み込んでください</option>
+                      </select>
                       <details class="field-info">
                         <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
-                        <div class="info-panel">ヘッダーに <code>content</code> と <code>Related</code> が含まれているシートを指定してください。</div>
+                        <div class="info-panel">ヘッダーに <code>content</code> と <code>Related</code> が含まれるシートを選択してください。</div>
                       </details>
                     </div>
                     <input type="hidden" id="concurrency" name="concurrency" value="50" />
+                    <input type="hidden" id="sheet_gid" name="sheet_gid" value="" />
                   </div>
                 </form>
+              </section>
+
+              <section class="anyai-form-section" aria-labelledby="keys-heading">
+                <details id="keys-section" class="section-toggle">
+                  <summary>
+                    <h2 id="keys-heading" class="mt-0">APIキー設定</h2>
+                    <span class="caret" aria-hidden="true">▸</span>
+                  </summary>
+                  <form id="keys-form" class="stack">
+                    <div class="field">
+                      <label for="gemini_api_key">Gemini API Key</label>
+                      <input type="password" id="gemini_api_key" name="gemini_api_key" placeholder="GEMINI_API_KEY" />
+                    </div>
+                    <div class="field">
+                      <label for="openai_api_key">OpenAI API Key</label>
+                      <input type="password" id="openai_api_key" name="openai_api_key" placeholder="OPENAI_API_KEY" />
+                    </div>
+                    <div class="field field-inline">
+                      <input type="checkbox" id="persist" name="persist" />
+                      <label for="persist">.env に保存（ローカル）</label>
+                      <button type="submit" class="btn btn-outline right">保存</button>
+                    </div>
+                  </form>
+                </details>
               </section>
             </div>
           </section>
@@ -124,6 +169,14 @@
       const progressEl = document.getElementById('job-progress');
       const errorBox = document.getElementById('job-errors');
       const errorList = document.getElementById('job-error-list');
+      const sheetInput = document.getElementById('sheet');
+      const sheetSelect = document.getElementById('sheet_name');
+      const sheetGidInput = document.getElementById('sheet_gid');
+      const setSheetButton = document.getElementById('btn-sheet-set');
+      const keysForm = document.getElementById('keys-form');
+
+      let resolvedSpreadsheetId = '';
+      let resolvedSheets = [];
 
       let currentJobId = null;
       let pollTimer = null;
@@ -133,6 +186,24 @@
           clearTimeout(pollTimer);
           pollTimer = null;
         }
+      }
+
+      function setButtonBusy(button, busyLabel) {
+        if (!button) return () => {};
+        const original = {
+          text: button.textContent,
+          disabled: button.disabled,
+        };
+        button.disabled = true;
+        if (busyLabel) {
+          button.textContent = busyLabel;
+        }
+        return () => {
+          button.disabled = original.disabled;
+          if (busyLabel) {
+            button.textContent = original.text;
+          }
+        };
       }
 
       async function fetchStatus(jobId) {
@@ -200,13 +271,125 @@
         }
       });
 
+      function clearSheetSelection(message = 'Setでシートを読み込んでください') {
+        if (!sheetSelect) return;
+        sheetSelect.innerHTML = '';
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = message;
+        sheetSelect.appendChild(opt);
+        sheetSelect.disabled = true;
+        if (sheetGidInput) sheetGidInput.value = '';
+      }
+
+      clearSheetSelection();
+
+      function updateSheetGid() {
+        if (!sheetSelect || !sheetGidInput) return;
+        const option = sheetSelect.selectedOptions && sheetSelect.selectedOptions[0];
+        sheetGidInput.value = option && option.dataset.sheetId ? option.dataset.sheetId : '';
+      }
+
+      async function handleSheetSet() {
+        if (!sheetInput || !sheetInput.value.trim()) {
+          alert('スプレッドシートURL/IDを入力してください');
+          return;
+        }
+        if (!setSheetButton) return;
+        const releaseBusy = setButtonBusy(setSheetButton, '取得中...');
+        resolvedSpreadsheetId = '';
+        resolvedSheets = [];
+        clearSheetSelection('シート一覧を取得中...');
+        try {
+          const res = await fetch('/cleansing/sheets/list', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sheet: sheetInput.value.trim() }),
+          });
+          let data = null;
+          try {
+            data = await res.json();
+          } catch (_) {}
+          if (!res.ok || !data || !data.ok) {
+            const message = (data && data.message) || 'シート一覧の取得に失敗しました';
+            alert(message);
+            clearSheetSelection('再度 Set を実行してください');
+            return;
+          }
+          resolvedSpreadsheetId = data.spreadsheet_id || sheetInput.value.trim();
+          resolvedSheets = Array.isArray(data.sheets) ? data.sheets : [];
+          sheetSelect.innerHTML = '';
+          const placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = '対象シートを選択してください';
+          sheetSelect.appendChild(placeholder);
+          resolvedSheets.forEach((item) => {
+            const option = document.createElement('option');
+            option.value = item.sheet_name;
+            option.textContent = item.sheet_name;
+            option.dataset.sheetId = String(item.sheet_id);
+            sheetSelect.appendChild(option);
+          });
+          sheetSelect.disabled = resolvedSheets.length === 0;
+          if (!sheetSelect.disabled) {
+            sheetSelect.focus();
+          }
+        } catch (err) {
+          console.error(err);
+          alert('シート一覧の取得に失敗しました');
+          clearSheetSelection('再度 Set を実行してください');
+        } finally {
+          releaseBusy();
+        }
+      }
+
+      if (setSheetButton) {
+        setSheetButton.addEventListener('click', () => {
+          void handleSheetSet();
+        });
+      }
+
+      if (sheetSelect) {
+        sheetSelect.addEventListener('change', () => {
+          updateSheetGid();
+        });
+      }
+
+      if (keysForm) {
+        keysForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const fd = new FormData(keysForm);
+          fd.set('persist', document.getElementById('persist')?.checked ? 'true' : 'false');
+          const res = await fetch('/settings', { method: 'POST', body: fd });
+          if (!res.ok) {
+            alert('APIキーの保存に失敗しました');
+            return;
+          }
+          alert('APIキーを保存しました');
+        });
+      }
+
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (!sheetInput?.value.trim()) {
+          alert('スプレッドシートURL/IDを入力してください');
+          return;
+        }
+        if (!sheetSelect || sheetSelect.disabled || !sheetSelect.value) {
+          alert('対象シートを選択してください');
+          return;
+        }
         stopPolling();
         await loadingOverlay.run(async () => {
           const fd = new FormData(form);
           if (!fd.get('concurrency')) {
             fd.set('concurrency', '50');
+          }
+          fd.set('sheet_name', sheetSelect.value);
+          if (sheetGidInput && sheetGidInput.value) {
+            fd.set('sheet_gid', sheetGidInput.value);
+          } else {
+            fd.delete('sheet_gid');
           }
           const res = await fetch('/cleansing/jobs', { method: 'POST', body: fd });
           if (!res.ok) {

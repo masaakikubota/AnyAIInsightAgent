@@ -40,7 +40,9 @@ CONTENT_CANDIDATES = ["content", "コンテンツ", "投稿", "text", "post"]
 RELATED_CANDIDATES = ["related", "関連"]
 LLM_TIMEOUT = 60.0
 SHEET_READ_RANGE = "A:Z"
-SHEET_UPDATE_CHUNK = 500
+SHEET_UPDATE_CHUNK = 5000
+CLEANSING_PROCESS_CHUNK = 500
+CLEANSING_FLUSH_CONCURRENCY = 2
 
 
 @dataclass
@@ -135,67 +137,159 @@ class CleansingJobManager:
                 country=cfg.country,
                 product_category=cfg.product_category,
                 gemini_api_key=gemini_api_key,
+                openai_api_key=openai_api_key,
                 timeout=LLM_TIMEOUT,
             )
             job.message = "System Prompt を生成しました"
 
-            updates: List[Tuple[int, str]] = []
             progress_lock = asyncio.Lock()
-            updates_lock = asyncio.Lock()
             sem = asyncio.Semaphore(cfg.concurrency)
+            column_letter = column_index_to_a1(idx_related)
+            sheet_label = _quote_sheet_name(cfg.sheet_name)
 
+            total_written = 0
             async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as openai_client, httpx.AsyncClient(timeout=LLM_TIMEOUT) as gemini_client:
+                active_flushes: set[asyncio.Task[int]] = set()
 
-                async def worker(row_number: int, content: str) -> None:
-                    async with sem:
-                        try:
-                            result, provider = await classify_with_fallback(
-                                system_prompt=system_prompt,
-                                content=content,
-                                openai_client=openai_client,
-                                gemini_client=gemini_client,
-                                openai_api_key=openai_api_key,
-                                gemini_api_key=gemini_api_key,
-                                timeout=LLM_TIMEOUT,
-                            )
-                        except ClassificationFailed as exc:
-                            reason = "; ".join(f"{f.provider}: {f.reason}" for f in exc.failures) or str(exc)
-                            await _record_failure(job, progress_lock, row_number, reason)
-                            return
-                        except CleansingLLMError as exc:
-                            await _record_failure(job, progress_lock, row_number, str(exc))
-                            return
-                        except Exception as exc:  # noqa: BLE001
-                            logger.exception("Cleansing worker unexpected error", exc_info=exc)
-                            await _record_failure(job, progress_lock, row_number, str(exc))
-                            return
+                async def ensure_flush_capacity() -> None:
+                    nonlocal active_flushes, total_written
+                    while active_flushes and len(active_flushes) >= CLEANSING_FLUSH_CONCURRENCY:
+                        done, pending = await asyncio.wait(active_flushes, return_when=asyncio.FIRST_COMPLETED)
+                        for task in done:
+                            total_written += task.result()
+                        active_flushes = set(pending)
 
-                        value = "TRUE" if result else "FALSE"
-                        async with updates_lock:
-                            updates.append((row_number, value))
-                        async with progress_lock:
-                            job.processed_items += 1
-                            job.success_count += 1
-                            if provider == "gemini":
-                                job.fallback_count += 1
+                async def drain_flushes() -> None:
+                    nonlocal active_flushes, total_written
+                    if not active_flushes:
+                        return
+                    done, _ = await asyncio.wait(active_flushes)
+                    for task in done:
+                        total_written += task.result()
+                    active_flushes.clear()
 
-                await asyncio.gather(*(worker(row, content) for row, content in items))
+                async def apply_updates(updates_chunk: List[Tuple[int, str]]) -> int:
+                    if not updates_chunk:
+                        return 0
+                    value_ranges = [
+                        {
+                            "range": f"{sheet_label}!{column_letter}{row}",
+                            "values": [[value]],
+                        }
+                        for row, value in updates_chunk
+                    ]
+                    for chunk in _chunked(value_ranges, SHEET_UPDATE_CHUNK):
+                        await asyncio.to_thread(batch_update_values, spreadsheet_id, chunk)
+                    return len(updates_chunk)
 
-            # Apply updates to Google Sheets
-            if updates:
-                updates.sort(key=lambda x: x[0])
-                column_letter = column_index_to_a1(idx_related)
                 sheet_label = _quote_sheet_name(cfg.sheet_name)
-                value_ranges = [
-                    {
-                        "range": f"{sheet_label}!{column_letter}{row}",
-                        "values": [[value]],
-                    }
-                    for row, value in updates
-                ]
-                for chunk in _chunked(value_ranges, SHEET_UPDATE_CHUNK):
-                    await asyncio.to_thread(batch_update_values, spreadsheet_id, chunk)
-                job.message = f"{len(updates)} 件の行を更新しました"
+                header_row: Optional[List[str]] = None
+                idx_content: Optional[int] = None
+                idx_related: Optional[int] = None
+                column_letter: Optional[str] = None
+                start_row = 1
+                while True:
+                    end_row = start_row + CLEANSING_PROCESS_CHUNK - 1
+                    range_label = f"{sheet_label}!A{start_row}:Z{end_row}"
+                    rows = await asyncio.to_thread(fetch_sheet_values, spreadsheet_id, range_label)
+                    if not rows:
+                        break
+
+                    if header_row is None:
+                        header_row = rows[0] if rows else []
+                        if not header_row:
+                            break
+                        idx_content = _find_column_index(header_row, CONTENT_CANDIDATES)
+                        if idx_content is None:
+                            raise CleansingLLMError(
+                                "content 列が見つかりませんでした。ヘッダーに content/text/post 等を含めてください。"
+                            )
+                        idx_related = _find_column_index(header_row, RELATED_CANDIDATES, default=6)
+                        if idx_related is None:
+                            idx_related = 6
+                        column_letter = column_index_to_a1(idx_related)
+                        data_rows = rows[1:]
+                        base_row_number = start_row + 1
+                    else:
+                        data_rows = rows
+                        base_row_number = start_row
+
+                    if idx_related is None:
+                        idx_related = 6
+                        column_letter = column_index_to_a1(idx_related)
+                    if column_letter is None:
+                        column_letter = column_index_to_a1(idx_related)
+
+                    chunk_has_values = False
+                    chunk_items: List[Tuple[int, str]] = []
+                    for offset, row in enumerate(data_rows):
+                        if row and any(str(cell).strip() for cell in row):
+                            chunk_has_values = True
+                        absolute_row = base_row_number + offset
+                        content = _safe_cell(row, idx_content)
+                        related_value = _safe_cell(row, idx_related)
+                        if content:
+                            chunk_has_values = True
+                        if content and not related_value:
+                            chunk_items.append((absolute_row, content))
+
+                    if not chunk_has_values and not chunk_items:
+                        break
+
+                    if chunk_items:
+                        job.total_items += len(chunk_items)
+                        chunk_updates: List[Tuple[int, str]] = []
+                        chunk_updates_lock = asyncio.Lock()
+
+                        async def worker(row_number: int, content: str) -> None:
+                            async with sem:
+                                try:
+                                    result, provider = await classify_with_fallback(
+                                        system_prompt=system_prompt,
+                                        content=content,
+                                        openai_client=openai_client,
+                                        gemini_client=gemini_client,
+                                        openai_api_key=openai_api_key,
+                                        gemini_api_key=gemini_api_key,
+                                        timeout=LLM_TIMEOUT,
+                                    )
+                                except ClassificationFailed as exc:
+                                    reason = "; ".join(f"{f.provider}: {f.reason}" for f in exc.failures) or str(exc)
+                                    await _record_failure(job, progress_lock, row_number, reason)
+                                    return
+                                except CleansingLLMError as exc:
+                                    await _record_failure(job, progress_lock, row_number, str(exc))
+                                    return
+                                except Exception as exc:  # noqa: BLE001
+                                    logger.exception("Cleansing worker unexpected error", exc_info=exc)
+                                    await _record_failure(job, progress_lock, row_number, str(exc))
+                                    return
+
+                                value = "TRUE" if result else "FALSE"
+                                async with chunk_updates_lock:
+                                    chunk_updates.append((row_number, value))
+                                async with progress_lock:
+                                    job.processed_items += 1
+                                    job.success_count += 1
+                                    if provider.endswith("fallback"):
+                                        job.fallback_count += 1
+
+                        await asyncio.gather(*(worker(row, content) for row, content in chunk_items))
+
+                        if chunk_updates:
+                            chunk_updates.sort(key=lambda x: x[0])
+                            await ensure_flush_capacity()
+                            flush_task = asyncio.create_task(apply_updates(chunk_updates))
+                            active_flushes.add(flush_task)
+
+                    start_row = end_row + 1
+
+                await drain_flushes()
+
+            if total_written > 0:
+                job.message = f"{total_written} 件の行を更新しました"
+            elif job.success_count > 0:
+                job.message = f"{job.success_count} 件の行を更新しました"
             else:
                 job.message = "更新対象がありませんでした"
 

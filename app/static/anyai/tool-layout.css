@@ -188,7 +188,7 @@ body {
   flex: 1;
   min-width: 0;
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
   padding: var(--anyai-app-padding-block, var(--anyai-space-8, 48px))
     var(--anyai-app-padding-inline, clamp(var(--anyai-space-6, 24px), 6vw, var(--anyai-space-9, 64px)))
     var(--anyai-app-padding-block-end, var(--anyai-space-9, 64px));
@@ -200,8 +200,8 @@ body {
   column-gap: var(--anyai-app-gutter, var(--anyai-space-7, 32px));
   row-gap: var(--anyai-app-gutter, var(--anyai-space-7, 32px));
   align-items: flex-start;
-  width: min(100%, var(--anyai-app-max-width, 1200px));
-  margin-inline: 0 auto;
+  width: min(100%, clamp(960px, 80vw, 1400px));
+  margin-inline: auto;
 }
 
 .anyai-app-primary,
@@ -247,6 +247,20 @@ body {
   );
   overflow: auto;
   padding-right: 2px;
+}
+
+@media (min-width: 1280px) {
+  .anyai-app {
+    --anyai-app-primary-span: 9;
+    --anyai-app-support-span: 3;
+  }
+}
+
+@media (min-width: 1600px) {
+  .anyai-app {
+    --anyai-app-primary-span: 10;
+    --anyai-app-support-span: 2;
+  }
 }
 
 .anyai-support-card {

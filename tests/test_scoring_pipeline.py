@@ -315,8 +315,8 @@ class ScoringPipelineWriterTests(unittest.TestCase):
         self.assertEqual(len(updates), 4)
         self.assertTrue(all(isinstance(entry, list) for entry in updates))
         self.assertEqual(updates[0][0]["values"], [["Row1 analysis"]])
-        self.assertEqual(updates[1][0]["values"], [["Row2 analysis"]])
-        self.assertEqual(updates[2][0]["values"], [[0.4]])
+        self.assertEqual(updates[1][0]["values"], [[0.4]])
+        self.assertEqual(updates[2][0]["values"], [["Row2 analysis"]])
         self.assertEqual(updates[3][0]["values"], [[0.6]])
         self.assertEqual(pipeline.stats.flush_count, 1)
 

@@ -420,7 +420,7 @@ class PersonaResponseJobForm(_BaseForm):
     persona_limit: int = 0
     stimuli_limit: int = 0
     concurrency: int = 12
-    gemini_model: str = "gemini-flash-latest"
+    gemini_model: str = "gemini-flash-lite-latest"
     response_style: str = "monologue"
     include_structured_summary: bool = True
     ssr_reference_path: Optional[str] = None
@@ -522,7 +522,7 @@ class PersonaResponseJobForm(_BaseForm):
             persona_limit=persona_limit,
             stimuli_limit=stimuli_limit,
             concurrency=self.concurrency,
-            gemini_model=self.gemini_model or "gemini-flash-latest",
+            gemini_model=self.gemini_model or "gemini-flash-lite-latest",
             response_style=self.response_style,
             include_structured_summary=self.include_structured_summary,
             ssr_reference_path=self.ssr_reference_path,

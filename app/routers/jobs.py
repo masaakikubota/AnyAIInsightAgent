@@ -10,15 +10,17 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..dependencies import get_base_dir, get_job_manager
-from ..models import CreateJobResponse, JobStatus, ProgressResponse, RunConfig
+from ..models import CreateJobResponse, JobStatus, ProgressResponse, Provider, RunConfig
 from ..services.google_sheets import (
     GoogleSheetsError,
+    SheetMatch,
     ensure_service_account_access,
     extract_spreadsheet_id,
     find_sheet,
+    list_sheets,
 )
 from ..worker import JobManager
 
@@ -28,10 +30,36 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+_MODEL_PROVIDER_MAP = {
+    "gemini-flash-lite-latest": Provider.gemini,
+    "gemini-flash-latest": Provider.gemini,
+    "gemini-pro-latest": Provider.gemini,
+    "gpt-5-nano": Provider.openai,
+    "gpt-4.1-nano": Provider.openai,
+}
+
+
+def _infer_provider(model_name: Optional[str], *, default: Provider = Provider.gemini) -> Provider:
+    if not model_name:
+        return default
+    normalized = model_name.strip().lower()
+    if not normalized:
+        return default
+    if normalized in _MODEL_PROVIDER_MAP:
+        return _MODEL_PROVIDER_MAP[normalized]
+    if normalized.startswith("gemini"):
+        return Provider.gemini
+    if normalized.startswith("gpt") or normalized.startswith("o"):
+        return Provider.openai
+    return default
+
+
 class JobCheckRequest(BaseModel):
     spreadsheet_url: str
     sheet_keyword: str
     score_sheet_keyword: Optional[str] = None
+    sheet_gid: Optional[int] = None
+    score_sheet_gid: Optional[int] = None
 
 
 class JobCheckResponse(BaseModel):
@@ -44,14 +72,75 @@ class JobCheckResponse(BaseModel):
     score_sheet_name: Optional[str] = None
 
 
-@router.post("/jobs/check", response_model=JobCheckResponse)
-async def check_job(payload: JobCheckRequest) -> JobCheckResponse:
+class SheetListRequest(BaseModel):
+    spreadsheet_url: str
+
+
+class SheetInfo(BaseModel):
+    sheet_id: int
+    sheet_name: str
+
+
+class SheetListResponse(BaseModel):
+    ok: bool
+    message: str
+    spreadsheet_id: Optional[str] = None
+    sheets: list[SheetInfo] = Field(default_factory=list)
+
+
+@router.post("/sheets/list", response_model=SheetListResponse)
+async def list_spreadsheet_sheets(payload: SheetListRequest) -> SheetListResponse:
     try:
         spreadsheet_id = extract_spreadsheet_id(payload.spreadsheet_url)
         await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
-        sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, payload.sheet_keyword)
-        score_keyword = (payload.score_sheet_keyword or payload.sheet_keyword).strip()
-        score_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_keyword)
+        matches = await asyncio.to_thread(list_sheets, spreadsheet_id)
+    except GoogleSheetsError as exc:
+        return SheetListResponse(ok=False, message=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        return SheetListResponse(ok=False, message=f"不明なエラーが発生しました: {exc}")
+
+    sheets = [SheetInfo(sheet_id=match.sheet_id, sheet_name=match.sheet_name) for match in matches]
+    if not sheets:
+        return SheetListResponse(ok=False, message="シートが見つかりませんでした", spreadsheet_id=spreadsheet_id)
+
+    return SheetListResponse(ok=True, message="シート一覧を取得しました。", spreadsheet_id=spreadsheet_id, sheets=sheets)
+
+
+@router.post("/jobs/check", response_model=JobCheckResponse)
+async def check_job(payload: JobCheckRequest) -> JobCheckResponse:
+    sheet_keyword = (payload.sheet_keyword or "").strip()
+    if not sheet_keyword:
+        return JobCheckResponse(ok=False, message="分析対象シートのキーワードを入力してください。")
+
+    score_keyword_source = payload.score_sheet_keyword
+    if score_keyword_source is None:
+        score_keyword_source = sheet_keyword
+    score_keyword = (score_keyword_source or "").strip()
+    if not score_keyword:
+        return JobCheckResponse(ok=False, message="スコア出力シートのキーワードを入力してください。")
+
+    try:
+        spreadsheet_id = extract_spreadsheet_id(payload.spreadsheet_url)
+        await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
+        sheet_meta: list[SheetMatch] | None = None
+        sheet_match: Optional[SheetMatch] = None
+        score_match: Optional[SheetMatch] = None
+        by_id: dict[int, SheetMatch] | None = None
+        if payload.sheet_gid is not None or payload.score_sheet_gid is not None:
+            sheet_meta = await asyncio.to_thread(list_sheets, spreadsheet_id)
+            by_id = {entry.sheet_id: entry for entry in sheet_meta}
+        if payload.sheet_gid is not None:
+            sheet_match = (by_id or {}).get(payload.sheet_gid) if sheet_meta is not None else None
+            if sheet_match is None:
+                return JobCheckResponse(ok=False, message="選択した分析シートが見つかりませんでした。")
+        if payload.score_sheet_gid is not None:
+            score_match = (by_id or {}).get(payload.score_sheet_gid) if sheet_meta is not None else None
+            if score_match is None:
+                return JobCheckResponse(ok=False, message="選択したスコアシートが見つかりませんでした。")
+        if sheet_match is None:
+            sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, sheet_keyword)
+        if score_match is None:
+            score_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_keyword)
     except GoogleSheetsError as exc:
         return JobCheckResponse(ok=False, message=str(exc))
     except Exception as exc:  # noqa: BLE001
@@ -74,6 +163,8 @@ async def create_job(
     spreadsheet_url: str = Form(...),
     sheet_keyword: str = Form("Link"),
     score_sheet_keyword: str = Form("Embedding"),
+    sheet_gid: Optional[int] = Form(None),
+    score_sheet_gid: Optional[int] = Form(None),
     utterance_col: int = Form(3),
     category_start_col: int = Form(4),
     name_row: int = Form(2),
@@ -90,17 +181,45 @@ async def create_job(
     enable_ssr: bool = Form(True),
     video_download_timeout: int = Form(120),
     video_temp_dir: Optional[str] = Form(None),
+    primary_model: Optional[str] = Form(None),
+    fallback_model: Optional[str] = Form(None),
     system_prompt_ssr: Optional[str] = Form(None),
     system_prompt_numeric: Optional[str] = Form(None),
     system_prompt: Optional[str] = Form(None),
     action: str = Form("queue"),
     manager: JobManager = Depends(get_job_manager),
 ) -> CreateJobResponse:
+    sheet_keyword = (sheet_keyword or "").strip() or "Link"
+    score_sheet_keyword = (score_sheet_keyword or "").strip()
+    if not score_sheet_keyword:
+        raise HTTPException(status_code=400, detail="スコア出力シートのキーワードを入力してください。")
+
     try:
         spreadsheet_id = extract_spreadsheet_id(spreadsheet_url)
         await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
-        sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, sheet_keyword)
-        score_sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_sheet_keyword)
+        sheet_meta: list[SheetMatch] | None = None
+        sheet_by_id: dict[int, SheetMatch] | None = None
+        sheet_match: Optional[SheetMatch] = None
+        score_sheet_match: Optional[SheetMatch] = None
+        if sheet_gid is not None or score_sheet_gid is not None:
+            sheet_meta = await asyncio.to_thread(list_sheets, spreadsheet_id)
+            sheet_by_id = {entry.sheet_id: entry for entry in sheet_meta}
+        if sheet_gid is not None and sheet_by_id is not None:
+            sheet_match = sheet_by_id.get(sheet_gid)
+            if sheet_match is None:
+                raise GoogleSheetsError("選択した分析シートが取得できませんでした。")
+            sheet_keyword = sheet_match.sheet_name
+        else:
+            sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, sheet_keyword)
+            sheet_gid = sheet_match.sheet_id
+        if score_sheet_gid is not None and sheet_by_id is not None:
+            score_sheet_match = sheet_by_id.get(score_sheet_gid)
+            if score_sheet_match is None:
+                raise GoogleSheetsError("選択したスコアシートが取得できませんでした。")
+            score_sheet_keyword = score_sheet_match.sheet_name
+        else:
+            score_sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_sheet_keyword)
+            score_sheet_gid = score_sheet_match.sheet_id
     except GoogleSheetsError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -108,6 +227,8 @@ async def create_job(
     max_category_cols_value = max_category_cols
     concurrency_value = concurrency
     timeout_value = timeout_sec
+    primary_model_value = (primary_model or "").strip()
+    fallback_model_value = (fallback_model or "").strip()
     if mode == "video":
         default_concurrency = RunConfig.model_fields["video_concurrency_default"].default
         default_timeout = RunConfig.model_fields["video_timeout_default"].default
@@ -120,10 +241,25 @@ async def create_job(
             )
         batch_size_value = 1
         max_category_cols_value = 1
+        if not primary_model_value:
+            primary_model_value = "gemini-flash-latest"
+        fallback_model_value = ""
+    else:
+        if not primary_model_value:
+            primary_model_value = "gemini-flash-lite-latest"
+        if not fallback_model_value:
+            fallback_model_value = "gpt-5-nano"
 
     if enable_ssr and batch_size_value != 1:
         logger.debug("evt=ssr_concurrency_forced value=1 scope=request")
         batch_size_value = 1
+
+    primary_provider = _infer_provider(primary_model_value, default=Provider.gemini)
+    fallback_provider = (
+        _infer_provider(fallback_model_value, default=Provider.openai)
+        if fallback_model_value
+        else (Provider.gemini if mode == "video" else Provider.openai)
+    )
 
     cfg = RunConfig(
         spreadsheet_url=spreadsheet_url,
@@ -149,6 +285,10 @@ async def create_job(
         timeout_sec=timeout_value,
         video_download_timeout=video_download_timeout,
         video_temp_dir=video_temp_dir,
+        primary_provider=primary_provider,
+        fallback_provider=fallback_provider,
+        primary_model=primary_model_value,
+        fallback_model=fallback_model_value or None,
         enable_ssr=enable_ssr,
         ssr_system_prompt=(
             system_prompt_ssr or RunConfig.model_fields["ssr_system_prompt"].default
@@ -279,6 +419,8 @@ async def edit_job(
     spreadsheet_url: str = Form(...),
     sheet_keyword: str = Form("Link"),
     score_sheet_keyword: str = Form("Embedding"),
+    sheet_gid: Optional[int] = Form(None),
+    score_sheet_gid: Optional[int] = Form(None),
     utterance_col: int = Form(3),
     category_start_col: int = Form(4),
     name_row: int = Form(2),
@@ -295,31 +437,82 @@ async def edit_job(
     video_download_timeout: int = Form(120),
     video_temp_dir: Optional[str] = Form(None),
     enable_ssr: bool = Form(True),
+    primary_model: Optional[str] = Form(None),
+    fallback_model: Optional[str] = Form(None),
     system_prompt_ssr: Optional[str] = Form(None),
     system_prompt_numeric: Optional[str] = Form(None),
     system_prompt: Optional[str] = Form(None),
     manager: JobManager = Depends(get_job_manager),
     base_dir: Path = Depends(get_base_dir),
 ):
+    sheet_keyword = (sheet_keyword or "").strip() or "Link"
+    score_sheet_keyword = (score_sheet_keyword or "").strip()
+    if not score_sheet_keyword:
+        raise HTTPException(status_code=400, detail="スコア出力シートのキーワードを入力してください。")
+
     job = manager.jobs.get(job_id)
     if job and job.status == JobStatus.running:
         raise HTTPException(status_code=400, detail="Job is running and cannot be edited")
     try:
         spreadsheet_id = extract_spreadsheet_id(spreadsheet_url)
         await asyncio.to_thread(ensure_service_account_access, spreadsheet_id)
-        sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, sheet_keyword)
-        score_sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_sheet_keyword)
+        sheet_meta: list[SheetMatch] | None = None
+        sheet_by_id: dict[int, SheetMatch] | None = None
+        sheet_match: Optional[SheetMatch] = None
+        score_sheet_match: Optional[SheetMatch] = None
+        if sheet_gid is not None or score_sheet_gid is not None:
+            sheet_meta = await asyncio.to_thread(list_sheets, spreadsheet_id)
+            sheet_by_id = {entry.sheet_id: entry for entry in sheet_meta}
+        if sheet_gid is not None and sheet_by_id is not None:
+            sheet_match = sheet_by_id.get(sheet_gid)
+            if sheet_match is None:
+                raise GoogleSheetsError("選択した分析シートが取得できませんでした。")
+            sheet_keyword = sheet_match.sheet_name
+        else:
+            sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, sheet_keyword)
+            sheet_gid = sheet_match.sheet_id
+        if score_sheet_gid is not None and sheet_by_id is not None:
+            score_sheet_match = sheet_by_id.get(score_sheet_gid)
+            if score_sheet_match is None:
+                raise GoogleSheetsError("選択したスコアシートが取得できませんでした。")
+            score_sheet_keyword = score_sheet_match.sheet_name
+        else:
+            score_sheet_match = await asyncio.to_thread(find_sheet, spreadsheet_id, score_sheet_keyword)
+            score_sheet_gid = score_sheet_match.sheet_id
     except GoogleSheetsError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     batch_size_value = batch_size
     concurrency_value = concurrency
     timeout_value = timeout_sec
+    primary_model_value = (primary_model or "").strip()
+    fallback_model_value = (fallback_model or "").strip()
     if mode == "video":
         default_concurrency = RunConfig.model_fields["video_concurrency_default"].default
         default_timeout = RunConfig.model_fields["video_timeout_default"].default
         concurrency_value = concurrency or default_concurrency
         timeout_value = timeout_sec or default_timeout
+        if not primary_model_value:
+            primary_model_value = "gemini-flash-latest"
+        fallback_model_value = ""
+        batch_size_value = 1
+        max_category_cols = 1
+    else:
+        if not primary_model_value:
+            primary_model_value = "gemini-flash-lite-latest"
+        if not fallback_model_value:
+            fallback_model_value = "gpt-5-nano"
+
+    if enable_ssr and batch_size_value != 1:
+        logger.debug("evt=ssr_concurrency_forced value=1 scope=edit job_id=%s", job_id)
+        batch_size_value = 1
+
+    primary_provider = _infer_provider(primary_model_value, default=Provider.gemini)
+    fallback_provider = (
+        _infer_provider(fallback_model_value, default=Provider.openai)
+        if fallback_model_value
+        else (Provider.gemini if mode == "video" else Provider.openai)
+    )
 
     cfg = RunConfig(
         spreadsheet_url=spreadsheet_url,
@@ -345,6 +538,10 @@ async def edit_job(
         timeout_sec=timeout_value,
         video_download_timeout=video_download_timeout,
         video_temp_dir=video_temp_dir,
+        primary_provider=primary_provider,
+        fallback_provider=fallback_provider,
+        primary_model=primary_model_value,
+        fallback_model=fallback_model_value or None,
         enable_ssr=enable_ssr,
         ssr_system_prompt=(
             system_prompt_ssr or RunConfig.model_fields["ssr_system_prompt"].default
