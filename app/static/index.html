@@ -652,10 +652,10 @@
 
         function buildKey() {
           const url = resolvedSpreadsheetId || spreadsheetUrlInput.value.trim();
-          const sheetKeyword = sheetKeywordInput ? sheetKeywordInput.value.trim() : '';
-          const scoreKeyword = scoreSheetKeywordInput ? scoreSheetKeywordInput.value.trim() : '';
-          const sheetGid = sheetGidInput ? sheetGidInput.value.trim() : '';
-          const scoreGid = scoreSheetGidInput ? scoreSheetGidInput.value.trim() : '';
+          const sheetKeyword = getAnalysisSheetKeyword();
+          const scoreKeyword = getScoreSheetKeyword();
+          const sheetGid = getAnalysisSheetGid();
+          const scoreGid = getScoreSheetGid();
           return [url, sheetGid || sheetKeyword, scoreGid || scoreKeyword].join('|');
         }
 
@@ -836,6 +836,50 @@
           fallback: MODE_DEFAULTS.video.fallbackModel,
         },
       };
+
+      const isSSREnabled = () => Boolean(enableSSR && enableSSR.checked);
+
+      function getAnalysisSheetKeyword() {
+        const direct = sheetKeywordInput ? sheetKeywordInput.value.trim() : '';
+        if (direct || isSSREnabled()) {
+          return direct;
+        }
+        return scoreSheetKeywordInput ? scoreSheetKeywordInput.value.trim() : '';
+      }
+
+      function getScoreSheetKeyword() {
+        return scoreSheetKeywordInput ? scoreSheetKeywordInput.value.trim() : '';
+      }
+
+      function getAnalysisSheetGid() {
+        const direct = sheetGidInput ? sheetGidInput.value.trim() : '';
+        if (direct || isSSREnabled()) {
+          return direct;
+        }
+        return scoreSheetGidInput ? scoreSheetGidInput.value.trim() : '';
+      }
+
+      function getScoreSheetGid() {
+        return scoreSheetGidInput ? scoreSheetGidInput.value.trim() : '';
+      }
+
+      function syncAnalysisSheetSelection() {
+        if (isSSREnabled() || !sheetKeywordInput || !scoreSheetKeywordInput) {
+          return;
+        }
+        const scoreValue = scoreSheetKeywordInput.value;
+        if (!scoreValue) {
+          sheetKeywordInput.value = '';
+          if (sheetGidInput) {
+            sheetGidInput.value = '';
+          }
+          return;
+        }
+        if (sheetKeywordInput.value !== scoreValue) {
+          sheetKeywordInput.value = scoreValue;
+        }
+        updateSheetSelectionInputs();
+      }
 
       function setValidationResult(ok, payload, message, status){
         validation.setResult(ok, payload, message, status);
@@ -1103,6 +1147,7 @@
         buildOptions(sheetKeywordInput, analysisGid);
         buildOptions(scoreSheetKeywordInput, scoreGid);
         updateSheetSelectionInputs();
+        syncAnalysisSheetSelection();
       }
 
       async function handleSpreadsheetSet() {
@@ -1155,8 +1200,8 @@
 
       function attemptAutoCheck() {
         if (!resolvedSpreadsheetId) return;
-        const sheetValue = sheetKeywordInput ? sheetKeywordInput.value.trim() : '';
-        const scoreValue = scoreSheetKeywordInput ? scoreSheetKeywordInput.value.trim() : '';
+        const sheetValue = getAnalysisSheetKeyword();
+        const scoreValue = getScoreSheetKeyword();
         if (!sheetValue || !scoreValue) {
           return;
         }
@@ -1313,6 +1358,7 @@
 
         updateSSREnabled();
         toggleSheetFields(ssrEnabled);
+        syncAnalysisSheetSelection();
 
         if (primaryModelSelect) {
           modeModelState[mode].primary = primaryModelSelect.value || '';
@@ -1344,8 +1390,8 @@
         const { auto = false } = options;
         if (!spreadsheetUrlInput) return;
         const url = spreadsheetUrlInput.value.trim();
-        const sheetKeyword = sheetKeywordInput ? sheetKeywordInput.value.trim() : '';
-        const scoreSheetKeyword = scoreSheetKeywordInput ? scoreSheetKeywordInput.value.trim() : '';
+        const sheetKeyword = getAnalysisSheetKeyword();
+        const scoreSheetKeyword = getScoreSheetKeyword();
         if (!url || !sheetKeyword || !scoreSheetKeyword) {
           return;
         }
@@ -1355,8 +1401,8 @@
           sheet_keyword: sheetKeyword,
           score_sheet_keyword: scoreSheetKeyword,
         };
-        const sheetGid = sheetGidInput ? sheetGidInput.value : '';
-        const scoreGid = scoreSheetGidInput ? scoreSheetGidInput.value : '';
+        const sheetGid = getAnalysisSheetGid();
+        const scoreGid = getScoreSheetGid();
         const parsedSheetGid = sheetGid ? Number(sheetGid) : NaN;
         const parsedScoreGid = scoreGid ? Number(scoreGid) : NaN;
         if (!Number.isNaN(parsedSheetGid)) payload.sheet_gid = parsedSheetGid;
@@ -1414,27 +1460,19 @@
           fd.set('batch_size', MODE_DEFAULTS.video.batchSize);
           fd.set('max_category_cols', MODE_DEFAULTS.video.maxCategoryCols);
         }
-        if (sheetKeywordInput) {
-          fd.set('sheet_keyword', sheetKeywordInput.value.trim());
+        fd.set('sheet_keyword', getAnalysisSheetKeyword());
+        fd.set('score_sheet_keyword', getScoreSheetKeyword());
+        const sheetGid = getAnalysisSheetGid();
+        const scoreGid = getScoreSheetGid();
+        if (sheetGid) {
+          fd.set('sheet_gid', sheetGid);
+        } else {
+          fd.delete('sheet_gid');
         }
-        if (scoreSheetKeywordInput) {
-          fd.set('score_sheet_keyword', scoreSheetKeywordInput.value.trim());
-        }
-        if (sheetGidInput) {
-          const sheetGid = sheetGidInput.value.trim();
-          if (sheetGid) {
-            fd.set('sheet_gid', sheetGid);
-          } else {
-            fd.delete('sheet_gid');
-          }
-        }
-        if (scoreSheetGidInput) {
-          const scoreGid = scoreSheetGidInput.value.trim();
-          if (scoreGid) {
-            fd.set('score_sheet_gid', scoreGid);
-          } else {
-            fd.delete('score_sheet_gid');
-          }
+        if (scoreGid) {
+          fd.set('score_sheet_gid', scoreGid);
+        } else {
+          fd.delete('score_sheet_gid');
         }
         appendPromptFields(fd);
         if (primaryModelSelect) {
@@ -1515,6 +1553,7 @@
       if (scoreSheetKeywordInput) {
         scoreSheetKeywordInput.addEventListener('change', () => {
           updateSheetSelectionInputs();
+          syncAnalysisSheetSelection();
           markValidationDirty();
           attemptAutoCheck();
         });
@@ -1564,8 +1603,9 @@
         checkStatusButton.addEventListener('click', async (e) => {
           e.preventDefault();
           const url = spreadsheetUrlInput.value.trim();
-          const sheetValue = sheetKeywordInput ? sheetKeywordInput.value.trim() : '';
-          const scoreValue = scoreSheetKeywordInput ? scoreSheetKeywordInput.value.trim() : '';
+          const sheetValue = getAnalysisSheetKeyword();
+          const scoreValue = getScoreSheetKeyword();
+          const ssrEnabled = isSSREnabled();
           if (!url) {
             const message = 'スプレッドシートURLを入力してください。';
             showValidationBanner('error', message);
@@ -1578,7 +1618,13 @@
             setValidationResult(false, null, message, 'error');
             return;
           }
-          if (!sheetValue || sheetKeywordInput.disabled) {
+          if (!sheetValue) {
+            const message = ssrEnabled ? '分析テキストのシートを選択してください。' : 'スコア出力のシートを選択してください。';
+            showValidationBanner('error', message);
+            setValidationResult(false, null, message, 'error');
+            return;
+          }
+          if (ssrEnabled && sheetKeywordInput?.disabled) {
             const message = '分析テキストのシートを選択してください。';
             showValidationBanner('error', message);
             setValidationResult(false, null, message, 'error');
