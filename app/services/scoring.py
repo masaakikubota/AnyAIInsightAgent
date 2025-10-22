@@ -293,6 +293,12 @@ async def score_with_fallback(
                 tries += 1
                 if provider == Provider.openai:
                     openai_pause_pending = True
+                if status == 401:
+                    logger.warning(
+                        "Provider %s returned 401 Unauthorized; skipping further retries",
+                        provider.value,
+                    )
+                    break
                 if tries <= max_retries:
                     await asyncio.sleep(backoff)
                     logger.debug(

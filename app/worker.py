@@ -480,6 +480,7 @@ class JobManager:
         )
         cache_path = self.base_dir / "scoring" / "cache.json"
         score_cache = await ScoreCache.get_shared(cache_path, cache_policy)
+        await score_cache.reset(delete_file=True)
 
         completed_blocks: set[str] = set()
         if job.checkpoint_path and job.checkpoint_path.exists():
@@ -758,6 +759,10 @@ class JobManager:
             job_fail_reason = str(exc)
             raise
         finally:
+            try:
+                await score_cache.reset(delete_file=True)
+            except Exception:
+                logger.warning("score_cache_reset_failed job_id=%s", job_id, exc_info=True)
             job.finished_at = time.time()
 
             import hashlib

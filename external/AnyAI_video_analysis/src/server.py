@@ -62,6 +62,8 @@ try:
     import gspread
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
+    from google.oauth2 import service_account
+    from app.services.google_sheets import SERVICE_ACCOUNT_DEFAULT_INFO
     from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
@@ -426,13 +428,31 @@ def num_to_col(n: int) -> str:
 
 def get_google_creds(client_secrets_file: str, log_q: multiprocessing.Queue) -> Optional[Credentials]:
     creds = None
+    secrets_path = Path(client_secrets_file)
+    if not secrets_path.is_file():
+        log_message(f"FATAL: Client secrets file not found at '{client_secrets_file}'", is_error=True, queue=log_q)
+        return None
+
+    secrets_payload: Optional[dict] = None
+    try:
+        secrets_payload = json.loads(secrets_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        log_message(f"WARNING: Failed to read client secrets file '{client_secrets_file}': {e}", is_error=True, queue=log_q)
+
+    if isinstance(secrets_payload, dict) and secrets_payload.get("type") == "service_account":
+        try:
+            return service_account.Credentials.from_service_account_info(secrets_payload, scopes=SHEET_SCOPES)
+        except Exception as e:
+            log_message(f"FATAL: Failed to load service account credentials from '{client_secrets_file}': {e}", is_error=True, queue=log_q)
+            return None
+
     token_path = Path("credentials/token.json")
     if token_path.exists():
         try:
             creds = Credentials.from_authorized_user_file(str(token_path), SHEET_SCOPES)
         except Exception as e:
             log_message(f"WARNING: Could not load token.json: {e}. Re-authenticating.", is_error=True, queue=log_q)
-    
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
@@ -2191,9 +2211,37 @@ Content: {content}
 
 def find_client_secrets_file() -> Optional[Path]:
     """Looks for the specific client_secrets.json file in the credentials directory."""
-    secrets_path = Path("credentials/client_secrets.json")
-    if secrets_path.is_file():
-        return secrets_path
+    candidate_strings = [
+        os.getenv("ANYAI_VIDEO_CLIENT_SECRETS"),
+        os.getenv("VIDEO_CLIENT_SECRETS"),
+        os.getenv("GOOGLE_CLIENT_SECRETS"),
+        os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
+        os.getenv("AAIM_SERVICE_ACCOUNT_FILE"),
+    ]
+    for candidate in candidate_strings:
+        if not candidate:
+            continue
+        path = Path(candidate).expanduser()
+        if path.is_file():
+            return path
+    defaults = [
+        Path("credentials/client_secrets.json"),
+        Path("client_secrets.json"),
+        Path("AnyAgent_serviceaccount.json"),
+    ]
+    for path in defaults:
+        if path.is_file():
+            return path
+    # Fallback: materialize the bundled service account used by scoring.
+    try:
+        fallback_dir = Path("credentials")
+        fallback_dir.mkdir(parents=True, exist_ok=True)
+        fallback_path = fallback_dir / "service_account_auto.json"
+        if not fallback_path.is_file():
+            fallback_path.write_text(json.dumps(SERVICE_ACCOUNT_DEFAULT_INFO), encoding="utf-8")
+        return fallback_path
+    except Exception:
+        pass
     return None
 
 @app.route('/')

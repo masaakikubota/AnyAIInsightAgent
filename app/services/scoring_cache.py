@@ -30,7 +30,7 @@ class ScoreCache:
         self._entries: Dict[str, dict] = {}
         self._loaded = False
         self._lock = asyncio.Lock()
-        self._stats: Dict[str, int] = {"hits": 0, "misses": 0, "expired": 0, "writes": 0}
+        self._stats = self._initial_stats()
 
     @classmethod
     async def get_shared(cls, path: Path, policy: CachePolicy) -> "ScoreCache":
@@ -43,6 +43,9 @@ class ScoreCache:
             else:
                 cache.policy = policy
         return cache
+
+    def _initial_stats(self) -> Dict[str, int]:
+        return {"hits": 0, "misses": 0, "expired": 0, "writes": 0}
 
     async def get(self, key: str) -> Optional[ScoreResult]:
         if not self.policy.enabled:
@@ -87,6 +90,22 @@ class ScoreCache:
             self._prune_locked(now)
             self._persist_locked()
             self._stats["writes"] += 1
+
+    async def reset(self, *, delete_file: bool = False) -> None:
+        async with self._lock:
+            self._entries.clear()
+            self._stats = self._initial_stats()
+            self._loaded = True
+            if delete_file:
+                try:
+                    self.path.unlink()
+                except FileNotFoundError:
+                    pass
+                else:
+                    # Ensure parent directory remains available for future writes
+                    self.path.parent.mkdir(parents=True, exist_ok=True)
+            else:
+                self._persist_locked()
 
     async def invalidate(self, key: str) -> None:
         await self._ensure_loaded()
@@ -155,4 +174,5 @@ class ScoreCache:
             "entries": self._entries,
             "stats": self._stats,
         }
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -166,6 +166,8 @@ class ScoringPipeline:
         self._dispatched_requests: int = 0
         self._completed_requests: int = 0
         self._request_lock: Optional[asyncio.Lock] = None
+        self._unit_failure_limit = 3
+        self._unit_failures: Dict[Tuple[int, int], int] = {}
 
     def _log(self, message: str) -> None:
         if not self._log_callback:
@@ -275,16 +277,14 @@ class ScoringPipeline:
         provider: Optional[str] = None,
     ) -> None:
         row_number = unit.row_index + 1
-        message = f"kubotin request={index}/{total} stage={stage} row={row_number} block={unit.block_index}"
+        message = f"score.request stage={stage} index={index}/{total} row={row_number} block={unit.block_index}"
         if provider:
             message = f"{message} provider={provider}"
         logger.debug(message)
 
     def _log_sheet_update(self, *, start_row: int, end_row: int) -> None:
         total = max(self._total_requests, 1)
-        message = (
-            f"kubotin sheet-update completed={self._completed_requests}/{total} rows={start_row}-{end_row}"
-        )
+        message = f"score.update progress={self._completed_requests}/{total} rows={start_row}-{end_row}"
         logger.debug(message)
 
     async def _producer(
@@ -364,6 +364,7 @@ class ScoringPipeline:
                         await validation_queue.put(None)
                         return
                     request_idx, total_requests = await self._reserve_request_index()
+                    failure_key = (task.unit.row_index, task.unit.block_index)
                     self._log_request_event(
                         stage="dispatch",
                         index=request_idx,
@@ -397,7 +398,56 @@ class ScoringPipeline:
                             total=total_requests,
                             unit=task.unit,
                         )
-                        raise
+                        failure_count = self._unit_failures.get(failure_key, 0) + 1
+                        self._unit_failures[failure_key] = failure_count
+                        if failure_count >= self._unit_failure_limit:
+                            logger.warning(
+                                "score.unit.giveup row=%s block=%s failures=%s trail=%s",
+                                task.unit.row_index + 1,
+                                task.unit.block_index,
+                                failure_count,
+                                error_trail,
+                            )
+                            blank_len = len(task.categories)
+                            blank_scores: List[Optional[float]] = [None] * blank_len
+                            missing = list(range(blank_len)) if blank_len else None
+                            blank_result = ScoreResult(
+                                provider=self.cfg.primary_provider,
+                                model=str(self.cfg.primary_model or ""),
+                                scores=list(blank_scores),
+                                analyses=None,
+                                pre_scores=list(blank_scores),
+                                absolute_scores=None,
+                                relative_rank_scores=None,
+                                anchor_labels=None,
+                                missing_indices=missing,
+                                partial=bool(missing),
+                            )
+                            self._log_request_event(
+                                stage="giveup",
+                                index=request_idx,
+                                total=total_requests,
+                                unit=task.unit,
+                                provider=self.cfg.primary_provider.value,
+                            )
+                            payload = ValidationPayload(
+                                task=task,
+                                result=blank_result,
+                                error_trail=error_trail,
+                                from_cache=True,
+                            )
+                            await validation_queue.put(payload)
+                            self._unit_failures.pop(failure_key, None)
+                            if task.cleanup_path:
+                                await self._cleanup_queue.put(task.cleanup_path)
+                        else:
+                            self._log(
+                                f"Invoker retry scheduled: row={task.unit.row_index} block={task.unit.block_index} "
+                                f"failure={failure_count}/{self._unit_failure_limit}"
+                            )
+                            await asyncio.sleep(min(2.0, 0.5 * failure_count))
+                            await invoke_queue.put(task)
+                        continue
                     else:
                         score_len = len(result.scores or [])
                         provider_label = result.provider.value if result.provider else "unknown"
@@ -425,8 +475,9 @@ class ScoringPipeline:
                             from_cache=from_cache,
                         )
                         await validation_queue.put(payload)
-                    if task.cleanup_path:
-                        await self._cleanup_queue.put(task.cleanup_path)
+                        self._unit_failures.pop(failure_key, None)
+                        if task.cleanup_path:
+                            await self._cleanup_queue.put(task.cleanup_path)
                 finally:
                     invoke_queue.task_done()
         except asyncio.CancelledError:
