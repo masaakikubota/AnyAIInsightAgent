@@ -20,8 +20,8 @@ try:  # pragma: no cover - start method can only be set once
 except RuntimeError:
     pass
 
-_MANAGER = multiprocessing.Manager()
-_BASE_LOG_QUEUE: multiprocessing.Queue = _MANAGER.Queue()
+_MANAGER: Optional[multiprocessing.managers.SyncManager] = None
+_BASE_LOG_QUEUE: Optional[multiprocessing.Queue] = None
 
 analysis_processes: Dict[str, multiprocessing.Process] = {}
 job_queue: Deque[Dict[str, Any]] = deque()
@@ -32,8 +32,21 @@ current_job_id: Optional[str] = None
 job_counter = 0
 
 
+def _ensure_manager() -> multiprocessing.managers.SyncManager:
+    global _MANAGER, _BASE_LOG_QUEUE
+    if _MANAGER is None:
+        ctx = multiprocessing.get_context("spawn")
+        _MANAGER = ctx.Manager()
+        _BASE_LOG_QUEUE = _MANAGER.Queue()
+    assert _MANAGER is not None
+    assert _BASE_LOG_QUEUE is not None
+    return _MANAGER
+
+
 def get_shared_log_queue() -> multiprocessing.Queue:
     """Return the shared log queue used when enqueuing new jobs."""
+    _ensure_manager()
+    assert _BASE_LOG_QUEUE is not None
     return _BASE_LOG_QUEUE
 
 
@@ -104,6 +117,7 @@ def enqueue_job(
     }
 
     with job_lock:
+        _ensure_manager()
         job_queue.append(job_info)
         status = (initial_status or ("queued" if start_immediately else "paused")).lower()
         job_metadata[process_id] = {

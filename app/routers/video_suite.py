@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from functools import partial
 from queue import Empty
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict
@@ -406,7 +407,7 @@ async def _log_event_stream(process_id: str) -> AsyncGenerator[Any, None]:
     log_queue = queue_service.get_log_queue(process_id)
     while True:
         try:
-            message = await anyio.to_thread.run_sync(log_queue.get, timeout=2.0)
+            message = await anyio.to_thread.run_sync(partial(log_queue.get, timeout=2.0))
         except Empty:
             if not queue_service.is_process_alive(process_id):
                 yield {"event": "error", "data": "Log stream connection lost (process terminated unexpectedly)."}

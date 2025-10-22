@@ -337,7 +337,8 @@
       );
       const result = await response.json();
       if (!response.ok) {
-        appendLog(`Error: ${result.error || 'Unknown error'}`, true);
+        const errorMessage = result.error || result.detail || result.message || 'Unknown error';
+        appendLog(`Error: ${errorMessage}`, true);
         resetUI();
         return;
       }
@@ -420,7 +421,8 @@
         });
         const result = await response.json();
         if (!response.ok) {
-          appendLog(`Error: ${result.error || 'Unknown error'}`, true);
+          const errorMessage = result.error || result.detail || result.message || 'Unknown error';
+          appendLog(`Error: ${errorMessage}`, true);
           return;
         }
 

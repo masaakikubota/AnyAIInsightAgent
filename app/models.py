@@ -25,7 +25,7 @@ class RunConfig(BaseModel):
     # Execution
     batch_size: conint(ge=1, le=50) = 10  # N categories per request (default 10)
     max_category_cols: conint(ge=1, le=10000) = 200  # Max columns to process per utterance
-    max_retries: conint(ge=0, le=50) = 10
+    max_retries: conint(ge=0, le=50) = 3
     concurrency: conint(ge=1, le=200) = 50
     auto_slowdown: bool = True
     timeout_sec: conint(ge=10, le=600) = 60

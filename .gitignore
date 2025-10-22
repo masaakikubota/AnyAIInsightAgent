@@ -11,3 +11,5 @@ server.pid
 AnyAgent_serviceaccount.json
 AnyAgent_OAuth.json
 Keys.txt
+credentials/
+.serena/
