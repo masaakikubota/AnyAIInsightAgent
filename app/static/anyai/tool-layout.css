@@ -202,6 +202,8 @@ body {
   align-items: flex-start;
   width: min(100%, clamp(960px, 80vw, 1400px));
   margin-inline: auto;
+  --anyai-app-primary-span: 8;
+  --anyai-app-support-span: 4;
 }
 
 .anyai-app-primary,
@@ -251,15 +253,15 @@ body {
 
 @media (min-width: 1280px) {
   .anyai-app {
-    --anyai-app-primary-span: 9;
-    --anyai-app-support-span: 3;
+    --anyai-app-primary-span: 8;
+    --anyai-app-support-span: 4;
   }
 }
 
 @media (min-width: 1600px) {
   .anyai-app {
-    --anyai-app-primary-span: 10;
-    --anyai-app-support-span: 2;
+    --anyai-app-primary-span: 9;
+    --anyai-app-support-span: 3;
   }
 }
 
