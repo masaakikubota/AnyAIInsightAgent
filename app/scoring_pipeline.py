@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import socket
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -782,6 +783,19 @@ class ScoringPipeline:
                         delay *= self.writer_retry_backoff_multiplier
                         self._log(
                             f"Writer retry scheduled: attempt={attempts + 1} delay={delay:.2f}"
+                        )
+                    except (TimeoutError, socket.timeout) as exc:
+                        last_error = exc
+                        attempts += 1
+                        if attempts >= self.writer_retry_limit:
+                            self._terminate.set()
+                            self._log(f"Writer flush failed after retries: timeout={exc}")
+                            logger.exception("Writer flush failed after retries", exc_info=exc)
+                            raise
+                        await asyncio.sleep(delay)
+                        delay *= self.writer_retry_backoff_multiplier
+                        self._log(
+                            f"Writer retry scheduled after timeout: attempt={attempts + 1} delay={delay:.2f}"
                         )
                     except Exception as exc:
                         last_error = exc
