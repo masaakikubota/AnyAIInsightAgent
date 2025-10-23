@@ -415,6 +415,43 @@
         color: var(--anyai-primary-700);
       }
 
+      .queue-toast {
+        position: fixed;
+        top: clamp(16px, 4vw, 40px);
+        left: 50%;
+        transform: translate(-50%, -140%);
+        opacity: 0;
+        pointer-events: none;
+        padding: var(--anyai-space-4) var(--anyai-space-5);
+        border-radius: var(--anyai-radius-2);
+        font-size: var(--anyai-fs-2);
+        font-weight: 600;
+        background: #ffffff;
+        color: var(--anyai-text, #1f2432);
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 18%);
+        border-left: 4px solid var(--queue-toast-accent, var(--anyai-primary, #2955ff));
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+        min-width: min(360px, calc(100vw - 32px));
+        max-width: calc(100vw - 32px);
+        text-align: center;
+        z-index: 120;
+        transition: transform 0.25s ease, opacity 0.25s ease;
+      }
+
+      .queue-toast.is-visible {
+        transform: translate(-50%, 0);
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .queue-toast[data-state="success"] {
+        --queue-toast-accent: var(--anyai-success, #12a150);
+      }
+
+      .queue-toast[data-state="error"] {
+        --queue-toast-accent: var(--anyai-danger, #d14343);
+      }
+
       .actions-row { display: flex; gap: var(--anyai-space-3); flex-wrap: wrap; align-items: center; }
       .band-title { margin: 0; font-size: var(--anyai-fs-3); font-weight: 600; }
       .callout {
@@ -625,7 +662,7 @@
                       <div class="field"><label for="timeout-input">タイムアウト秒</label><input type="number" name="timeout_sec" value="60" min="10" max="600" id="timeout-input" /></div>
                       <div class="field">
                         <label for="primary_model">メインモデル</label>
-                      <select id="primary_model" name="primary_model" class="js-custom-select">
+                      <select id="primary_model" name="primary_model" class="js-custom-select" data-placeholder="モデルを選択">
                         <optgroup label="Gemini">
                           <option value="gemini-flash-lite-latest" selected>Gemini Flash Lite (latest)</option>
                           <option value="gemini-flash-latest">Gemini Flash (latest)</option>
@@ -640,7 +677,7 @@
                       </div>
                       <div class="field" id="fallback-model-field">
                         <label for="fallback_model">フォールバックモデル</label>
-                        <select id="fallback_model" name="fallback_model" class="js-custom-select">
+                        <select id="fallback_model" name="fallback_model" class="js-custom-select" data-placeholder="フォールバックモデルを選択">
                           <optgroup label="OpenAI">
                             <option value="gpt-5-nano" selected>GPT-5 Nano</option>
                             <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
@@ -863,6 +900,8 @@
       <button type="button" class="btn btn-primary" data-proxy-for="btn-queue-add-start">Run</button>
     </div>
 
+    <div id="queue-toast" class="queue-toast" role="status" aria-live="polite" aria-hidden="true"></div>
+
     <script>
       const loadingOverlay = window.AnyAILoading || {
         run: async (task) => task(),
@@ -923,6 +962,13 @@
       const actionBarButtons = actionBar ? Array.from(actionBar.querySelectorAll('[data-proxy-for]')) : [];
       const primaryPanel = document.querySelector('.anyai-app-primary');
       const validationBanner = document.getElementById('validation-banner');
+      const queueToast = document.getElementById('queue-toast');
+      let queueToastTimer = null;
+      if (queueToast) {
+        queueToast.addEventListener('click', () => {
+          hideQueueToast();
+        });
+      }
       const validationStatusCard = document.getElementById('validation-status-card');
       const validationStatusBadge = document.getElementById('validation-status-badge');
       const validationStatusMessage = document.getElementById('validation-status-message');
@@ -1593,6 +1639,43 @@
         }
         validationBanner.setAttribute('data-state', state);
         validationBanner.textContent = message || '';
+      }
+
+      function hideQueueToast(){
+        if (!queueToast) return;
+        if (queueToastTimer) {
+          clearTimeout(queueToastTimer);
+          queueToastTimer = null;
+        }
+        queueToast.classList.remove('is-visible');
+        queueToast.setAttribute('aria-hidden', 'true');
+        window.setTimeout(() => {
+          if (!queueToast.classList.contains('is-visible')) {
+            queueToast.textContent = '';
+            queueToast.removeAttribute('data-state');
+          }
+        }, 220);
+      }
+
+      function showQueueToast(message, options = {}){
+        if (!queueToast) return;
+        const state = options.state || 'success';
+        const duration =
+          typeof options.duration === 'number' ? options.duration : 3200;
+        if (queueToastTimer) {
+          clearTimeout(queueToastTimer);
+          queueToastTimer = null;
+        }
+        queueToast.setAttribute('data-state', state);
+        queueToast.textContent = message || '';
+        queueToast.setAttribute('aria-hidden', 'false');
+        void queueToast.offsetWidth;
+        queueToast.classList.add('is-visible');
+        if (duration > 0) {
+          queueToastTimer = window.setTimeout(() => {
+            hideQueueToast();
+          }, duration);
+        }
       }
 
       function updateQueueActionState(){
@@ -2377,9 +2460,12 @@
         try {
           const fd = buildJobFormData('queue');
           const res = await fetch('/jobs', { method: 'POST', body: fd });
-          if (!res.ok) { alert('キュー追加に失敗'); return; }
+          if (!res.ok) {
+            showQueueToast('キュー追加に失敗', { state: 'error', duration: 0 });
+            return;
+          }
           await refreshQueue();
-          alert('キューに追加しました');
+          showQueueToast('キューに追加しました', { state: 'success' });
         } finally {
           if (releaseBusy) releaseBusy();
           updateQueueActionState();

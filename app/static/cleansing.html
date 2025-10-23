@@ -1007,6 +1007,7 @@
       if (sheetSelect) {
         sheetSelect.addEventListener('change', () => {
           updateSheetGid();
+          refreshCustomSelect(sheetSelect);
         });
       }
 
