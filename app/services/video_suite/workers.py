@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import importlib.util
+import importlib
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable
@@ -14,10 +15,6 @@ LEGACY_IMPORT_ERROR: BaseException | None = None
 
 class LegacyDependencyError(RuntimeError):
     """Raised when the legacy worker module is unavailable due to missing deps."""
-
-
-def _legacy_module_path() -> Path:
-    return Path(__file__).resolve().parents[3] / "external" / "AnyAI_video_analysis" / "src" / "server.py"
 
 
 def _format_dependency_error(exc: BaseException) -> str:
@@ -43,14 +40,8 @@ def _load_legacy_module() -> ModuleType:
     if LEGACY_IMPORT_ERROR is not None:
         raise LegacyDependencyError(_format_dependency_error(LEGACY_IMPORT_ERROR)) from LEGACY_IMPORT_ERROR
 
-    legacy_path = _legacy_module_path()
-    spec = importlib.util.spec_from_file_location(LEGACY_MODULE_NAME, legacy_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Unable to load legacy server module from {legacy_path}")
-
-    module = importlib.util.module_from_spec(spec)
     try:
-        spec.loader.exec_module(module)
+        module = importlib.import_module(LEGACY_MODULE_NAME)
     except SystemExit as exc:  # Raised when the module calls sys.exit on missing deps
         LEGACY_IMPORT_ERROR = exc
         raise LegacyDependencyError(_format_dependency_error(exc)) from exc
@@ -60,6 +51,17 @@ def _load_legacy_module() -> ModuleType:
 
     LEGACY_MODULE = module
     return module
+
+
+def _legacy_module_path() -> Path:
+    """Best effort path hint for error messages."""
+    try:
+        module = sys.modules.get(LEGACY_MODULE_NAME)
+        if module and getattr(module, "__file__", None):
+            return Path(getattr(module, "__file__")).resolve()
+    except Exception:
+        pass
+    return Path(__file__).resolve().parents[3] / "external" / "AnyAI_video_analysis" / "src" / "server.py"
 
 
 def ensure_dependencies() -> None:
@@ -134,4 +136,3 @@ try:  # pragma: no cover - best effort to surface optional exports
     GoogleDeadlineExceeded = getattr(module, "GoogleDeadlineExceeded", None)
 except LegacyDependencyError:
     pass
-

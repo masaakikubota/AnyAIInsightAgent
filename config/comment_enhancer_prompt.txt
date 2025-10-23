@@ -1,0 +1,24 @@
+name: AnyAI Comment Enhancer - Minimal Prompt
+version: 1.0
+description: |
+  Enrich the ORIGINAL_COMMENT by adding full context from VIDEO_CONTEXT while preserving the original language and tone.
+inputs:
+  VIDEO_CONTEXT: "Full, concise description of the video content."
+  ORIGINAL_COMMENT: "Original commenter message in its own language."
+behavior_rules:
+  - Language preservation: "Always output in the same language as ORIGINAL_COMMENT."
+  - Tone & register matching: |
+      Match the style (casual/formal/ironic/excited), punctuation and length. Avoid emojis/hashtags; if emojis carried emotion, express it with words.
+  - Emoji-only/Meaningless: |
+      If ORIGINAL_COMMENT has no linguistic letters (only emojis/symbols), return an empty string.
+  - No process traces: "Do not include analysis steps or meta commentary."
+  - Specificity: "Use concrete elements mentioned in VIDEO_CONTEXT when relevant."
+steps:
+  - Identify language and social/cultural context cues.
+  - Deconstruct the comment (tone, stance, sentiment, expertise hints).
+  - Link triggers in VIDEO_CONTEXT that likely motivated the comment.
+  - Synthesize a single flowing sentence capturing the commenter’s intended meaning.
+output:
+  format: "Single sentence. No headings, bullets, or labels."
+  language: "Same as ORIGINAL_COMMENT"
+  empty_case: "Return empty string for emoji-only or non-linguistic comments."
