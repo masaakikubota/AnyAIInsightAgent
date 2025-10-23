@@ -18,14 +18,77 @@
     <script defer src="/static/anyai/sidebar.js"></script>
     
     <style>
-      .mode-options { display: flex; flex-wrap: nowrap; gap: var(--anyai-space-3); align-items: center; }
-      .mode-options label { display: inline-flex; align-items: center; gap: var(--anyai-space-2); font-weight: 600; }
-      .mode-options .spacer { flex: 1 1 auto; }
+      .mode-options {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--anyai-space-2);
+        margin-bottom: var(--anyai-space-3);
+      }
+
       .mode-divider {
         width: 1px;
         align-self: stretch;
         background: color-mix(in srgb, var(--anyai-border), transparent 20%);
       }
+
+      .mode-pill {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--anyai-space-2);
+        padding: 0.45rem 1rem;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
+        background: color-mix(in srgb, #ffffff, var(--anyai-border) 6%);
+        color: color-mix(in srgb, var(--anyai-text), transparent 25%);
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+          box-shadow 0.2s ease;
+        user-select: none;
+      }
+
+      .mode-pill input[type="radio"] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        border: 0;
+        clip: rect(0, 0, 0, 0);
+        clip-path: inset(100%);
+        overflow: hidden;
+        white-space: nowrap;
+      }
+
+      .mode-pill span {
+        font-size: var(--anyai-fs-2);
+        line-height: 1;
+      }
+
+      .mode-pill:not([aria-checked="true"]) {
+        background: color-mix(in srgb, #ffffff, var(--anyai-border) 6%);
+        border-color: color-mix(in srgb, var(--anyai-border), transparent 25%);
+      }
+
+      .mode-pill:not([aria-checked="true"]):hover {
+        border-color: color-mix(in srgb, var(--anyai-border), var(--anyai-primary, #2955ff) 28%);
+        color: color-mix(in srgb, var(--anyai-text), transparent 10%);
+      }
+
+      .mode-pill:focus-within {
+        outline: none;
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 75%);
+      }
+
+      .mode-pill[aria-checked="true"] {
+        background: var(--anyai-primary, #2955ff);
+        border-color: var(--anyai-primary, #2955ff);
+        color: #ffffff;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 80%);
+      }
+
       .mode-ssr {
         display: inline-flex;
         align-items: center;
@@ -33,15 +96,116 @@
         font-weight: 600;
       }
 
+      .mode-ssr span:first-of-type {
+        font-weight: 600;
+      }
+
+      .mode-ssr-hint {
+        font-weight: 400;
+        font-size: var(--anyai-fs-2);
+        color: var(--anyai-text-subtle);
+      }
+
+      .toggle-switch {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        width: 48px;
+        height: 26px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: box-shadow 0.2s ease;
+        flex: 0 0 auto;
+        min-width: 48px;
+      }
+
+      .toggle-switch input[type="checkbox"] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        border: 0;
+        clip: rect(0, 0, 0, 0);
+        clip-path: inset(100%);
+        overflow: hidden;
+        white-space: nowrap;
+      }
+
+      .toggle-switch .toggle-knob {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        right: auto;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2);
+        transition: transform 0.2s ease, left 0.2s ease, right 0.2s ease;
+      }
+
+      .toggle-switch input[type="checkbox"]:checked ~ .toggle-knob {
+        left: auto;
+        right: 3px;
+        transform: none;
+      }
+
+      .toggle-switch input[type="checkbox"]:checked ~ .toggle-track {
+        background: var(--anyai-primary, #2955ff);
+        border-color: var(--anyai-primary, #2955ff);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 82%);
+      }
+
+      .toggle-switch:focus-within {
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 80%),
+          0 8px 18px rgba(41, 85, 255, 0.2);
+      }
+
+      .toggle-switch .toggle-track {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: color-mix(in srgb, var(--anyai-border), transparent 35%);
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 25%);
+        transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
       #scoring-heading {
         margin-bottom: 0;
       }
 
-      .anyai-form-section > header {
+      .anyai-form-section {
+        display: flex;
+        flex-direction: column;
+        gap: var(--anyai-space-4, 16px);
+        background: var(--anyai-form-band, #f1f5f9);
+        border-radius: var(--anyai-radius-2, 12px);
+        padding: var(--anyai-space-6, 24px) var(--anyai-space-7, 32px);
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 85%);
+      }
+
+      .anyai-form-section + .anyai-form-section {
+        margin-top: 0;
+      }
+
+      .anyai-form-group {
+        display: flex;
+        flex-direction: column;
+        gap: var(--anyai-space-4, 16px);
+        background: none;
+        border: 0;
+        border-radius: 0;
+        padding: 0;
+      }
+
+      .anyai-form-section > header,
+      .anyai-form-group > header {
         margin-bottom: 0;
       }
 
-      .anyai-form-section > header > h2.mt-0 {
+      .anyai-form-section > header > h2.mt-0,
+      .anyai-form-group > header > h3.mt-0 {
         margin-bottom: 0;
       }
 
@@ -583,11 +747,25 @@
                 <form id="mode-form">
                   <fieldset class="field">
                     <legend class="sr-only">実行モード</legend>
-                    <div class="mode-options">
-                      <label><input type="radio" name="mode" value="csv" checked /> Textモード</label>
-                      <label><input type="radio" name="mode" value="video" /> Videoモード</label>
+                    <div class="mode-options" role="radiogroup" aria-label="モード選択">
+                      <label class="mode-pill" data-mode="csv" role="radio" aria-checked="true" tabindex="0">
+                        <input type="radio" name="mode" value="csv" checked />
+                        <span>Textモード</span>
+                      </label>
+                      <label class="mode-pill" data-mode="video" role="radio" aria-checked="false" tabindex="-1">
+                        <input type="radio" name="mode" value="video" />
+                        <span>Videoモード</span>
+                      </label>
                       <span class="mode-divider" aria-hidden="true"></span>
-                      <label class="mode-ssr"><input type="checkbox" id="enable_ssr" name="enable_ssr" checked /> SSRモードを有効化（推奨）</label>
+                      <label class="mode-ssr">
+                        <span>SSRモード</span>
+                        <span class="toggle-switch" role="switch" aria-checked="true" tabindex="0">
+                          <input type="checkbox" id="enable_ssr" name="enable_ssr" checked />
+                          <span class="toggle-track"></span>
+                          <span class="toggle-knob"></span>
+                        </span>
+                        <span class="mode-ssr-hint">（推奨）</span>
+                      </label>
                       <span class="spacer"></span>
                     </div>
                   </fieldset>
@@ -869,13 +1047,6 @@
               <pre id="job-log-content" class="log-viewer" tabindex="0">ジョブを開始するとログが表示されます。</pre>
             </div>
 
-            <div id="task-finish-card" class="anyai-support-card">
-              <div class="support-header">
-                <h2 class="mt-0">タスクの終了</h2>
-              </div>
-              <p class="muted">ジョブが完了したら、進捗が100%になったことを確認し、必要に応じて run_meta.json やログをダウンロードしてください。完了したジョブは「削除」でキューから整理できます。</p>
-            </div>
-
             <section id="result" class="anyai-support-card" style="display:none;">
               <div class="stack-sm">
                 <div>ジョブID: <code id="job-id"></code></div>
@@ -948,8 +1119,13 @@
       const primaryModelSelect = document.getElementById('primary_model');
       const fallbackModelSelect = document.getElementById('fallback_model');
       const fallbackModelField = document.getElementById('fallback-model-field');
+      const modePills = Array.from(document.querySelectorAll('.mode-pill'));
       const modeRadios = modeForm.querySelectorAll('input[name="mode"]');
       const enableSSR = document.getElementById('enable_ssr');
+      const enableSSRToggle = enableSSR ? enableSSR.closest('.toggle-switch') : null;
+      if (enableSSRToggle) {
+        enableSSRToggle.setAttribute('aria-checked', enableSSR.checked ? 'true' : 'false');
+      }
       const queueStatus = document.getElementById('queue-status');
       const cancelButton = document.getElementById('btn-cancel-job');
       const resultSection = document.getElementById('result');
@@ -2296,20 +2472,86 @@
       }
 
       enableSSR.addEventListener('change', () => {
+        if (enableSSRToggle) {
+          enableSSRToggle.setAttribute('aria-checked', enableSSR.checked ? 'true' : 'false');
+        }
         handleSSRChange();
       });
 
-      modeRadios.forEach(radio => {
-        radio.addEventListener('change', () => {
-          if (!radio.checked) return;
-          if (!enableSSR.checked) {
-            storeCurrentNonSSRValues(currentMode);
+      if (enableSSRToggle) {
+        enableSSRToggle.addEventListener('click', (event) => {
+          if (event.target === enableSSR) return;
+          event.preventDefault();
+          enableSSR.checked = !enableSSR.checked;
+          enableSSRToggle.setAttribute('aria-checked', enableSSR.checked ? 'true' : 'false');
+          handleSSRChange();
+        });
+        enableSSRToggle.addEventListener('keydown', (event) => {
+          if (event.key === ' ' || event.key === 'Enter') {
+            event.preventDefault();
+            enableSSR.checked = !enableSSR.checked;
+            enableSSRToggle.setAttribute('aria-checked', enableSSR.checked ? 'true' : 'false');
+            handleSSRChange();
           }
-          storeModeModels(currentMode);
-          currentMode = radio.value;
-          applyMode(currentMode);
+        });
+      }
+
+      function setModeSelection(newMode) {
+        modeRadios.forEach((radio) => {
+          radio.checked = radio.value === newMode;
+        });
+        modePills.forEach((pill) => {
+          const isActive = pill.dataset.mode === newMode;
+          pill.setAttribute('aria-checked', isActive ? 'true' : 'false');
+          pill.tabIndex = isActive ? 0 : -1;
+        });
+      }
+
+      function handleModeChange(newMode) {
+        if (newMode === currentMode) return;
+        if (!enableSSR.checked) {
+          storeCurrentNonSSRValues(currentMode);
+        }
+        storeModeModels(currentMode);
+        currentMode = newMode;
+        applyMode(currentMode);
+        setModeSelection(currentMode);
+      }
+
+      modePills.forEach((pill) => {
+        pill.addEventListener('click', (event) => {
+          event.preventDefault();
+          const newMode = pill.dataset.mode;
+          handleModeChange(newMode);
+        });
+        pill.addEventListener('keydown', (event) => {
+          const modes = modePills.map((p) => p.dataset.mode);
+          const currentIndex = modes.indexOf(currentMode);
+          if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+            event.preventDefault();
+            const nextIndex = (currentIndex + 1) % modes.length;
+            handleModeChange(modes[nextIndex]);
+            modePills[nextIndex].focus();
+          } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            const prevIndex = (currentIndex - 1 + modes.length) % modes.length;
+            handleModeChange(modes[prevIndex]);
+            modePills[prevIndex].focus();
+          } else if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleModeChange(pill.dataset.mode);
+          }
         });
       });
+
+      modeRadios.forEach((radio) => {
+        radio.addEventListener('change', () => {
+          if (!radio.checked) return;
+          handleModeChange(radio.value);
+        });
+      });
+
+      setModeSelection(currentMode);
 
       if (primaryModelSelect) {
         primaryModelSelect.addEventListener('change', () => {
