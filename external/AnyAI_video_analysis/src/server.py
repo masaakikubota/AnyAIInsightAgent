@@ -616,8 +616,12 @@ def process_video_task_worker(task_info: dict, config: dict, log_q: multiprocess
     """
     row_idx = task_info['row']
     video_url = task_info['url']
-    
-    log_message(f"-> Worker started for Row {row_idx}: {video_url}", queue=log_q)
+    pid = os.getpid()
+    proc_name = multiprocessing.current_process().name
+    log_message(
+        f"-> Worker started for Row {row_idx}: {video_url} [pid={pid}, proc={proc_name}]",
+        queue=log_q,
+    )
     
     gemini_file, local_video_path = None, None
     client = None
@@ -706,11 +710,16 @@ def analysis_main_logic(config: dict, log_q: multiprocessing.Queue):
             raise ValueError(f"Prompt file not found at '{config['prompt_file']}'")
         log_message("[+] Configuration valid.", queue=log_q)
 
-        debug_mode = bool(config.get("debug_mode"))
+        raw_debug_flag = config.get("debug_mode")
+        if raw_debug_flag is not None:
+            log_message(f"[DEBUG] Debug mode flag (raw): {raw_debug_flag!r}", queue=log_q)
+        debug_mode = bool(raw_debug_flag)
         worker_count = max(1, int(config.get("workers", 5)))
         if debug_mode:
-            log_message("[DEBUG] Debug mode enabled: forcing single-worker execution and extra logging.", queue=log_q)
-            worker_count = 1
+            log_message(
+                "[DEBUG] Debug mode enabled: retaining configured worker count for parallel execution.",
+                queue=log_q,
+            )
         config["workers"] = worker_count
 
         log_message("[2] Authenticating with Google in main process...", queue=log_q)

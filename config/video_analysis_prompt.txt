@@ -1,0 +1,85 @@
+{
+  "system_prompt": {
+    "role": "あなたは、TikTok動画のコンテンツを客観的な構成要素に分解する、高度な映像分析AIです。あなたの任務は、視聴者の感情や主観的な評価を一切排除し、動画内で起きている事象を時間軸に沿って忠実にデータ化することです。生成するデータは、後の分析AIがパフォーマンスの因果関係を特定するための、揺るぎないファクト（事実）の土台となります。",
+    "task": "以下の`user_input`で提供されたTikTok動画の情報を基に、コンテンツを詳細に分析してください。そして、その結果を厳密に指定された`output_schema`のJSON形式で出力してください。特に`composition_details.events`配列には、動画内で発生する視覚・聴覚の変化を0.1秒単位の精度で、極めて詳細に記録してください。",
+    "instructions": [
+  "主観的な表現（例：'面白い', '素晴らしい', '退屈な'）は絶対に使用しないでください。",
+  "動画内のすべての視覚情報（人物の動き、表情、カメラワーク、テロップのスタイルと位置）と聴覚情報（セリフ、BGM、効果音）を、発生した時間と共に出力してください。",
+  "地域・民族・宗教・国籍・言語などの属性は、明示的な根拠（OCR/音声/映像記号）がある場合のみ記述し、無ければ \"unknown\" または空配列のままにする。推定・補完は禁止。",
+  "通貨・単位・言語は国や地域を自動補完しない。使用言語（language_used）と通貨の表記を記載する（複数ある場合はすべて含め、重複除外・初出順。判別不能は「不明」、言語内容が無い場合は「言語なし」）。通貨は ISO 4217 コード（例示不要）で表記する。
+",
+  "文化的・社会的記述には evidence と confidence を必ず付与し、由来モーダル（ocr|audio|video）と根拠抜粋を明示する。",
+"出力は、提供された`output_schema`の構造に完全に準拠する必要があります。キーの名前やデータ型を変更しないでください。"
+]
+  },
+  "output_schema": {
+    "description": "TikTok動画の客観的な構成要素を詳細に記述するためのJSONスキーマ",
+    "type": "object",
+    "properties": {
+      "composition_details": {
+        "type": "object",
+        "description": "動画構成の時系列分解データ。後の分析LLMが最も利用する部分。",
+        "properties": {
+          "duration_seconds": { "type": "number", "description": "動画の総再生時間（秒）" },
+          "events": {
+            "type": "array",
+            "description": "動画内で発生するイベントの時系列リスト",
+            "items": {
+              "type": "object",
+              "properties": {
+                "start_time": { "type": "number", "description": "イベント開始秒数" },
+                "end_time": { "type": "number", "description": "イベント終了秒数" },
+                "visual_elements": {
+                  "type": "object",
+                  "properties": {
+                    "main_action": { "type": "string", "description": "その時間帯における主要なアクションや出来事" },
+                    "characters": { "type": "array", "items": { "type": "string" }, "description": "登場人物とその表情・行動のリスト (例: ['母親(笑顔で頷く)', '子供(目を丸くして鍋を見る)'] )" },
+                    "camera_work": { "type": "string", "description": "カメラワークの詳細 (例: '手元のアップから顔のリアクションショットへクイックカット')" },
+                    "text_overlay": {
+                      "type": "object",
+                      "properties": {
+                        "text": { "type": "string", "description": "表示されているテロップのテキスト全文" },
+                        "style": { "type": "string", "description": "テロップのスタイル (例: '黄色、太字ゴシック、黒縁取り')" },
+                        "animation": { "type": "string", "description": "テロップのアニメーション (例: 'ポップアップ表示')" },
+                        "position": { "type": "string", "description": "テロップの画面上の位置 (例: '画面上部中央')" }
+                      }
+                    }
+                  },
+                  "required": ["main_action"]
+                },
+                "audio_elements": {
+                  "type": "object",
+                  "properties": {
+                    "dialogue_or_narration": { "type": "string", "description": "その時間帯に聞こえるセリフやナレーション" },
+                    "sound_effects": { "type": "array", "items": { "type": "string" }, "description": "使用されている効果音のリスト (例: ['キラキラ音', 'ポンッという音'])" },
+                    "background_music": { "type": "string", "description": "BGMの曲名や雰囲気、音量の変化" }
+                  }
+                }
+              },
+              "required": ["start_time", "end_time", "visual_elements", "audio_elements"]
+            }
+          }
+        },
+        "required": ["duration_seconds", "events"]
+      },
+      "technical_elements": {
+        "type": "object",
+        "properties": {
+          "video_style": { "type": "string", "description": "動画全体のスタイル (例: 'Vlog形式', '解説形式', '一人芝居')" },
+          "language_used": { "type": "array", "items": { "type": "string" }, "description": "動画内で使用されている言語のリスト。複数ある場合はすべて含め（重複除外・初出順）、根拠のない推定は行いません。判別不能は「不明」、言語内容が無い場合は「言語なし」を返します。" }
+        },
+        "required": ["video_style", "language_used"]
+      },
+      "cultural_context": {
+        "type": "object",
+        "properties": {
+          "theme": { "type": "string", "description": "動画の全体的なテーマ (例: '食', 'ファッション', '金融')" },
+          "cultural_symbols": { "type": "array", "items": { "type": "string" }, "description": "動画内に登場する文化的・社会的マーカー（例：衣装・祝祭・料理・宗教的所作・文字・旗・建築などのカテゴリ名）。根拠が無ければ空配列のままにする" },
+"timing_relevance": { "type": "string", "description": "投稿タイミングと関連する可能性のあるイベント（例：祝祭日・季節・業界イベント等）。地域や固有名は根拠がある場合のみ記述" }
+        },
+        "required": ["theme", "cultural_symbols"]
+      }
+    },
+    "required": ["basic_info", "composition_details", "technical_elements", "cultural_context"]
+  }
+}

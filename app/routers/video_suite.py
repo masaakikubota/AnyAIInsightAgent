@@ -18,6 +18,17 @@ from app.services.video_suite import workers
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
+def _flag_from_form(value: Any) -> bool:
+    """Convert form-like values into a strict boolean."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "on"}
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return False
+
+
 def _load_static(filename: str) -> str:
     try:
         return (STATIC_DIR / filename).read_text(encoding="utf-8")
@@ -111,7 +122,7 @@ async def run_analysis(request: Request) -> JSONResponse:
             "prompt_file": data.get("prompt_file") or "config/video_analysis_prompt.txt",
             "client_secrets": str(client_secrets_path),
             "job_type": "video_analysis",
-            "debug_mode": bool(data.get("debug_mode")),
+            "debug_mode": _flag_from_form(data.get("debug_mode")),
         }
     except (ValueError, TypeError):
         raise HTTPException(
@@ -279,7 +290,7 @@ async def run_video_comment_review(request: Request) -> JSONResponse:
         "output_language": (data.get("output_language") or "Japanese").strip() or "Japanese",
         "client_secrets": str(client_secrets_path),
         "job_type": "video_summarizer",
-        "debug_mode": bool(data.get("debug_mode")),
+        "debug_mode": _flag_from_form(data.get("debug_mode")),
     }
 
     custom_prompt = data.get("prompt_file")
@@ -364,7 +375,7 @@ async def run_kol_reviewer(request: Request) -> JSONResponse:
         "output_language": (data.get("output_language") or "Japanese").strip() or "Japanese",
         "client_secrets": str(client_secrets_path),
         "job_type": "kol_reviewer",
-        "debug_mode": bool(data.get("debug_mode")),
+        "debug_mode": _flag_from_form(data.get("debug_mode")),
     }
 
     custom_prompt = data.get("prompt_file")
