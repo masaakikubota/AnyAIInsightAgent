@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 import os
+import json
+import logging
 from contextlib import contextmanager
 from functools import lru_cache
 from dataclasses import dataclass
@@ -16,6 +18,9 @@ except Exception:  # pragma: no cover - optional dependency guard
     service_account = None  # type: ignore[assignment]
     build = None  # type: ignore[assignment]
     HttpError = Exception  # type: ignore[assignment]
+
+
+logger = logging.getLogger(__name__)
 
 
 def _require_google_clients() -> None:
@@ -139,6 +144,61 @@ def _load_credentials() -> service_account.Credentials:
         raise GoogleSheetsError(f"サービスアカウントの読み込みに失敗しました: {exc}") from exc
 
 
+def _parse_http_error(exc: HttpError) -> dict:
+    """Extract structured information from a Google API HttpError."""
+
+    details: dict = {
+        "status": getattr(getattr(exc, "resp", None), "status", None),
+        "reason": getattr(getattr(exc, "resp", None), "reason", None),
+        "message": None,
+        "errors": None,
+    }
+    content: Optional[bytes] = getattr(exc, "content", None)
+    if content:
+        try:
+            payload = json.loads(content.decode("utf-8"))
+        except Exception:  # pragma: no cover - defensive
+            payload = None
+        if isinstance(payload, dict):
+            error_body = payload.get("error")
+            if isinstance(error_body, dict):
+                details["message"] = error_body.get("message")
+                if "status" in error_body and not details["reason"]:
+                    details["reason"] = error_body.get("status")
+                if "errors" in error_body:
+                    details["errors"] = error_body.get("errors")
+            elif "message" in payload:
+                details["message"] = payload.get("message")
+    return details
+
+
+def _summarize_http_error(details: dict) -> str:
+    parts: list[str] = []
+    status = details.get("status")
+    reason = details.get("reason")
+    message = details.get("message")
+    if status:
+        parts.append(f"status={status}")
+    if reason:
+        parts.append(f"reason={reason}")
+    if message:
+        parts.append(f"message={message}")
+    errors = details.get("errors")
+    if isinstance(errors, list) and errors:
+        first_error = errors[0]
+        if isinstance(first_error, dict):
+            domain = first_error.get("domain")
+            reason_detail = first_error.get("reason")
+            if domain or reason_detail:
+                parts.append(
+                    "detail="
+                    + ",".join(
+                        filter(None, [f"domain={domain}" if domain else "", f"reason={reason_detail}" if reason_detail else ""])
+                    )
+                )
+    return ", ".join(parts)
+
+
 @lru_cache(maxsize=1)
 def get_service_account_email() -> str:
     creds = _load_credentials()
@@ -165,7 +225,14 @@ def list_sheets(spreadsheet_id: str) -> List[SheetMatch]:
         try:
             meta = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
         except HttpError as exc:  # noqa: BLE001
-            raise GoogleSheetsError(f"スプレッドシートの取得に失敗しました: {exc}") from exc
+            details = _parse_http_error(exc)
+            logger.warning(
+                "Google Sheets API error while listing sheets for %s: %s", spreadsheet_id, _summarize_http_error(details)
+            )
+            raise GoogleSheetsError(
+                "スプレッドシートの取得に失敗しました: "
+                f"{details.get('message') or exc}"
+            ) from exc
 
     sheets = meta.get("sheets", [])
     results: List[SheetMatch] = []
@@ -244,13 +311,24 @@ def ensure_service_account_access(spreadsheet_id: str) -> None:
         try:
             service.spreadsheets().get(spreadsheetId=spreadsheet_id, fields="spreadsheetId").execute()
         except HttpError as exc:  # noqa: BLE001
-            status = getattr(exc.resp, "status", None)
+            details = _parse_http_error(exc)
+            status = details.get("status")
+            logger.warning(
+                "Google Sheets access check failed for %s using %s: %s",
+                spreadsheet_id,
+                email,
+                _summarize_http_error(details),
+            )
             if status in {403, 404}:
                 raise GoogleSheetsError(
                     f"サービスアカウント '{email}' にスプレッドシートへのアクセス権がありません。"
                     "共有設定で編集者として追加してください。"
+                    f" (API response: {details.get('message') or details.get('reason') or status})"
                 ) from exc
-            raise GoogleSheetsError(f"スプレッドシートへのアクセス確認に失敗しました: {exc}") from exc
+            raise GoogleSheetsError(
+                "スプレッドシートへのアクセス確認に失敗しました: "
+                f"{details.get('message') or exc}"
+            ) from exc
 
 
 def column_index_to_a1(idx_zero_based: int) -> str:

@@ -1219,6 +1219,85 @@
         entry.syncSelectedClass();
       }
 
+      function isSSREnabled() {
+        return Boolean(enableSSR && enableSSR.checked);
+      }
+
+      function getSelectValue(select) {
+        if (!select) return '';
+        const value = select.value ?? '';
+        return typeof value === 'string' ? value.trim() : '';
+      }
+
+      function getScoreSheetKeyword() {
+        return getSelectValue(scoreSheetKeywordInput);
+      }
+
+      function getAnalysisSheetKeyword() {
+        return isSSREnabled() ? getSelectValue(sheetKeywordInput) : getScoreSheetKeyword();
+      }
+
+      function getScoreSheetGid() {
+        if (!scoreSheetGidInput) return '';
+        const value = scoreSheetGidInput.value ?? '';
+        return typeof value === 'string' ? value.trim() : '';
+      }
+
+      function getAnalysisSheetGid() {
+        if (!sheetGidInput) return '';
+        if (isSSREnabled()) {
+          const value = sheetGidInput.value ?? '';
+          return typeof value === 'string' ? value.trim() : '';
+        }
+        return getScoreSheetGid();
+      }
+
+      function syncAnalysisSheetSelection() {
+        if (!sheetKeywordInput) return;
+        const ssrEnabled = isSSREnabled();
+        const scoreValue = getScoreSheetKeyword();
+        const scorePlaceholder =
+          (scoreSheetKeywordInput && scoreSheetKeywordInput.dataset.placeholder) || 'Setで読み込んでください';
+
+        if (ssrEnabled) {
+          sheetKeywordInput.disabled = false;
+          const previousPlaceholder = sheetKeywordInput.dataset.previousPlaceholder;
+          if (previousPlaceholder !== undefined) {
+            sheetKeywordInput.dataset.placeholder = previousPlaceholder || sheetKeywordInput.dataset.placeholder || '';
+            updateCustomSelectPlaceholder(sheetKeywordInput, sheetKeywordInput.dataset.placeholder || '');
+            delete sheetKeywordInput.dataset.previousPlaceholder;
+          }
+        } else {
+          if (sheetKeywordInput.dataset.previousPlaceholder === undefined) {
+            sheetKeywordInput.dataset.previousPlaceholder = sheetKeywordInput.dataset.placeholder || '';
+          }
+
+          if (scoreValue) {
+            const options = Array.from(sheetKeywordInput.options || []);
+            const match = options.find((option) => option.value === scoreValue);
+            if (match) {
+              sheetKeywordInput.value = match.value;
+            } else {
+              sheetKeywordInput.value = '';
+            }
+          } else {
+            sheetKeywordInput.value = '';
+          }
+
+          sheetKeywordInput.disabled = true;
+          const linkedPlaceholder = scoreValue ? 'スコアシートと同じ' : scorePlaceholder;
+          sheetKeywordInput.dataset.placeholder = linkedPlaceholder;
+          updateCustomSelectPlaceholder(sheetKeywordInput, linkedPlaceholder);
+          if (sheetGidInput) {
+            sheetGidInput.value = scoreValue ? getScoreSheetGid() : '';
+          }
+        }
+
+        syncCustomSelectDisabled(sheetKeywordInput);
+        refreshCustomSelect(sheetKeywordInput);
+        updateSheetSelectionInputs();
+      }
+
       function positionActionBar() {
         if (!actionBar || !primaryPanel) return;
         const hasVisibleProxy = actionBarButtons.some((proxy) => proxy.style.display !== 'none');
