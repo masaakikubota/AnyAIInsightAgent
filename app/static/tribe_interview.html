@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>AnyAI Tribe Interview</title>
+    <link rel="icon" href="/static/anyai/assets/AnyAI_Logo_For_Loading.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/anyai/core/anyai.tokens.css" />
+    <link rel="stylesheet" href="/static/anyai/core/anyai.components.css" />
+    <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css" />
+    <link rel="stylesheet" href="/static/anyai/tool-layout.css" />
+    <script src="/static/anyai/loading-overlay.js"></script>
+    <script defer src="/static/anyai/vendor/lucide.js"></script>
+    <script defer src="/static/anyai/sidebar.js"></script>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font-family: 'Noto Sans JP', sans-serif;
+        background: var(--anyai-bg);
+        color: var(--anyai-text);
+        min-height: 100vh;
+        margin: 0;
+      }
+      .anyai-app {
+        width: min(1080px, 100%);
+        margin: 0 auto;
+        padding: var(--anyai-space-5);
+        display: flex;
+        flex-direction: column;
+        gap: var(--anyai-space-4);
+        box-sizing: border-box;
+      }
+      .anyai-form-section {
+        background: var(--anyai-panel);
+        border-radius: 18px;
+        padding: var(--anyai-space-4);
+        box-shadow: var(--anyai-shadow-sm);
+        display: flex;
+        flex-direction: column;
+        gap: var(--anyai-space-4);
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field label {
+        font-weight: 600;
+        font-size: var(--anyai-fs-2);
+      }
+      .field-hint,
+      .muted {
+        color: var(--anyai-text-subtle);
+        font-size: var(--anyai-fs-2);
+      }
+      input[type="text"],
+      input[type="number"],
+      textarea,
+      select {
+        width: 100%;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid var(--anyai-border);
+        background: var(--anyai-surface);
+        color: inherit;
+        font: inherit;
+      }
+      textarea { min-height: 120px; resize: vertical; }
+      .grid-two {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: var(--anyai-space-3);
+      }
+      .grid-three {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: var(--anyai-space-3);
+      }
+      .mode-radio-group {
+        display: flex;
+        gap: var(--anyai-space-3);
+        flex-wrap: wrap;
+      }
+      .mode-radio-group label {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--anyai-space-2);
+        font-weight: 600;
+      }
+      .dropzone {
+        border: 1px dashed var(--anyai-border-strong);
+        border-radius: 12px;
+        padding: var(--anyai-space-3);
+        text-align: center;
+        background: var(--anyai-surface);
+        cursor: pointer;
+        transition: border-color 0.2s ease, background 0.2s ease;
+      }
+      .dropzone.dragover {
+        border-color: var(--anyai-primary);
+        background: color-mix(in srgb, var(--anyai-primary), transparent 90%);
+      }
+      .image-preview-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: var(--anyai-space-3);
+        margin-top: var(--anyai-space-3);
+      }
+      .image-card {
+        background: var(--anyai-surface);
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 40%);
+        border-radius: 14px;
+        padding: var(--anyai-space-2);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        position: relative;
+      }
+      .image-card img {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 10px;
+        background: #111;
+      }
+      .remove-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 28px;
+        height: 28px;
+        border: none;
+        border-radius: 50%;
+        background: rgba(20, 24, 36, 0.78);
+        color: #fff;
+        cursor: pointer;
+      }
+      .anyai-form-actions {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .metrics-list,
+      .artifact-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: var(--anyai-fs-2);
+      }
+      @media (max-width: 720px) {
+        .anyai-app { padding: var(--anyai-space-3); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="anyai-layout">
+      <aside class="anyai-sidebar" data-active-tool="tribe-interview"></aside>
+      <main class="anyai-content">
+        <div class="anyai-app">
+          <section class="anyai-app-primary" aria-labelledby="tribe-heading">
+            <h1 id="tribe-heading" class="mt-0">Tribe Interview パイプライン</h1>
+            <p class="field-hint">トライブ生成からインタビュー回答・Embedding まで一括で実行します。</p>
+
+            <form id="tribe-form" class="anyai-form" enctype="multipart/form-data">
+              <section class="anyai-form-section" aria-labelledby="basic-heading">
+                <header>
+                  <h2 id="basic-heading" class="mt-0">基本情報</h2>
+                  <p class="field-hint">カテゴリと地域に基づいてトライブを生成します。</p>
+                </header>
+                <div class="grid-two">
+                  <div class="field">
+                    <label for="product_category">Product Category</label>
+                    <input type="text" id="product_category" name="product_category" placeholder="例: ヘアケア" required />
+                  </div>
+                  <div class="field">
+                    <label for="country_region">Country / Region</label>
+                    <input type="text" id="country_region" name="country_region" placeholder="例: JP_Kanto" required />
+                  </div>
+                </div>
+                <div class="field">
+                  <span class="sr-only" id="mode-label">モード選択</span>
+                  <div class="mode-radio-group" role="radiogroup" aria-labelledby="mode-label">
+                    <label><input type="radio" name="mode" value="product" checked /> 製品モード</label>
+                    <label><input type="radio" name="mode" value="communication" /> コミュニケーションモード</label>
+                  </div>
+                  <p class="field-hint">製品モードは商品評価、コミュニケーションモードはタグライン評価にフォーカスします。</p>
+                </div>
+                <div class="field" id="product-detail-field">
+                  <label for="product_detail">製品詳細・特徴（任意）</label>
+                  <textarea id="product_detail" name="product_detail" placeholder="例: 低刺激の頭皮ケア用美容液。主要成分..."></textarea>
+                </div>
+                <div class="field" id="tagline-detail-field" style="display:none;">
+                  <label for="tagline_detail">タグライン / コピー（任意）</label>
+                  <textarea id="tagline_detail" name="tagline_detail" placeholder="例: 'Reset your scalp, reset your day.'"></textarea>
+                </div>
+              </section>
+
+              <section class="anyai-form-section" aria-labelledby="generation-heading">
+                <header>
+                  <h2 id="generation-heading" class="mt-0">生成パラメータ</h2>
+                  <p class="field-hint">ペルソナ／インタビュー生成数や補助テンプレートを設定します。</p>
+                </header>
+                <div class="grid-three">
+                  <div class="field">
+                    <label for="persona_per_combination">ペルソナ数（各トライブ組合せ）</label>
+                    <input type="number" id="persona_per_combination" name="persona_per_combination" value="3" min="1" max="10" required />
+                  </div>
+                  <div class="field">
+                    <label for="interviews_per_persona">インタビュー数（各ペルソナ）</label>
+                    <input type="number" id="interviews_per_persona" name="interviews_per_persona" value="3" min="1" max="10" required />
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="persona_prompt_template">ペルソナプロンプトテンプレ（任意）</label>
+                  <textarea id="persona_prompt_template" name="persona_prompt_template" placeholder="ペルソナに含めたい追加条件があれば記載してください。"></textarea>
+                </div>
+                <div class="field">
+                  <label for="interview_questions">カスタム質問（任意）</label>
+                  <textarea id="interview_questions" name="interview_questions" placeholder="1行につき1質問を入力。空欄の場合はデフォルト質問を使用します。"></textarea>
+                </div>
+              </section>
+
+              <section class="anyai-form-section" aria-labelledby="sheet-heading">
+                <header>
+                  <h2 id="sheet-heading" class="mt-0">Google Sheets 設定</h2>
+                  <p class="field-hint">処理対象となるスプレッドシートと各出力タブを選択します。</p>
+                </header>
+                <div class="field">
+                  <label for="spreadsheet_url">スプレッドシート URL / ID</label>
+                  <div class="field-with-action" style="display:flex; gap:var(--anyai-space-3); flex-wrap:wrap;">
+                    <input type="text" id="spreadsheet_url" name="spreadsheet_url" placeholder="https://docs.google.com/spreadsheets/d/..." required />
+                    <button type="button" class="btn btn-outline" id="btn-sheet-set">Set</button>
+                  </div>
+                  <p class="field-hint" id="sheet-status">Set を押してシート一覧を読み込みます。</p>
+                </div>
+                <div class="grid-three">
+                  <div class="field">
+                    <label for="tribe_sheet">Tribe_SetUp</label>
+                    <select id="tribe_sheet" name="tribe_sheet_name" data-default="Tribe_SetUp">
+                      <option value="Tribe_SetUp" selected>Tribe_SetUp</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="combination_sheet">Tribe_Combination</label>
+                    <select id="combination_sheet" name="combination_sheet_name" data-default="Tribe_Combination">
+                      <option value="Tribe_Combination" selected>Tribe_Combination</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="persona_sheet">Persona_SetUp</label>
+                    <select id="persona_sheet" name="persona_sheet_name" data-default="Persona_SetUp">
+                      <option value="Persona_SetUp" selected>Persona_SetUp</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="qa_llm_sheet">QA_LLM</label>
+                    <select id="qa_llm_sheet" name="qa_llm_sheet_name" data-default="QA_LLM">
+                      <option value="QA_LLM" selected>QA_LLM</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="qa_embedding_sheet">QA_Embedding</label>
+                    <select id="qa_embedding_sheet" name="qa_embedding_sheet_name" data-default="QA_Embedding">
+                      <option value="QA_Embedding" selected>QA_Embedding</option>
+                    </select>
+                  </div>
+                </div>
+              </section>
+
+              <section class="anyai-form-section" aria-labelledby="asset-heading">
+                <header>
+                  <h2 id="asset-heading" class="mt-0">補助アセット（任意）</h2>
+                  <p class="field-hint">商品ビジュアルや資料があればアップロードしてください。</p>
+                </header>
+                <div class="field">
+                  <div id="image-dropzone" class="dropzone" tabindex="0">
+                    <strong>画像をドロップ / ペースト / クリックして選択</strong>
+                    <p class="muted" style="margin:4px 0 0;">PNG・JPEG など複数可。最大5MB/枚。</p>
+                  </div>
+                  <input type="file" id="manual_images" name="manual_images" accept="image/*" hidden multiple />
+                  <div id="image-preview" class="image-preview-list"></div>
+                </div>
+              </section>
+
+              <div class="anyai-form-actions">
+                <button type="submit" class="btn btn-primary">パイプラインを開始</button>
+              </div>
+            </form>
+
+            <section id="job-section" class="anyai-form-section" style="display:none;" aria-live="polite">
+              <header>
+                <h2 class="mt-0">ジョブステータス</h2>
+                <p class="field-hint">数秒ごとに進捗を更新します。</p>
+              </header>
+              <div class="field">ジョブID: <code id="job-id"></code></div>
+              <div class="field"><span class="muted" id="job-stage"></span></div>
+              <div class="field"><span class="muted" id="job-message"></span></div>
+              <div class="field">
+                <label>メトリクス</label>
+                <div id="job-metrics" class="metrics-list muted"></div>
+              </div>
+              <div class="field">
+                <label>成果物</label>
+                <div id="job-artifacts" class="artifact-list muted"></div>
+              </div>
+            </section>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      (function () {
+        const loadingOverlay = window.AnyAILoading || {
+          run: async (task) => task(),
+          show: () => {},
+          hide: () => {},
+        };
+
+        const form = document.getElementById('tribe-form');
+        const spreadsheetUrlInput = document.getElementById('spreadsheet_url');
+        const setButton = document.getElementById('btn-sheet-set');
+        const sheetStatus = document.getElementById('sheet-status');
+        const sheetSelects = {
+          tribe: document.getElementById('tribe_sheet'),
+          combination: document.getElementById('combination_sheet'),
+          persona: document.getElementById('persona_sheet'),
+          qaLLM: document.getElementById('qa_llm_sheet'),
+          qaEmbedding: document.getElementById('qa_embedding_sheet'),
+        };
+
+        const modeRadios = Array.from(document.querySelectorAll('input[name="mode"]'));
+        const productDetailField = document.getElementById('product-detail-field');
+        const productDetailInput = document.getElementById('product_detail');
+        const taglineDetailField = document.getElementById('tagline-detail-field');
+        const taglineDetailInput = document.getElementById('tagline_detail');
+
+        const personaPerCombinationInput = document.getElementById('persona_per_combination');
+        const interviewsPerPersonaInput = document.getElementById('interviews_per_persona');
+        const personaPromptTemplateInput = document.getElementById('persona_prompt_template');
+        const interviewQuestionsInput = document.getElementById('interview_questions');
+        const productCategoryInput = document.getElementById('product_category');
+        const countryRegionInput = document.getElementById('country_region');
+
+        const imageInput = document.getElementById('manual_images');
+        const imageDropzone = document.getElementById('image-dropzone');
+        const imagePreview = document.getElementById('image-preview');
+        const imageDataTransfer = new DataTransfer();
+
+        const jobSection = document.getElementById('job-section');
+        const jobIdEl = document.getElementById('job-id');
+        const jobStageEl = document.getElementById('job-stage');
+        const jobMessageEl = document.getElementById('job-message');
+        const jobMetricsEl = document.getElementById('job-metrics');
+        const jobArtifactsEl = document.getElementById('job-artifacts');
+
+        let currentJobId = null;
+        let pollTimer = null;
+
+        function stopPolling() {
+          if (pollTimer) {
+            clearTimeout(pollTimer);
+            pollTimer = null;
+          }
+        }
+
+        function syncModeFields() {
+          const active = modeRadios.find((radio) => radio.checked)?.value || 'product';
+          const isProduct = active === 'product';
+          productDetailField.style.display = isProduct ? '' : 'none';
+          taglineDetailField.style.display = isProduct ? 'none' : '';
+        }
+        modeRadios.forEach((radio) => radio.addEventListener('change', syncModeFields));
+        syncModeFields();
+
+        function populateSheetSelect(select, sheets) {
+          const current = select.dataset.default || select.value || '';
+          select.innerHTML = '';
+          const ensureOption = (value) => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            select.appendChild(option);
+          };
+          ensureOption(current || select.dataset.default || '');
+          sheets.forEach((sheet) => {
+            if (![...select.options].some((opt) => opt.value === sheet.sheet_name)) {
+              ensureOption(sheet.sheet_name);
+            }
+          });
+          select.value = current || select.dataset.default;
+        }
+
+        async function handleSetSheets() {
+          const url = spreadsheetUrlInput.value.trim();
+          if (!url) {
+            alert('スプレッドシート URL / ID を入力してください');
+            return;
+          }
+          const prevText = setButton.textContent;
+          setButton.disabled = true;
+          setButton.textContent = '取得中...';
+          sheetStatus.textContent = 'シート一覧を取得中...';
+          try {
+            const res = await fetch('/sheets/list', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ spreadsheet_url: url }),
+            });
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data || !data.ok) {
+              throw new Error((data && data.message) || 'シート一覧の取得に失敗しました');
+            }
+            const sheets = Array.isArray(data.sheets) ? data.sheets : [];
+            Object.values(sheetSelects).forEach((select) => populateSheetSelect(select, sheets));
+            sheetStatus.textContent = 'シート一覧を読み込みました。必要に応じて選択してください。';
+          } catch (err) {
+            sheetStatus.textContent = err instanceof Error ? err.message : 'シート一覧の取得に失敗しました';
+          } finally {
+            setButton.disabled = false;
+            setButton.textContent = prevText;
+          }
+        }
+        setButton.addEventListener('click', () => { void handleSetSheets(); });
+
+        function appendImages(files) {
+          if (!files) return;
+          Array.from(files).forEach((file) => {
+            if (!(file instanceof File) || !file.type.startsWith('image/')) {
+              return;
+            }
+            imageDataTransfer.items.add(file);
+            const card = document.createElement('div');
+            card.className = 'image-card';
+
+            const preview = document.createElement('img');
+            preview.src = URL.createObjectURL(file);
+            preview.alt = file.name;
+            preview.addEventListener('load', () => URL.revokeObjectURL(preview.src));
+            card.appendChild(preview);
+
+            const meta = document.createElement('div');
+            meta.className = 'muted';
+            meta.textContent = file.name;
+            card.appendChild(meta);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'remove-btn';
+            removeBtn.innerHTML = '&times;';
+            removeBtn.addEventListener('click', () => {
+              const dt = new DataTransfer();
+              Array.from(imageDataTransfer.files).forEach((f) => {
+                if (f !== file) {
+                  dt.items.add(f);
+                }
+              });
+              imageDataTransfer.items.clear();
+              Array.from(dt.files).forEach((f) => imageDataTransfer.items.add(f));
+              card.remove();
+              imageInput.files = imageDataTransfer.files;
+            });
+            card.appendChild(removeBtn);
+
+            imagePreview.appendChild(card);
+          });
+          imageInput.files = imageDataTransfer.files;
+        }
+
+        imageDropzone.addEventListener('click', () => {
+          imageInput.click();
+        });
+        imageDropzone.addEventListener('dragover', (event) => {
+          event.preventDefault();
+          imageDropzone.classList.add('dragover');
+        });
+        imageDropzone.addEventListener('dragleave', (event) => {
+          event.preventDefault();
+          imageDropzone.classList.remove('dragover');
+        });
+        imageDropzone.addEventListener('drop', (event) => {
+          event.preventDefault();
+          imageDropzone.classList.remove('dragover');
+          appendImages(event.dataTransfer ? event.dataTransfer.files : null);
+        });
+        imageDropzone.addEventListener('paste', (event) => {
+          appendImages(event.clipboardData ? event.clipboardData.files : null);
+        });
+        imageInput.addEventListener('change', (event) => {
+          appendImages(event.target.files);
+          event.target.value = '';
+        });
+
+        async function pollStatus(jobId) {
+          try {
+            const res = await fetch(`/tribe-interview/jobs/${jobId}`);
+            if (!res.ok) {
+              throw new Error('ステータス取得に失敗しました');
+            }
+            const data = await res.json();
+            renderStatus(data);
+            if (data.status === 'running') {
+              pollTimer = setTimeout(() => pollStatus(jobId), 2500);
+            }
+          } catch (err) {
+            jobMessageEl.textContent = err instanceof Error ? err.message : 'ステータス取得に失敗しました';
+            stopPolling();
+          }
+        }
+
+        function renderMetrics(metrics) {
+          jobMetricsEl.innerHTML = '';
+          if (!metrics) {
+            jobMetricsEl.textContent = 'メトリクスはまだありません。';
+            return;
+          }
+          Object.entries(metrics).forEach(([key, value]) => {
+            const row = document.createElement('div');
+            row.textContent = `${key}: ${value}`;
+            jobMetricsEl.appendChild(row);
+          });
+        }
+
+        function renderArtifacts(artifacts) {
+          jobArtifactsEl.innerHTML = '';
+          if (!artifacts) {
+            jobArtifactsEl.textContent = '成果物はまだありません。';
+            return;
+          }
+          Object.entries(artifacts).forEach(([key, value]) => {
+            const row = document.createElement('div');
+            row.textContent = `${key}: ${value}`;
+            jobArtifactsEl.appendChild(row);
+          });
+        }
+
+        function renderStatus(state) {
+          if (!state) return;
+          const stageLabels = {
+            pending: '待機中',
+            tribe: 'Tribe 生成中',
+            combination: '組合せ生成中',
+            persona: 'ペルソナ生成中',
+            qa: 'インタビュー生成中',
+            embedding: 'Embedding 生成中',
+          };
+
+          jobSection.style.display = 'block';
+          jobIdEl.textContent = state.job_id;
+          jobStageEl.textContent = `ステータス: ${stageLabels[state.stage] || state.stage} / ${state.status}`;
+          jobMessageEl.textContent = state.message || '';
+          renderMetrics(state.metrics);
+          renderArtifacts(state.artifacts);
+
+          if (state.status !== 'running') {
+            stopPolling();
+          }
+        }
+
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          stopPolling();
+
+          const spreadsheetUrl = spreadsheetUrlInput.value.trim();
+          if (!spreadsheetUrl) {
+            alert('スプレッドシート URL / ID を入力してください');
+            return;
+          }
+
+          const personaCount = parseInt(personaPerCombinationInput.value || '3', 10);
+          if (Number.isNaN(personaCount) || personaCount < 1 || personaCount > 10) {
+            alert('ペルソナ数は 1〜10 の範囲で入力してください');
+            return;
+          }
+          const interviewCount = parseInt(interviewsPerPersonaInput.value || '3', 10);
+          if (Number.isNaN(interviewCount) || interviewCount < 1 || interviewCount > 10) {
+            alert('インタビュー数は 1〜10 の範囲で入力してください');
+            return;
+          }
+
+          const fd = new FormData();
+          fd.set('product_category', productCategoryInput.value.trim());
+          fd.set('country_region', countryRegionInput.value.trim());
+
+          const modeValue = modeRadios.find((radio) => radio.checked)?.value || 'product';
+          fd.set('mode', modeValue);
+
+          fd.set('persona_per_combination', String(personaCount));
+          fd.set('interviews_per_persona', String(interviewCount));
+          fd.set('spreadsheet_url', spreadsheetUrl);
+
+          fd.set('tribe_sheet_name', sheetSelects.tribe.value || sheetSelects.tribe.dataset.default || 'Tribe_SetUp');
+          fd.set('combination_sheet_name', sheetSelects.combination.value || sheetSelects.combination.dataset.default || 'Tribe_Combination');
+          fd.set('persona_sheet_name', sheetSelects.persona.value || sheetSelects.persona.dataset.default || 'Persona_SetUp');
+          fd.set('qa_llm_sheet_name', sheetSelects.qaLLM.value || sheetSelects.qaLLM.dataset.default || 'QA_LLM');
+          fd.set('qa_embedding_sheet_name', sheetSelects.qaEmbedding.value || sheetSelects.qaEmbedding.dataset.default || 'QA_Embedding');
+
+          fd.set('product_detail', modeValue === 'product' ? (productDetailInput.value || '').trim() : '');
+          fd.set('tagline_detail', modeValue === 'communication' ? (taglineDetailInput.value || '').trim() : '');
+          fd.set('persona_prompt_template', (personaPromptTemplateInput.value || '').trim());
+          fd.set('interview_questions', (interviewQuestionsInput.value || '').trim());
+
+          Array.from(imageDataTransfer.files).forEach((file) => {
+            fd.append('manual_images', file, file.name);
+          });
+
+          try {
+            const res = await loadingOverlay.run(() => fetch('/tribe-interview/jobs', { method: 'POST', body: fd }));
+            if (!res.ok) {
+              const text = await res.text();
+              throw new Error(text || 'ジョブ生成に失敗しました');
+            }
+            const data = await res.json();
+            currentJobId = data.job_id;
+            jobSection.style.display = 'block';
+            jobStageEl.textContent = 'ステータス: 実行開始';
+            jobMessageEl.textContent = 'パイプラインを初期化しています...';
+            jobMetricsEl.innerHTML = '';
+            jobArtifactsEl.innerHTML = '';
+            pollStatus(currentJobId);
+          } catch (err) {
+            alert(err instanceof Error ? err.message : 'ジョブ生成に失敗しました');
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

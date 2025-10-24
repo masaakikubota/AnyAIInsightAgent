@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from contextlib import suppress
 
 import logging
 
@@ -138,7 +139,7 @@ class ScoringPipeline:
         )
         self.writer_retry_backoff_multiplier = max(1.0, backoff_multiplier)
         self.writer_max_concurrent_flushes = max(
-            1, int(getattr(cfg, "writer_max_flush_concurrency", 2))
+            1, int(getattr(cfg, "writer_max_flush_concurrency", 4))
         )
         batch_rows_value = sheet_batch_row_size
         if batch_rows_value is None:
@@ -621,6 +622,7 @@ class ScoringPipeline:
         buffer_scores: Dict[int, Dict[int, float]] = {}
         buffer_analyses: Dict[int, Dict[int, str]] = {}
         active_flushes: set[asyncio.Task[None]] = set()
+        flush_lock = asyncio.Lock()
 
         def prune_completed_flushes() -> None:
             nonlocal active_flushes
@@ -643,173 +645,186 @@ class ScoringPipeline:
 
         async def flush(*, force: bool = False) -> None:
             nonlocal buffer_scores, buffer_analyses, pending_units, pending_updates, active_flushes
-            if not buffer_scores and not buffer_analyses:
-                return
-            if not force and pending_units < self.flush_unit_threshold:
-                return
+            async with flush_lock:
+                if not buffer_scores and not buffer_analyses:
+                    return
+                if not force and pending_units < self.flush_unit_threshold:
+                    return
 
-            snapshot_score_buffer = buffer_scores
-            snapshot_analysis_buffer = buffer_analyses
-            snapshot_updates = list(pending_updates)
-            buffer_scores = {}
-            buffer_analyses = {}
-            pending_units = 0
-            pending_updates = []
+                snapshot_score_buffer = buffer_scores
+                snapshot_analysis_buffer = buffer_analyses
+                snapshot_updates = list(pending_updates)
+                buffer_scores = {}
+                buffer_analyses = {}
+                pending_units = 0
+                pending_updates = []
 
-            if not snapshot_updates:
-                return
+                if not snapshot_updates:
+                    return
 
-            all_rows = sorted(
-                set(snapshot_score_buffer.keys()) | set(snapshot_analysis_buffer.keys())
-            )
-            if not all_rows:
-                self._stats.flush_count += 1
-                self._completed_requests += len(snapshot_updates)
-                for entry in snapshot_updates:
-                    await self.mark_unit_completed(entry.unit, entry.result)
-                self._log(
-                    "Writer flush skipped Sheets update because no values were produced"
+                all_rows = sorted(
+                    set(snapshot_score_buffer.keys()) | set(snapshot_analysis_buffer.keys())
                 )
-                return
+                if not all_rows:
+                    self._stats.flush_count += 1
+                    self._completed_requests += len(snapshot_updates)
+                    for entry in snapshot_updates:
+                        await self.mark_unit_completed(entry.unit, entry.result)
+                    self._log(
+                        "Writer flush skipped Sheets update because no values were produced"
+                    )
+                    return
 
-            if self.sheet_batch_row_size and self.sheet_batch_row_size > 0:
-                row_chunks: List[List[int]] = [
-                    all_rows[i : i + self.sheet_batch_row_size]
-                    for i in range(0, len(all_rows), self.sheet_batch_row_size)
-                ]
-            else:
-                row_chunks = [all_rows]
-
-            payload_batches: List[List[dict]] = []
-
-            for chunk_rows in row_chunks:
-                analysis_subset = {
-                    row: snapshot_analysis_buffer[row]
-                    for row in chunk_rows
-                    if row in snapshot_analysis_buffer
-                }
-                if analysis_subset:
-                    analysis_payload = [
-                        payload
-                        for _, payload in build_row_value_ranges(
-                            category_start_col=self.cfg.category_start_col,
-                            sheet_name=self.sheet_name,
-                            update_buffer=analysis_subset,
-                        )
+                if self.sheet_batch_row_size and self.sheet_batch_row_size > 0:
+                    row_chunks: List[List[int]] = [
+                        all_rows[i : i + self.sheet_batch_row_size]
+                        for i in range(0, len(all_rows), self.sheet_batch_row_size)
                     ]
-                    if analysis_payload:
-                        payload_batches.append(analysis_payload)
+                else:
+                    row_chunks = [all_rows]
 
-                score_subset = {
-                    row: snapshot_score_buffer[row]
-                    for row in chunk_rows
-                    if row in snapshot_score_buffer
-                }
-                if score_subset:
-                    score_payload = [
-                        payload
-                        for _, payload in build_row_value_ranges(
-                            category_start_col=self.cfg.category_start_col,
-                            sheet_name=self.score_sheet_name or self.sheet_name,
-                            update_buffer=score_subset,
-                        )
-                    ]
-                    if score_payload:
-                        payload_batches.append(score_payload)
+                payload_batches: List[List[dict]] = []
 
-            if not payload_batches:
-                self._stats.flush_count += 1
-                self._completed_requests += len(snapshot_updates)
-                for entry in snapshot_updates:
-                    await self.mark_unit_completed(entry.unit, entry.result)
-                self._log(
-                    "Writer flush skipped Sheets update because no values were produced"
+                for chunk_rows in row_chunks:
+                    analysis_subset = {
+                        row: snapshot_analysis_buffer[row]
+                        for row in chunk_rows
+                        if row in snapshot_analysis_buffer
+                    }
+                    if analysis_subset:
+                        analysis_payload = [
+                            payload
+                            for _, payload in build_row_value_ranges(
+                                category_start_col=self.cfg.category_start_col,
+                                sheet_name=self.sheet_name,
+                                update_buffer=analysis_subset,
+                            )
+                        ]
+                        if analysis_payload:
+                            payload_batches.append(analysis_payload)
+
+                    score_subset = {
+                        row: snapshot_score_buffer[row]
+                        for row in chunk_rows
+                        if row in snapshot_score_buffer
+                    }
+                    if score_subset:
+                        score_payload = [
+                            payload
+                            for _, payload in build_row_value_ranges(
+                                category_start_col=self.cfg.category_start_col,
+                                sheet_name=self.score_sheet_name or self.sheet_name,
+                                update_buffer=score_subset,
+                            )
+                        ]
+                        if score_payload:
+                            payload_batches.append(score_payload)
+
+                if not payload_batches:
+                    self._stats.flush_count += 1
+                    self._completed_requests += len(snapshot_updates)
+                    for entry in snapshot_updates:
+                        await self.mark_unit_completed(entry.unit, entry.result)
+                    self._log(
+                        "Writer flush skipped Sheets update because no values were produced"
+                    )
+                    return
+
+                await ensure_flush_capacity()
+
+                distinct_rows = set(snapshot_score_buffer.keys()) | set(
+                    snapshot_analysis_buffer.keys()
                 )
-                return
+                analysis_cells = (
+                    sum(len(columns) for columns in snapshot_analysis_buffer.values())
+                    if snapshot_analysis_buffer
+                    else 0
+                )
+                score_cells = (
+                    sum(len(columns) for columns in snapshot_score_buffer.values())
+                    if snapshot_score_buffer
+                    else 0
+                )
 
-            await ensure_flush_capacity()
-
-            distinct_rows = set(snapshot_score_buffer.keys()) | set(
-                snapshot_analysis_buffer.keys()
-            )
-            analysis_cells = (
-                sum(len(columns) for columns in snapshot_analysis_buffer.values())
-                if snapshot_analysis_buffer
-                else 0
-            )
-            score_cells = (
-                sum(len(columns) for columns in snapshot_score_buffer.values())
-                if snapshot_score_buffer
-                else 0
-            )
-
-            async def perform_flush() -> None:
-                attempts = 0
-                delay = self.writer_retry_initial_delay
-                last_error: Optional[Exception] = None
-                while attempts < self.writer_retry_limit:
-                    try:
-                        for batch_payload in payload_batches:
-                            await asyncio.to_thread(
-                                batch_update_values, self.spreadsheet_id, batch_payload
+                async def perform_flush() -> None:
+                    attempts = 0
+                    delay = self.writer_retry_initial_delay
+                    last_error: Optional[Exception] = None
+                    while attempts < self.writer_retry_limit:
+                        try:
+                            for batch_payload in payload_batches:
+                                await asyncio.to_thread(
+                                    batch_update_values, self.spreadsheet_id, batch_payload
+                                )
+                            self._stats.flush_count += 1
+                            self._completed_requests += len(snapshot_updates)
+                            for entry in snapshot_updates:
+                                await self.mark_unit_completed(entry.unit, entry.result)
+                            self._log(
+                                "Writer flush success: rows={} entries={} attempts={} cells(text={} score={})".format(
+                                    len(distinct_rows),
+                                    len(snapshot_updates),
+                                    attempts + 1,
+                                    analysis_cells,
+                                    score_cells,
+                                )
                             )
-                        self._stats.flush_count += 1
-                        self._completed_requests += len(snapshot_updates)
-                        for entry in snapshot_updates:
-                            await self.mark_unit_completed(entry.unit, entry.result)
-                        self._log(
-                            "Writer flush success: rows={} entries={} attempts={} cells(text={} score={})".format(
-                                len(distinct_rows),
-                                len(snapshot_updates),
-                                attempts + 1,
-                                analysis_cells,
-                                score_cells,
+                            if distinct_rows:
+                                start_row = min(distinct_rows)
+                                end_row = max(distinct_rows)
+                                self._log_sheet_update(start_row=start_row, end_row=end_row)
+                            return
+                        except GoogleSheetsError as exc:
+                            last_error = exc
+                            attempts += 1
+                            if attempts >= self.writer_retry_limit:
+                                self._terminate.set()
+                                self._log(f"Writer flush failed after retries: error={exc}")
+                                logger.exception("Writer flush failed after retries", exc_info=exc)
+                                raise
+                            await asyncio.sleep(delay)
+                            delay *= self.writer_retry_backoff_multiplier
+                            self._log(
+                                f"Writer retry scheduled: attempt={attempts + 1} delay={delay:.2f}"
                             )
-                        )
-                        if distinct_rows:
-                            start_row = min(distinct_rows)
-                            end_row = max(distinct_rows)
-                            self._log_sheet_update(start_row=start_row, end_row=end_row)
-                        return
-                    except GoogleSheetsError as exc:
-                        last_error = exc
-                        attempts += 1
-                        if attempts >= self.writer_retry_limit:
+                        except (TimeoutError, socket.timeout) as exc:
+                            last_error = exc
+                            attempts += 1
+                            if attempts >= self.writer_retry_limit:
+                                self._terminate.set()
+                                self._log(f"Writer flush failed after retries: timeout={exc}")
+                                logger.exception("Writer flush failed after retries", exc_info=exc)
+                                raise
+                            await asyncio.sleep(delay)
+                            delay *= self.writer_retry_backoff_multiplier
+                            self._log(
+                                f"Writer retry scheduled after timeout: attempt={attempts + 1} delay={delay:.2f}"
+                            )
+                        except Exception as exc:
+                            last_error = exc
                             self._terminate.set()
-                            self._log(f"Writer flush failed after retries: error={exc}")
-                            logger.exception("Writer flush failed after retries", exc_info=exc)
+                            self._log(f"Writer flush fatal error: {exc}")
+                            logger.exception("Writer flush fatal error", exc_info=exc)
                             raise
-                        await asyncio.sleep(delay)
-                        delay *= self.writer_retry_backoff_multiplier
-                        self._log(
-                            f"Writer retry scheduled: attempt={attempts + 1} delay={delay:.2f}"
-                        )
-                    except (TimeoutError, socket.timeout) as exc:
-                        last_error = exc
-                        attempts += 1
-                        if attempts >= self.writer_retry_limit:
-                            self._terminate.set()
-                            self._log(f"Writer flush failed after retries: timeout={exc}")
-                            logger.exception("Writer flush failed after retries", exc_info=exc)
-                            raise
-                        await asyncio.sleep(delay)
-                        delay *= self.writer_retry_backoff_multiplier
-                        self._log(
-                            f"Writer retry scheduled after timeout: attempt={attempts + 1} delay={delay:.2f}"
-                        )
-                    except Exception as exc:
-                        last_error = exc
-                        self._terminate.set()
-                        self._log(f"Writer flush fatal error: {exc}")
-                        logger.exception("Writer flush fatal error", exc_info=exc)
-                        raise
-                if last_error:
-                    raise last_error
+                    if last_error:
+                        raise last_error
 
-            task = asyncio.create_task(perform_flush())
-            active_flushes.add(task)
+                task = asyncio.create_task(perform_flush())
+                active_flushes.add(task)
 
+        async def flush_periodically() -> None:
+            try:
+                while True:
+                    await asyncio.sleep(self.flush_interval)
+                    if pending_units:
+                        await flush(force=True)
+            except asyncio.CancelledError:
+                raise
+
+        flush_timer: Optional[asyncio.Task[None]] = None
         try:
+            if self.flush_interval > 0:
+                flush_timer = asyncio.create_task(flush_periodically())
             while True:
                 entry = await writer_queue.get()
                 try:
@@ -837,6 +852,10 @@ class ScoringPipeline:
         except asyncio.CancelledError:
             raise
         finally:
+            if flush_timer:
+                flush_timer.cancel()
+                with suppress(asyncio.CancelledError):
+                    await flush_timer
             await flush(force=True)
             prune_completed_flushes()
             if active_flushes:

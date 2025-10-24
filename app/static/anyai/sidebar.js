@@ -9,15 +9,14 @@
       items: [
         { id: 'scoring', href: '/', text: 'Score', tooltip: 'AnyAI Scoring', icon: 'sparkles' },
         { id: 'cleansing', href: '/cleansing', text: 'Cleanse', tooltip: 'AnyAI Cleansing', icon: 'wand-2' },
-        { id: 'interview', href: '/interview', text: 'Interview', tooltip: 'AnyAI Interview', icon: 'mic' }
+        { id: 'tribe-interview', href: '/tribe-interview', text: 'Tribe Interview', tooltip: 'Tribe Interview Pipeline', icon: 'share-2' }
       ]
     },
     {
       id: 'persona',
       label: 'PERSONA',
       items: [
-        { id: 'persona', href: '/persona', text: 'Seeds', tooltip: 'Persona Seeds', icon: 'sprout' },
-        { id: 'persona-dashboard', href: '/dashboard', text: 'Dashboard', tooltip: 'Persona Dashboard', icon: 'layout-dashboard' }
+        { id: 'persona', href: '/persona', text: 'Seeds', tooltip: 'Persona Seeds', icon: 'sprout' }
       ]
     },
     {

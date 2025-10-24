@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import logging
 import os
 import sys
 from pathlib import Path
@@ -12,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .dependencies import get_base_dir
 from .logging_config import configure_logging
-from .routers import cleansing, interview, jobs, persona, settings, video_suite
+from .routers import cleansing, jobs, persona, settings, tribe_interview, video_suite
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +67,8 @@ def create_app() -> FastAPI:
     app.include_router(settings.router)
     app.include_router(jobs.router)
     app.include_router(cleansing.router)
-    app.include_router(interview.router)
     app.include_router(persona.router)
+    app.include_router(tribe_interview.router)
     app.include_router(video_suite.router)
 
     @app.get("/", response_class=HTMLResponse)

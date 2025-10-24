@@ -9,10 +9,9 @@ from fastapi import HTTPException
 
 from . import settings as app_settings
 from .cleansing_manager import CleansingJobManager
-from .interview_manager import InterviewJobManager
 from .mass_persona_manager import MassPersonaJobManager
 from .persona_builder_manager import PersonaBuildJobManager
-from .persona_response_manager import PersonaResponseJobManager
+from .tribe_interview_manager import TribeInterviewJobManager
 from .runtime import ensure_runtime_compat
 from .worker import JobManager
 
@@ -40,11 +39,6 @@ def get_cleansing_job_manager() -> CleansingJobManager:
 
 
 @lru_cache
-def get_interview_job_manager() -> InterviewJobManager:
-    return InterviewJobManager(get_base_dir())
-
-
-@lru_cache
 def get_mass_persona_job_manager() -> MassPersonaJobManager:
     return MassPersonaJobManager(get_base_dir())
 
@@ -55,8 +49,8 @@ def get_persona_build_job_manager() -> PersonaBuildJobManager:
 
 
 @lru_cache
-def get_persona_response_job_manager() -> PersonaResponseJobManager:
-    return PersonaResponseJobManager(get_base_dir())
+def get_tribe_interview_job_manager() -> TribeInterviewJobManager:
+    return TribeInterviewJobManager(get_base_dir())
 
 
 def get_app_settings():
@@ -81,10 +75,9 @@ __all__ = [
     "get_app_settings",
     "get_base_dir",
     "get_cleansing_job_manager",
-    "get_interview_job_manager",
     "get_job_manager",
     "get_mass_persona_job_manager",
     "get_persona_build_job_manager",
-    "get_persona_response_job_manager",
+    "get_tribe_interview_job_manager",
     "ensure_runs_subpath",
 ]

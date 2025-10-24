@@ -343,3 +343,104 @@ def column_index_to_a1(idx_zero_based: int) -> str:
             break
         idx -= 1
     return result
+
+
+def _build_a1_range(sheet_name: str, start_row: int, start_col: int, row_count: int, col_count: int) -> str:
+    if row_count <= 0 or col_count <= 0:
+        raise ValueError("row_count and col_count must be positive")
+    start_a1 = f"{column_index_to_a1(start_col - 1)}{start_row}"
+    end_a1 = f"{column_index_to_a1(start_col + col_count - 2)}{start_row + row_count - 1}"
+    return f"{sheet_name}!{start_a1}:{end_a1}"
+
+
+def write_table_with_headers(
+    spreadsheet_id: str,
+    sheet_name: str,
+    headers: List[str],
+    rows: List[List[str]],
+    *,
+    start_row: int = 1,
+    start_col: int = 1,
+) -> None:
+    """Write a table with headers, replacing the existing region."""
+
+    if not headers:
+        raise ValueError("headers must not be empty")
+    values: List[List[str]] = [headers]
+    values.extend(rows)
+    range_name = _build_a1_range(sheet_name, start_row, start_col, len(values), len(headers))
+    batch_update_values(
+        spreadsheet_id,
+    updates=[{"range": range_name, "values": values}],
+    )
+
+
+def append_rows_with_headers(
+    spreadsheet_id: str,
+    sheet_name: str,
+    headers: List[str],
+    rows: List[List[str]],
+    *,
+    header_row: int = 1,
+) -> None:
+    """Ensure headers exist and append rows starting after the last non-empty row."""
+
+    if not headers:
+        raise ValueError("headers must not be empty")
+    if not rows:
+        return
+
+    # First write headers if necessary.
+    write_row_values(
+        spreadsheet_id,
+        sheet_name,
+        row_index=header_row,
+        start_col=1,
+        values=headers,
+    )
+
+    # Append rows below the header. In lieu of Sheets append API, place using batch update.
+    start_row = header_row + 1
+    range_name = _build_a1_range(sheet_name, start_row, 1, len(rows), len(headers))
+    batch_update_values(
+        spreadsheet_id,
+        updates=[{"range": range_name, "values": rows}],
+    )
+
+
+def write_row_values(
+    spreadsheet_id: str,
+    sheet_name: str,
+    row_index: int,
+    start_col: int,
+    values: List[str],
+) -> None:
+    """Write values along a single row starting at the given column."""
+
+    if not values:
+        return
+    range_name = _build_a1_range(sheet_name, row_index, start_col, 1, len(values))
+    batch_update_values(
+        spreadsheet_id,
+        updates=[{"range": range_name, "values": [values]}],
+    )
+
+
+def write_column_values(
+    spreadsheet_id: str,
+    sheet_name: str,
+    column_index: int,
+    start_row: int,
+    values: List[str],
+) -> None:
+    """Write values down a single column starting at the given row."""
+
+    if not values:
+        return
+    range_name = _build_a1_range(sheet_name, start_row, column_index, len(values), 1)
+    # Each value must be its own list for column updates
+    column_values = [[value] for value in values]
+    batch_update_values(
+        spreadsheet_id,
+        updates=[{"range": range_name, "values": column_values}],
+    )
