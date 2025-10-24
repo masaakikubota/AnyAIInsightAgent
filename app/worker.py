@@ -215,7 +215,7 @@ class JobManager:
                 except Exception as exc:
                     job = self.jobs.get(job_id)
                     job_log = self._job_logger(job_id)
-                    job_log(f"Job failed with exception: {exc!r}")
+                    job_log(f"[Queue] Job aborted due to error: {exc}")
                     logging.getLogger(__name__).exception("Job %s failed", job_id, exc_info=exc)
                     if job:
                         job.status = JobStatus.failed
@@ -241,7 +241,7 @@ class JobManager:
 
         def _log(message: str) -> None:
             try:
-                ts = datetime.utcnow().isoformat()
+                ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
                 with log_path.open("a", encoding="utf-8") as fp:
                     fp.write(f"[{ts}] {message}\n")
             except Exception:
@@ -302,7 +302,17 @@ class JobManager:
         job.started_at = time.time()
         job_dir = self._job_dir(job_id)
         job_log = self._job_logger(job_id)
-        job_log("Job started")
+
+        def log_stage(stage: str, message: str) -> None:
+            job_log(f"[{stage}] {message}")
+
+        def log_chunk(chunk_number: int, message: str) -> None:
+            log_stage(f"Chunk {chunk_number}", message)
+
+        def log_retry(retry_number: int, message: str) -> None:
+            log_stage(f"Retry {retry_number}", message)
+
+        log_stage("Setup", "Job started")
         job_fail_reason: str | None = None
         logger.debug("evt=job_start job_id=%s", job_id)
 
@@ -331,12 +341,13 @@ class JobManager:
                 score_sheet_name = score_match.sheet_name
                 job.cfg.score_sheet_name = score_sheet_name
             rows = await asyncio.to_thread(fetch_sheet_values, spreadsheet_id, sheet_name)
-            job_log(
-                f"Fetched sheet '{sheet_name}' rows={len(rows)} (scores -> '{score_sheet_name}')"
+            log_stage(
+                "Setup",
+                f"Connected to sheet '{sheet_name}' (rows={len(rows)}; output sheet '{score_sheet_name}')",
             )
         except GoogleSheetsError as exc:
             job.status = JobStatus.failed
-            job_log(f"Failed to fetch sheet: {exc}")
+            log_stage("Setup", f"Failed to access sheet: {exc}")
             job_fail_reason = f"sheets:{exc}"
             logger.debug(
                 "evt=job_fail job_id=%s status=%s reason=%s",
@@ -362,7 +373,10 @@ class JobManager:
             return
 
         data_rows = rows[start_idx:]
-        job_log(f"Processing rows starting at {start_idx + 1}, total_rows={len(data_rows)}")
+        log_stage(
+            "Setup",
+            f"Scanning rows starting at {start_idx + 1} (total rows inspected: {len(data_rows)})",
+        )
 
         active_row_indices: List[int] = []
         for idx, row in enumerate(data_rows):
@@ -375,7 +389,7 @@ class JobManager:
             job.processed_rows = 0
             job.status = JobStatus.completed
             job.finished_at = time.time()
-            job_log("No active utterances found")
+            log_stage("Setup", "No utterances found in selected range")
             logger.debug(
                 "evt=job_done job_id=%s status=%s reason=no_active_rows",
                 job_id,
@@ -457,13 +471,16 @@ class JobManager:
         _save_chunk_meta()
 
         job.total_rows = sum(len(chunk_units) for chunk_units in chunked_units)
-        job_log(f"Prepared {len(chunked_units)} chunks, total_units={job.total_rows}")
+        log_stage(
+            "Setup",
+            f"Prepared {len(chunked_units)} chunks covering {job.total_rows} scoring tasks",
+        )
 
         if job.total_rows == 0:
             job.processed_rows = 0
             job.status = JobStatus.completed
             job.finished_at = time.time()
-            job_log("No scoring units generated")
+            log_stage("Setup", "No scoring tasks generated")
             logger.debug(
                 "evt=job_done job_id=%s status=%s reason=no_units",
                 job_id,
@@ -512,7 +529,10 @@ class JobManager:
                 chunk_record = chunk_records[chunk_idx] if chunk_idx < len(chunk_records) else None
                 retries_used = int(chunk_record.get("retry_count", 0)) if chunk_record else 0
                 max_chunk_retries = int(job.cfg.chunk_retry_limit)
-                job_log(f"Chunk {chunk_idx + 1}/{len(chunked_units)} start units={len(chunk_units)} retry_count={retries_used}")
+                log_chunk(
+                    chunk_idx + 1,
+                    f"Starting ({len(chunk_units)} tasks, retry {retries_used}/{max_chunk_retries})",
+                )
 
                 while True:
                     chunk_remaining = [u for u in chunk_units if not is_completed(u)]
@@ -524,7 +544,7 @@ class JobManager:
                                 last_error=None,
                                 retry_count=retries_used,
                             )
-                        job_log(f"Chunk {chunk_idx + 1} completed")
+                        log_chunk(chunk_idx + 1, "Completed all tasks in chunk")
                         break
 
                     if chunk_record:
@@ -540,9 +560,9 @@ class JobManager:
                             PipelineUnit(row_index=u[0], block_index=u[1], col_offset=u[2])
                             for u in chunk_remaining
                         ]
-                        job_log(
-                            f"Chunk {chunk_idx + 1} pass start pending_units={len(pipeline_units)} "
-                            f"concurrency={min(current_conc, max(1, len(pipeline_units)))}"
+                        log_chunk(
+                            chunk_idx + 1,
+                            f"Dispatching {len(pipeline_units)} tasks (concurrency {min(current_conc, max(1, len(pipeline_units)))})",
                         )
 
                         async def mark_unit(unit: PipelineUnit, result: ScoreResult) -> None:
@@ -591,15 +611,16 @@ class JobManager:
                             writer_retry_backoff_multiplier=job.cfg.writer_retry_backoff_multiplier,
                             sheet_batch_row_size=job.cfg.sheet_chunk_rows,
                             video_mode=job.cfg.mode == "video",
-                            event_logger=lambda msg, cid=chunk_idx + 1: job_log(f"[chunk {cid}] {msg}"),
+                            event_logger=lambda msg, cid=chunk_idx + 1: log_chunk(cid, msg),
                         )
                         stats = await pipeline.run(pipeline_units)
                         rate_429_batch = stats.rate_429_count
                         rate_429_total += stats.rate_429_count
                         batch_num += 1
-                        job_log(
-                            f"Chunk {chunk_idx + 1} pass done processed={stats.processed_units} "
-                            f"flushes={stats.flush_count} cache_hits={stats.cache_hits} 429={stats.rate_429_count}"
+                        log_chunk(
+                            chunk_idx + 1,
+                            "Pass finished: "
+                            f"tasks={stats.processed_units}, cache_hits={stats.cache_hits}, rate_limits={stats.rate_429_count}",
                         )
 
                         if job.cfg.auto_slowdown:
@@ -629,8 +650,9 @@ class JobManager:
                                     last_error=str(exc),
                                     retry_count=retries_used,
                                 )
-                                job_log(
-                                    f"Chunk {chunk_idx + 1} error attempt={retries_used}/{max_chunk_retries}: {exc}"
+                                log_chunk(
+                                    chunk_idx + 1,
+                                    f"Error ({retries_used}/{max_chunk_retries}): {exc}",
                                 )
                             else:
                                 _update_chunk_meta(
@@ -639,14 +661,15 @@ class JobManager:
                                     last_error=str(exc),
                                     retry_count=retries_used,
                                 )
-                                job_log(
-                                    f"Chunk {chunk_idx + 1} exhausted retries ({retries_used}/{max_chunk_retries}) error={exc}"
+                                log_chunk(
+                                    chunk_idx + 1,
+                                    f"Gave up after {retries_used} retries: {exc}",
                                 )
                         if retries_used <= max_chunk_retries:
                             await asyncio.sleep(min(60, 2 ** retries_used))
                             continue
                         job.status = JobStatus.failed
-                        job_log("Job failed due to unrecoverable chunk error")
+                        log_stage("Error", "Job failed because a chunk could not be recovered")
                         raise
                     else:
                         if chunk_record:
@@ -662,7 +685,7 @@ class JobManager:
             for retry_round in range(4):
                 if job.cancel_flag:
                     break
-                job_log(f"Retry pass {retry_round + 1} checking for blanks")
+                log_retry(retry_round + 1, "Scanning sheet for blank scores")
                 # Refresh rows to inspect blanks
                 rows = fetch_sheet_values(spreadsheet_id, sheet_name)
                 retry_units: List[Tuple[int, int, int]] = []
@@ -725,14 +748,15 @@ class JobManager:
                         writer_retry_backoff_multiplier=job.cfg.writer_retry_backoff_multiplier,
                         sheet_batch_row_size=job.cfg.sheet_chunk_rows,
                         video_mode=job.cfg.mode == "video",
-                        event_logger=lambda msg, rid=retry_round + 1: job_log(f"[retry {rid}] {msg}"),
+                        event_logger=lambda msg, rid=retry_round + 1: log_retry(rid, msg),
                     )
                     stats = await pipeline.run(pipeline_units)
                     rate_429_total += stats.rate_429_count
                     batch_agg["rate_429_batch"] += stats.rate_429_count
-                    job_log(
-                        f"Retry pass {retry_round + 1} chunk processed processed={stats.processed_units} "
-                        f"flushes={stats.flush_count} 429={stats.rate_429_count}"
+                    log_retry(
+                        retry_round + 1,
+                        "Processed retry batch: "
+                        f"tasks={stats.processed_units}, cache_hits={stats.cache_hits}, rate_limits={stats.rate_429_count}",
                     )
 
                     if job.cfg.auto_slowdown:
@@ -752,10 +776,10 @@ class JobManager:
                                 clean_batches = 0
 
             job.status = JobStatus.cancelled if job.cancel_flag else JobStatus.completed
-            job_log(f"Job finished status={job.status.value}")
+            log_stage("Done", f"Job finished with status {job.status.value}")
         except Exception as exc:
             job.status = JobStatus.failed
-            job_log("Job failed with unexpected exception")
+            log_stage("Error", "Job failed with unexpected exception")
             job_fail_reason = str(exc)
             raise
         finally:
