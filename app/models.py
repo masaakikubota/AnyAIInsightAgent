@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from datetime import datetime
 from typing import Dict, List, Optional, Literal
 
 from pydantic import BaseModel, Field, conint, confloat, model_validator
@@ -38,7 +37,7 @@ class RunConfig(BaseModel):
     pipeline_queue_size: Optional[conint(ge=1, le=2000)] = None
     validation_max_workers: conint(ge=1, le=64) = 4
     validation_worker_timeout_sec: conint(ge=1, le=300) = 30
-    writer_flush_interval_sec: confloat(ge=0.1, le=30.0) = 2.0
+    writer_flush_interval_sec: confloat(ge=0.1, le=30.0) = 6.0
     writer_flush_batch_size: conint(ge=1, le=500) = 50
     writer_retry_limit: conint(ge=1, le=10) = 5
     writer_retry_initial_delay_sec: confloat(ge=0.1, le=10.0) = 0.5
@@ -353,92 +352,66 @@ class InterviewJobProgress(BaseModel):
     artifacts: Optional[Dict[str, str]] = None
 
 
-class DashboardMetric(BaseModel):
-    name: str
-    value: str | float
-    unit: Optional[str] = None
-    delta: Optional[float] = None
-    description: Optional[str] = None
+class TribeInterviewJobStatus(str, Enum):
+    pending = "pending"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
 
 
-class DashboardDataset(BaseModel):
-    name: str
-    summary: Optional[str] = None
-    metrics: Optional[List[DashboardMetric]] = None
-    table_headers: Optional[List[str]] = None
-    table_rows: Optional[List[List[str | float]]] = None
-    chart_type: Optional[str] = None
-    provenance: Optional[str] = None
+class TribeInterviewStage(str, Enum):
+    pending = "pending"
+    tribe = "tribe"
+    combination = "combination"
+    persona = "persona"
+    qa = "qa"
+    embedding = "embedding"
 
 
-class DashboardRequest(BaseModel):
-    title: str
-    overview: str
-    segments: Optional[List[str]] = None
-    highlights: Optional[List[str]] = None
-    datasets: List[DashboardDataset] = Field(default_factory=list)
-    interview_insights: Optional[List[str]] = None
-    scoring_insights: Optional[List[str]] = None
-    cleansing_insights: Optional[List[str]] = None
-    call_to_actions: Optional[List[str]] = None
+class TribeInterviewMode(str, Enum):
+    product = "product"
+    communication = "communication"
 
 
-class DashboardResponse(BaseModel):
-    html: str
-    model: str
-    input_tokens: Optional[int] = None
-    output_tokens: Optional[int] = None
-    plan_markdown: Optional[str] = None
-    plan_model: Optional[str] = None
-    plan_input_tokens: Optional[int] = None
-    plan_output_tokens: Optional[int] = None
+class TribeInterviewSheetNames(BaseModel):
+    tribe_setup: str = "Tribe_SetUp"
+    tribe_combination: str = "Tribe_Combination"
+    persona_setup: str = "Persona_SetUp"
+    qa_llm: str = "QA_LLM"
+    qa_embedding: str = "QA_Embedding"
 
 
-class DashboardBuildRequest(BaseModel):
-    request: DashboardRequest
-    output_dir: str = Field(..., description="相対パス（runs/ 以下）")
-    filename: str = Field("index.html", description="出力するHTMLファイル名")
-    plan_filename: str = Field("dashboard_plan.md", description="出力する計画ファイル名")
+class TribeInterviewJobConfig(BaseModel):
+    product_category: str
+    country_region: str
+    mode: TribeInterviewMode
+    persona_per_combination: conint(ge=1, le=10)
+    interviews_per_persona: conint(ge=1, le=10)
+    sheet_names: TribeInterviewSheetNames = Field(default_factory=TribeInterviewSheetNames)
+    spreadsheet_url: str
+    product_detail: Optional[str] = None
+    tagline_detail: Optional[str] = None
+    image_paths: List[str] = Field(default_factory=list)
+    retry_limit: conint(ge=1, le=10) = 5
+    max_tribes: conint(ge=1, le=10) = 10
+    persona_prompt_template: Optional[str] = None
+    interview_questions: Optional[List[str]] = None
 
 
-class DashboardFilters(BaseModel):
-    segments: Dict[str, List[str]] = Field(default_factory=dict)
-    stimuli: List[str] = Field(default_factory=list)
-    persona_ids: List[str] = Field(default_factory=list)
-    min_ssr_score: Optional[float] = None
-    max_ssr_score: Optional[float] = None
-    search_text: Optional[str] = None
+class TribeInterviewJobResponse(BaseModel):
+    job_id: str
+    status: TribeInterviewJobStatus
 
 
-class DashboardQueryRequest(BaseModel):
-    filters: Optional[DashboardFilters] = None
-    include_records: bool = True
-    limit: Optional[conint(ge=1, le=5000)] = 200
+class TribeInterviewJobProgress(BaseModel):
+    job_id: str
+    status: TribeInterviewJobStatus
+    stage: TribeInterviewStage
+    message: Optional[str] = None
+    artifacts: Optional[Dict[str, str]] = None
+    metrics: Optional[Dict[str, int]] = None
 
 
-class DashboardFilterOption(BaseModel):
-    value: str
-    count: int
-
-
-class DashboardFilterOptions(BaseModel):
-    segments: Dict[str, List[DashboardFilterOption]] = Field(default_factory=dict)
-    stimuli: List[DashboardFilterOption] = Field(default_factory=list)
-
-
-class DashboardQueryResponse(BaseModel):
-    request: DashboardRequest
-    total_responses: int
-    filtered_responses: int
-    total_personas: int
-    filtered_personas: int
-    total_stimuli: int
-    filtered_stimuli: int
-    filters: DashboardFilters = Field(default_factory=DashboardFilters)
-    available_filters: DashboardFilterOptions = Field(default_factory=DashboardFilterOptions)
-    available_filters_all: DashboardFilterOptions = Field(default_factory=DashboardFilterOptions)
-    records: Optional[List[Dict[str, str | float | None]]] = None
-    cache_status: Optional[str] = None
 
 
 class MassPersonaJobStatus(str, Enum):
@@ -571,22 +544,6 @@ class PersonaResponseJobProgress(BaseModel):
     processed_pairs: int = 0
     message: Optional[str] = None
     artifacts: Optional[Dict[str, str]] = None
-
-
-class DashboardRunSummary(BaseModel):
-    job_id: str
-    project_name: Optional[str] = None
-    domain: Optional[str] = None
-    language: Optional[str] = None
-    output_dir: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    total_pairs: Optional[int] = None
-    artifacts: Dict[str, str] = Field(default_factory=dict)
-
-
-class DashboardRunDetail(DashboardRunSummary):
-    config: PersonaResponseJobConfig
 
 
 class PersonaDirectionConfig(BaseModel):
