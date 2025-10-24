@@ -18,14 +18,77 @@
     <script defer src="/static/anyai/sidebar.js"></script>
     
     <style>
-      .mode-options { display: flex; flex-wrap: nowrap; gap: var(--anyai-space-3); align-items: center; }
-      .mode-options label { display: inline-flex; align-items: center; gap: var(--anyai-space-2); font-weight: 600; }
-      .mode-options .spacer { flex: 1 1 auto; }
+      .mode-options {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--anyai-space-2);
+        margin-bottom: var(--anyai-space-3);
+      }
+
       .mode-divider {
         width: 1px;
         align-self: stretch;
         background: color-mix(in srgb, var(--anyai-border), transparent 20%);
       }
+
+      .mode-pill {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--anyai-space-2);
+        padding: 0.45rem 1rem;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
+        background: color-mix(in srgb, #ffffff, var(--anyai-border) 6%);
+        color: color-mix(in srgb, var(--anyai-text), transparent 25%);
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+          box-shadow 0.2s ease;
+        user-select: none;
+      }
+
+      .mode-pill input[type="radio"] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        border: 0;
+        clip: rect(0, 0, 0, 0);
+        clip-path: inset(100%);
+        overflow: hidden;
+        white-space: nowrap;
+      }
+
+      .mode-pill span {
+        font-size: var(--anyai-fs-2);
+        line-height: 1;
+      }
+
+      .mode-pill:not([aria-checked="true"]) {
+        background: color-mix(in srgb, #ffffff, var(--anyai-border) 6%);
+        border-color: color-mix(in srgb, var(--anyai-border), transparent 25%);
+      }
+
+      .mode-pill:not([aria-checked="true"]):hover {
+        border-color: color-mix(in srgb, var(--anyai-border), var(--anyai-primary, #2955ff) 28%);
+        color: color-mix(in srgb, var(--anyai-text), transparent 10%);
+      }
+
+      .mode-pill:focus-within {
+        outline: none;
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 75%);
+      }
+
+      .mode-pill[aria-checked="true"] {
+        background: var(--anyai-primary, #2955ff);
+        border-color: var(--anyai-primary, #2955ff);
+        color: #ffffff;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 80%);
+      }
+
       .mode-ssr {
         display: inline-flex;
         align-items: center;
@@ -33,39 +96,171 @@
         font-weight: 600;
       }
 
+      .mode-ssr span:first-of-type {
+        font-weight: 600;
+      }
+
+      .mode-ssr-hint {
+        font-weight: 400;
+        font-size: var(--anyai-fs-2);
+        color: var(--anyai-text-subtle);
+      }
+
+      .toggle-switch {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        width: 48px;
+        height: 26px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: box-shadow 0.2s ease;
+        flex: 0 0 auto;
+        min-width: 48px;
+      }
+
+      .toggle-switch input[type="checkbox"] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        border: 0;
+        clip: rect(0, 0, 0, 0);
+        clip-path: inset(100%);
+        overflow: hidden;
+        white-space: nowrap;
+      }
+
+      .toggle-switch .toggle-knob {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        right: auto;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2);
+        transition: transform 0.2s ease, left 0.2s ease, right 0.2s ease;
+      }
+
+      .toggle-switch input[type="checkbox"]:checked ~ .toggle-knob {
+        left: auto;
+        right: 3px;
+        transform: none;
+      }
+
+      .toggle-switch input[type="checkbox"]:checked ~ .toggle-track {
+        background: var(--anyai-primary, #2955ff);
+        border-color: var(--anyai-primary, #2955ff);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 82%);
+      }
+
+      .toggle-switch:focus-within {
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 80%),
+          0 8px 18px rgba(41, 85, 255, 0.2);
+      }
+
+      .toggle-switch .toggle-track {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: color-mix(in srgb, var(--anyai-border), transparent 35%);
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 25%);
+        transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
       #scoring-heading {
         margin-bottom: 0;
       }
 
-      .anyai-form-section > header {
+      .anyai-form-section {
+        display: flex;
+        flex-direction: column;
+        gap: var(--anyai-space-3, 12px);
+        background: var(--anyai-form-band, #f1f5f9);
+        border-radius: var(--anyai-radius-2, 12px);
+        padding: var(--anyai-space-5, 20px) var(--anyai-space-6, 28px);
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 85%);
+      }
+
+      .anyai-form-section + .anyai-form-section {
+        margin-top: 0;
+      }
+
+      .anyai-form-group {
+        display: flex;
+        flex-direction: column;
+        gap: var(--anyai-space-3, 12px);
+        background: none;
+        border: 0;
+        border-radius: 0;
+        padding: 0;
+      }
+
+      .anyai-form-section > header,
+      .anyai-form-group > header {
         margin-bottom: 0;
       }
 
-      .anyai-form-section > header > h2.mt-0 {
+      .anyai-form-section > header > h2.mt-0,
+      .anyai-form-group > header > h3.mt-0 {
         margin-bottom: 0;
       }
 
       .field-with-action {
         display: flex;
-        gap: var(--anyai-space-3);
-        align-items: center;
-        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 0;
       }
 
       .field-with-action input[type="text"] {
-        flex: 1 1 280px;
+        flex: 1 1 auto;
         min-width: 0;
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+        border-right: 0;
       }
 
-      .field-with-action .btn {
+      .field-with-action .input-action-btn {
         flex: 0 0 auto;
-        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 var(--anyai-space-4, 16px);
+        min-width: 72px;
+        border-radius: 0 var(--anyai-radius-2, 12px) var(--anyai-radius-2, 12px) 0;
+        border-left: 0;
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        background: var(--anyai-primary, #2955ff);
+        color: var(--anyai-text-inverse, #ffffff);
+        font-weight: 600;
+        box-shadow: 0 4px 10px rgba(31, 36, 50, 0.12);
+        transition: box-shadow 0.2s ease, background-color 0.2s ease;
       }
+
+      .field-with-action .input-action-btn:hover,
+      .field-with-action .input-action-btn:focus-visible {
+        background: var(--anyai-primary-600, #1f3de6);
+        box-shadow: 0 6px 16px rgba(31, 36, 50, 0.16);
+        outline: none;
+        color: var(--anyai-text-inverse, #ffffff);
+      }
+
+.anyai-form-fields {
+  gap: var(--anyai-space-3, 12px);
+}
+
+.field .field-hint {
+  margin-top: var(--anyai-space-1, 4px);
+}
 
 .sheet-selection-grid {
   width: 100%;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--anyai-space-4);
+  gap: var(--anyai-space-3);
   align-items: start;
 }
 
@@ -91,7 +286,7 @@
           url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='none' stroke='%23545d72' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.2' d='m3 5 4 4 4-4'/%3E%3C/svg%3E")
             right 12px center / 14px 14px no-repeat,
           #ffffff;
-        padding: 10px 44px 10px 14px;
+        padding: 6px 40px 6px 12px;
         font: inherit;
         line-height: 1.4;
         color: inherit;
@@ -155,7 +350,7 @@
         align-items: center;
         justify-content: space-between;
         gap: var(--anyai-space-3);
-        padding: 10px 44px 10px 14px;
+        padding: 6px 40px 6px 12px;
         border-radius: var(--anyai-radius-2);
         border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
         background: #ffffff;
@@ -295,7 +490,7 @@
       }
 
       .sheet-selection-grid .field .field-hint {
-        margin-top: var(--anyai-space-2);
+        margin-top: var(--anyai-space-1);
       }
 
       @media (min-width: 960px) {
@@ -343,15 +538,6 @@
       }
 
       @media (max-width: 720px) {
-        .field-with-action {
-          flex-direction: column;
-          align-items: stretch;
-        }
-
-        .field-with-action .btn {
-          width: 100%;
-        }
-
         .anyai-form-actions {
           flex-direction: column;
           align-items: stretch;
@@ -377,7 +563,7 @@
       input[type="file"],
       textarea {
         width: 100%;
-        padding: 10px 12px;
+        padding: 6px 10px;
         border-radius: var(--anyai-radius-2);
         border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 30%);
         background: var(--anyai-panel);
@@ -413,6 +599,43 @@
       .validation-banner[data-state="info"] {
         background: color-mix(in srgb, var(--anyai-primary), transparent 88%);
         color: var(--anyai-primary-700);
+      }
+
+      .queue-toast {
+        position: fixed;
+        top: clamp(16px, 4vw, 40px);
+        left: 50%;
+        transform: translate(-50%, -140%);
+        opacity: 0;
+        pointer-events: none;
+        padding: var(--anyai-space-4) var(--anyai-space-5);
+        border-radius: var(--anyai-radius-2);
+        font-size: var(--anyai-fs-2);
+        font-weight: 600;
+        background: #ffffff;
+        color: var(--anyai-text, #1f2432);
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 18%);
+        border-left: 4px solid var(--queue-toast-accent, var(--anyai-primary, #2955ff));
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+        min-width: min(360px, calc(100vw - 32px));
+        max-width: calc(100vw - 32px);
+        text-align: center;
+        z-index: 120;
+        transition: transform 0.25s ease, opacity 0.25s ease;
+      }
+
+      .queue-toast.is-visible {
+        transform: translate(-50%, 0);
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .queue-toast[data-state="success"] {
+        --queue-toast-accent: var(--anyai-success, #12a150);
+      }
+
+      .queue-toast[data-state="error"] {
+        --queue-toast-accent: var(--anyai-danger, #d14343);
       }
 
       .actions-row { display: flex; gap: var(--anyai-space-3); flex-wrap: wrap; align-items: center; }
@@ -471,7 +694,7 @@
         max-height: 240px;
         width: 100%;
         padding: var(--anyai-space-3) var(--anyai-space-4);
-        background: color-mix(in srgb, var(--anyai-panel), transparent 10%);
+        background: color-mix(in srgb, var(--anyai-bg-subtle, #f1f5f9), transparent 20%);
         border-radius: var(--anyai-radius-2);
         border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 10%);
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -522,8 +745,21 @@
       }
 
       details.section-toggle > summary::-webkit-details-marker { display: none; }
-      .caret { font-size: 18px; opacity: 0.8; margin-left: auto; transition: transform 0.2s ease; }
-      details[open] .caret { transform: rotate(90deg); }
+      .caret {
+        margin-left: auto;
+        align-self: center;
+        display: inline-block;
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 8px solid currentColor;
+        opacity: 0.8;
+        transform: rotate(0deg);
+        transform-origin: center;
+        transition: transform 0.2s ease;
+      }
+      details[open] .caret { transform: rotate(180deg); }
 
       pre { max-width: 100%; white-space: pre-wrap; word-break: break-word; }
     </style>
@@ -534,7 +770,10 @@
       <main class="anyai-content">
         <div class="anyai-app">
           <section class="anyai-app-primary" aria-labelledby="scoring-heading">
-            <h1 id="scoring-heading" class="mt-0">スコアリング実行</h1>
+            <h1 id="scoring-heading" class="mt-0 page-title-with-icon">
+              <span class="page-title-icon" aria-hidden="true"><i data-lucide="sparkles"></i></span>
+              <span>スコアリング実行</span>
+            </h1>
             <p class="field-hint">スプレッドシートから概念ごとのスコアを一括で生成します。</p>
 
             <div class="anyai-form" aria-labelledby="scoring-config-heading">
@@ -546,11 +785,25 @@
                 <form id="mode-form">
                   <fieldset class="field">
                     <legend class="sr-only">実行モード</legend>
-                    <div class="mode-options">
-                      <label><input type="radio" name="mode" value="csv" checked /> Textモード</label>
-                      <label><input type="radio" name="mode" value="video" /> Videoモード</label>
+                    <div class="mode-options" role="radiogroup" aria-label="モード選択">
+                      <label class="mode-pill" data-mode="csv" role="radio" aria-checked="true" tabindex="0">
+                        <input type="radio" name="mode" value="csv" checked />
+                        <span>Textモード</span>
+                      </label>
+                      <label class="mode-pill" data-mode="video" role="radio" aria-checked="false" tabindex="-1">
+                        <input type="radio" name="mode" value="video" />
+                        <span>Videoモード</span>
+                      </label>
                       <span class="mode-divider" aria-hidden="true"></span>
-                      <label class="mode-ssr"><input type="checkbox" id="enable_ssr" name="enable_ssr" checked /> SSRモードを有効化（推奨）</label>
+                      <label class="mode-ssr">
+                        <span>SSRモード</span>
+                        <span class="toggle-switch" role="switch" aria-checked="true" tabindex="0">
+                          <input type="checkbox" id="enable_ssr" name="enable_ssr" checked />
+                          <span class="toggle-track"></span>
+                          <span class="toggle-knob"></span>
+                        </span>
+                        <span class="mode-ssr-hint">（推奨）</span>
+                      </label>
                       <span class="spacer"></span>
                     </div>
                   </fieldset>
@@ -569,7 +822,7 @@
                       <p class="field-hint">対象のGoogleシートURLまたはIDを入力し、Setでシート一覧を読み込みます。</p>
                       <div class="field-with-action">
                         <input type="text" id="spreadsheet_url" name="spreadsheet_url" placeholder="https://docs.google.com/spreadsheets/d/..." required />
-                        <button type="button" class="btn btn-outline" id="btn-spreadsheet-set">Set</button>
+                        <button type="button" class="btn btn-outline input-action-btn" id="btn-spreadsheet-set">Set</button>
                       </div>
                     </div>
                     <div class="field" id="analysis-sheet-field">
@@ -615,7 +868,7 @@
                     <h3 id="execution-heading" class="band-title">実行設定</h3>
                     <div class="anyai-form-fields is-two-column">
                       <div class="field"><label for="batch_size">カテゴリ同梱数 N</label><input type="number" name="batch_size" id="batch_size" value="10" min="1" max="50" />
-                        <p class="field-hint">Videoモードでは 1 に固定されます。</p>
+                        <p class="field-hint">SSRモードでは 1 に固定されます。</p>
                       </div>
                       <div class="field"><label for="max_category_cols">最大カテゴリ列数</label><input type="number" name="max_category_cols" id="max_category_cols" value="200" min="1" max="10000" />
                         <p class="field-hint">Videoモードでは最初の列のみ処理します。</p>
@@ -625,7 +878,7 @@
                       <div class="field"><label for="timeout-input">タイムアウト秒</label><input type="number" name="timeout_sec" value="60" min="10" max="600" id="timeout-input" /></div>
                       <div class="field">
                         <label for="primary_model">メインモデル</label>
-                      <select id="primary_model" name="primary_model" class="js-custom-select">
+                      <select id="primary_model" name="primary_model" class="js-custom-select" data-placeholder="モデルを選択">
                         <optgroup label="Gemini">
                           <option value="gemini-flash-lite-latest" selected>Gemini Flash Lite (latest)</option>
                           <option value="gemini-flash-latest">Gemini Flash (latest)</option>
@@ -640,7 +893,7 @@
                       </div>
                       <div class="field" id="fallback-model-field">
                         <label for="fallback_model">フォールバックモデル</label>
-                        <select id="fallback_model" name="fallback_model" class="js-custom-select">
+                        <select id="fallback_model" name="fallback_model" class="js-custom-select" data-placeholder="フォールバックモデルを選択">
                           <optgroup label="OpenAI">
                             <option value="gpt-5-nano" selected>GPT-5 Nano</option>
                             <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
@@ -674,7 +927,7 @@
                 <details id="sys-section" class="section-toggle">
                   <summary>
                     <h2 id="prompt-heading" class="mt-0">System Prompts</h2>
-                    <span class="caret" aria-hidden="true">▸</span>
+                    <span class="caret" aria-hidden="true"></span>
                   </summary>
                   <div class="stack">
                     <div>
@@ -780,7 +1033,7 @@
                 <details id="keys-section" class="section-toggle">
                   <summary>
                     <h2 id="keys-heading" class="mt-0">APIキー設定</h2>
-                    <span class="caret" aria-hidden="true">▸</span>
+                    <span class="caret" aria-hidden="true"></span>
                   </summary>
                   <form id="keys-form" class="stack">
                     <div class="field"><label for="gemini_api_key">Gemini API Key</label><input type="password" name="gemini_api_key" id="gemini_api_key" placeholder="GEMINI_API_KEY" /></div>
@@ -832,13 +1085,6 @@
               <pre id="job-log-content" class="log-viewer" tabindex="0">ジョブを開始するとログが表示されます。</pre>
             </div>
 
-            <div id="task-finish-card" class="anyai-support-card">
-              <div class="support-header">
-                <h2 class="mt-0">タスクの終了</h2>
-              </div>
-              <p class="muted">ジョブが完了したら、進捗が100%になったことを確認し、必要に応じて run_meta.json やログをダウンロードしてください。完了したジョブは「削除」でキューから整理できます。</p>
-            </div>
-
             <section id="result" class="anyai-support-card" style="display:none;">
               <div class="stack-sm">
                 <div>ジョブID: <code id="job-id"></code></div>
@@ -862,6 +1108,8 @@
       <button type="button" class="btn btn-secondary" data-proxy-for="btn-queue-add-action">Add to Queue</button>
       <button type="button" class="btn btn-primary" data-proxy-for="btn-queue-add-start">Run</button>
     </div>
+
+    <div id="queue-toast" class="queue-toast" role="status" aria-live="polite" aria-hidden="true"></div>
 
     <script>
       const loadingOverlay = window.AnyAILoading || {
@@ -909,8 +1157,13 @@
       const primaryModelSelect = document.getElementById('primary_model');
       const fallbackModelSelect = document.getElementById('fallback_model');
       const fallbackModelField = document.getElementById('fallback-model-field');
+      const modePills = Array.from(document.querySelectorAll('.mode-pill'));
       const modeRadios = modeForm.querySelectorAll('input[name="mode"]');
       const enableSSR = document.getElementById('enable_ssr');
+      const enableSSRToggle = enableSSR ? enableSSR.closest('.toggle-switch') : null;
+      if (enableSSRToggle) {
+        enableSSRToggle.setAttribute('aria-checked', enableSSR.checked ? 'true' : 'false');
+      }
       const queueStatus = document.getElementById('queue-status');
       const cancelButton = document.getElementById('btn-cancel-job');
       const resultSection = document.getElementById('result');
@@ -923,6 +1176,14 @@
       const actionBarButtons = actionBar ? Array.from(actionBar.querySelectorAll('[data-proxy-for]')) : [];
       const primaryPanel = document.querySelector('.anyai-app-primary');
       const validationBanner = document.getElementById('validation-banner');
+      const queueToast = document.getElementById('queue-toast');
+      let queueToastTimer = null;
+      if (queueToast) {
+        queueToast.addEventListener('click', () => {
+          hideQueueToast();
+        });
+      }
+
       const validationStatusCard = document.getElementById('validation-status-card');
       const validationStatusBadge = document.getElementById('validation-status-badge');
       const validationStatusMessage = document.getElementById('validation-status-message');
@@ -1595,6 +1856,43 @@
         validationBanner.textContent = message || '';
       }
 
+      function hideQueueToast(){
+        if (!queueToast) return;
+        if (queueToastTimer) {
+          clearTimeout(queueToastTimer);
+          queueToastTimer = null;
+        }
+        queueToast.classList.remove('is-visible');
+        queueToast.setAttribute('aria-hidden', 'true');
+        window.setTimeout(() => {
+          if (!queueToast.classList.contains('is-visible')) {
+            queueToast.textContent = '';
+            queueToast.removeAttribute('data-state');
+          }
+        }, 220);
+      }
+
+      function showQueueToast(message, options = {}){
+        if (!queueToast) return;
+        const state = options.state || 'success';
+        const duration =
+          typeof options.duration === 'number' ? options.duration : 3200;
+        if (queueToastTimer) {
+          clearTimeout(queueToastTimer);
+          queueToastTimer = null;
+        }
+        queueToast.setAttribute('data-state', state);
+        queueToast.textContent = message || '';
+        queueToast.setAttribute('aria-hidden', 'false');
+        void queueToast.offsetWidth;
+        queueToast.classList.add('is-visible');
+        if (duration > 0) {
+          queueToastTimer = window.setTimeout(() => {
+            hideQueueToast();
+          }, duration);
+        }
+      }
+
       function updateQueueActionState(){
         const valid = isValidationCurrent();
         if(queueAddButton) queueAddButton.disabled = !valid;
@@ -1636,16 +1934,21 @@
 
       function setButtonBusy(button, busyLabel){
         if(!button) return () => {};
+        const originalWidth = button.offsetWidth || button.getBoundingClientRect().width;
         const original = {
           text: button.textContent,
-          width: button.offsetWidth,
+          width: originalWidth,
+          minWidth: button.style.minWidth,
           disabled: button.disabled,
         };
-        button.style.minWidth = `${original.width || button.getBoundingClientRect().width}px`;
         button.setAttribute('aria-busy', 'true');
         button.disabled = true;
         if (busyLabel) {
           button.textContent = busyLabel;
+        }
+        if (original.width) {
+          const busyWidth = Math.max(original.width, button.offsetWidth || button.getBoundingClientRect().width);
+          button.style.minWidth = `${busyWidth}px`;
         }
         syncActionProxies();
         return () => {
@@ -1655,6 +1958,9 @@
             button.textContent = original.text;
           }
           button.disabled = original.disabled;
+          if (original.minWidth) {
+            button.style.minWidth = original.minWidth;
+          }
           syncActionProxies();
         };
       }
@@ -2213,20 +2519,86 @@
       }
 
       enableSSR.addEventListener('change', () => {
+        if (enableSSRToggle) {
+          enableSSRToggle.setAttribute('aria-checked', enableSSR.checked ? 'true' : 'false');
+        }
         handleSSRChange();
       });
 
-      modeRadios.forEach(radio => {
-        radio.addEventListener('change', () => {
-          if (!radio.checked) return;
-          if (!enableSSR.checked) {
-            storeCurrentNonSSRValues(currentMode);
+      if (enableSSRToggle) {
+        enableSSRToggle.addEventListener('click', (event) => {
+          if (event.target === enableSSR) return;
+          event.preventDefault();
+          enableSSR.checked = !enableSSR.checked;
+          enableSSRToggle.setAttribute('aria-checked', enableSSR.checked ? 'true' : 'false');
+          handleSSRChange();
+        });
+        enableSSRToggle.addEventListener('keydown', (event) => {
+          if (event.key === ' ' || event.key === 'Enter') {
+            event.preventDefault();
+            enableSSR.checked = !enableSSR.checked;
+            enableSSRToggle.setAttribute('aria-checked', enableSSR.checked ? 'true' : 'false');
+            handleSSRChange();
           }
-          storeModeModels(currentMode);
-          currentMode = radio.value;
-          applyMode(currentMode);
+        });
+      }
+
+      function setModeSelection(newMode) {
+        modeRadios.forEach((radio) => {
+          radio.checked = radio.value === newMode;
+        });
+        modePills.forEach((pill) => {
+          const isActive = pill.dataset.mode === newMode;
+          pill.setAttribute('aria-checked', isActive ? 'true' : 'false');
+          pill.tabIndex = isActive ? 0 : -1;
+        });
+      }
+
+      function handleModeChange(newMode) {
+        if (newMode === currentMode) return;
+        if (!enableSSR.checked) {
+          storeCurrentNonSSRValues(currentMode);
+        }
+        storeModeModels(currentMode);
+        currentMode = newMode;
+        applyMode(currentMode);
+        setModeSelection(currentMode);
+      }
+
+      modePills.forEach((pill) => {
+        pill.addEventListener('click', (event) => {
+          event.preventDefault();
+          const newMode = pill.dataset.mode;
+          handleModeChange(newMode);
+        });
+        pill.addEventListener('keydown', (event) => {
+          const modes = modePills.map((p) => p.dataset.mode);
+          const currentIndex = modes.indexOf(currentMode);
+          if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+            event.preventDefault();
+            const nextIndex = (currentIndex + 1) % modes.length;
+            handleModeChange(modes[nextIndex]);
+            modePills[nextIndex].focus();
+          } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            const prevIndex = (currentIndex - 1 + modes.length) % modes.length;
+            handleModeChange(modes[prevIndex]);
+            modePills[prevIndex].focus();
+          } else if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleModeChange(pill.dataset.mode);
+          }
         });
       });
+
+      modeRadios.forEach((radio) => {
+        radio.addEventListener('change', () => {
+          if (!radio.checked) return;
+          handleModeChange(radio.value);
+        });
+      });
+
+      setModeSelection(currentMode);
 
       if (primaryModelSelect) {
         primaryModelSelect.addEventListener('change', () => {
@@ -2377,9 +2749,12 @@
         try {
           const fd = buildJobFormData('queue');
           const res = await fetch('/jobs', { method: 'POST', body: fd });
-          if (!res.ok) { alert('キュー追加に失敗'); return; }
+          if (!res.ok) {
+            showQueueToast('キュー追加に失敗', { state: 'error', duration: 0 });
+            return;
+          }
           await refreshQueue();
-          alert('キューに追加しました');
+          showQueueToast('キューに追加しました', { state: 'success' });
         } finally {
           if (releaseBusy) releaseBusy();
           updateQueueActionState();

@@ -1,0 +1,4 @@
+# Project Overview
+AnyAIInsightAgent (a.k.a. AnyAIMarketingAgentV2) is a FastAPI-based backend that serves scoring and analysis tools for marketing/insight workflows. It exposes HTML UIs (e.g., scoring dashboard, cleansing form, video analysis) via static pages and processes spreadsheet-driven jobs that rate content against semantic categories using LLMs (Gemini/OpenAI). The app orchestrates scoring pipelines, persona/interview generation, and video-related utilities while persisting run metadata under `runs/`.
+
+The repository also includes supporting scripts, docs, and tests for semantic similarity scoring and interview pipelines.

@@ -23,7 +23,7 @@
       input[type="file"],
       textarea {
         width: 100%;
-        padding: 10px 12px;
+        padding: 6px 10px;
         border-radius: var(--anyai-radius-2);
         border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 30%);
         background: var(--anyai-panel);
@@ -37,19 +37,62 @@
 
       .field-with-action {
         display: flex;
-        gap: var(--anyai-space-3);
-        align-items: center;
-        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 0;
       }
 
       .field-with-action input[type="text"] {
-        flex: 1 1 280px;
+        flex: 1 1 auto;
         min-width: 0;
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+        border-right: 0;
       }
 
-      .field-with-action .btn {
+      .field-with-action .input-action-btn {
         flex: 0 0 auto;
-        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 var(--anyai-space-4, 16px);
+        min-width: 72px;
+        border-radius: 0 var(--anyai-radius-2, 12px) var(--anyai-radius-2, 12px) 0;
+        border-left: 0;
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        background: var(--anyai-primary, #2955ff);
+        color: var(--anyai-text-inverse, #ffffff);
+        font-weight: 600;
+        box-shadow: 0 4px 10px rgba(31, 36, 50, 0.12);
+        transition: box-shadow 0.2s ease, background-color 0.2s ease;
+      }
+
+      .field-with-action .input-action-btn:hover,
+      .field-with-action .input-action-btn:focus-visible {
+        background: var(--anyai-primary-600, #1f3de6);
+        box-shadow: 0 6px 16px rgba(31, 36, 50, 0.16);
+        outline: none;
+        color: var(--anyai-text-inverse, #ffffff);
+      }
+
+      .anyai-form-section {
+        display: flex;
+        flex-direction: column;
+        gap: var(--anyai-space-3, 12px);
+        background: var(--anyai-form-band, #f1f5f9);
+        border-radius: var(--anyai-radius-2, 12px);
+        padding: var(--anyai-space-5, 20px) var(--anyai-space-6, 28px);
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 85%);
+      }
+
+      .anyai-form-group {
+        display: flex;
+        flex-direction: column;
+        gap: var(--anyai-space-3, 12px);
+      }
+
+      .field .field-hint {
+        margin-top: var(--anyai-space-1, 4px);
       }
 
       .stack-sm { display: flex; flex-direction: column; gap: var(--anyai-space-3); }
@@ -73,7 +116,7 @@
       .cleansing-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: var(--anyai-space-4);
+        gap: var(--anyai-space-3);
         align-items: start;
       }
 
@@ -106,7 +149,7 @@
         align-items: center;
         justify-content: space-between;
         gap: var(--anyai-space-3);
-        padding: 10px 44px 10px 14px;
+        padding: 6px 40px 6px 12px;
         border-radius: var(--anyai-radius-2);
         border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
         background: #ffffff;
@@ -239,14 +282,21 @@
 
       .section-toggle .caret {
         margin-left: auto;
-        font-size: 18px;
-        line-height: 1;
+        align-self: center;
+        display: inline-block;
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 8px solid currentColor;
         opacity: 0.8;
+        transform: rotate(0deg);
+        transform-origin: center;
         transition: transform 0.2s ease;
       }
 
       .section-toggle[open] .caret {
-        transform: rotate(90deg);
+        transform: rotate(180deg);
       }
 
       .anyai-form-actions {
@@ -284,15 +334,6 @@
       }
 
       @media (max-width: 720px) {
-        .field-with-action {
-          flex-direction: column;
-          align-items: stretch;
-        }
-
-        .field-with-action .btn {
-          width: 100%;
-        }
-
         .anyai-form-actions {
           flex-direction: column;
           align-items: stretch;
@@ -329,7 +370,7 @@
                       <p class="field-hint">対象スプレッドシートを指定し、Setボタンでシート一覧を読み込みます。</p>
                       <div class="field-with-action">
                         <input type="text" id="sheet" name="sheet" placeholder="https://docs.google.com/spreadsheets/d/..." required />
-                        <button type="button" class="btn btn-outline" id="btn-sheet-set">Set</button>
+                        <button type="button" class="btn btn-outline input-action-btn" id="btn-sheet-set">Set</button>
                       </div>
                     </div>
                     <div class="field sheet-select-field">
@@ -363,7 +404,7 @@
                 <details id="keys-section" class="section-toggle">
                   <summary>
                     <h2 id="keys-heading" class="mt-0">APIキー設定</h2>
-                    <span class="caret" aria-hidden="true">▸</span>
+                    <span class="caret" aria-hidden="true"></span>
                   </summary>
                   <form id="keys-form" class="stack">
                     <div class="field">
@@ -443,6 +484,7 @@
       const primaryPanel = document.querySelector('.anyai-app-primary');
 
       const customSelectRegistry = new WeakMap();
+
 
       function setupCustomSelect(select) {
         if (!select || customSelectRegistry.has(select)) return;
@@ -785,24 +827,32 @@
 
       function setButtonBusy(button, busyLabel) {
         if (!button) return () => {};
+        const originalWidth = button.offsetWidth || button.getBoundingClientRect().width;
         const original = {
           text: button.textContent,
-          width: button.offsetWidth,
+          width: originalWidth,
+          minWidth: button.style.minWidth,
           disabled: button.disabled,
         };
-        button.style.minWidth = `${original.width || button.getBoundingClientRect().width}px`;
         button.setAttribute('aria-busy', 'true');
         button.disabled = true;
         if (busyLabel) {
           button.textContent = busyLabel;
         }
+        if (original.width) {
+          const busyWidth = Math.max(original.width, button.offsetWidth || button.getBoundingClientRect().width);
+          button.style.minWidth = `${busyWidth}px`;
+        }
         syncActionProxies();
         return () => {
           button.removeAttribute('aria-busy');
           button.style.removeProperty('min-width');
-          button.disabled = original.disabled;
           if (busyLabel) {
             button.textContent = original.text;
+          }
+          button.disabled = original.disabled;
+          if (original.minWidth) {
+            button.style.minWidth = original.minWidth;
           }
           syncActionProxies();
         };
@@ -1007,6 +1057,7 @@
       if (sheetSelect) {
         sheetSelect.addEventListener('change', () => {
           updateSheetGid();
+          refreshCustomSelect(sheetSelect);
         });
       }
 
