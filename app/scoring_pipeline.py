@@ -193,7 +193,9 @@ class ScoringPipeline:
         self._dispatched_requests = 0
         self._completed_requests = 0
         self._request_lock = asyncio.Lock()
-        self._log(f"Pipeline start: units={len(units_list)} concurrency={self.invoke_concurrency}")
+        self._log(
+            f"Starting pass with {len(units_list)} tasks (concurrency {self.invoke_concurrency})"
+        )
 
         producer_task = asyncio.create_task(self._producer(units_list, invoke_queue))
         invoker_tasks = [
@@ -216,7 +218,9 @@ class ScoringPipeline:
         finally:
             await self._shutdown_validation_executor()
 
-        self._log(f"Pipeline complete: processed_units={self._stats.processed_units} flushes={self._stats.flush_count} cache_hits={self._stats.cache_hits}")
+        self._log(
+            f"Pass complete: tasks={self._stats.processed_units}, flushes={self._stats.flush_count}, cache_hits={self._stats.cache_hits}"
+        )
         return self._stats
 
     async def _signal_termination(
@@ -348,7 +352,7 @@ class ScoringPipeline:
         finally:
             for _ in range(self.invoke_concurrency):
                 await invoke_queue.put(None)
-            self._log("Producer finished, sentinels dispatched")
+            self._log("Queued all tasks for this pass")
 
     async def _invoker(
         self,
@@ -444,8 +448,8 @@ class ScoringPipeline:
                                 await self._cleanup_queue.put(task.cleanup_path)
                         else:
                             self._log(
-                                f"Invoker retry scheduled: row={task.unit.row_index} block={task.unit.block_index} "
-                                f"failure={failure_count}/{self._unit_failure_limit}"
+                                f"Retrying row {task.unit.row_index + 1} block {task.unit.block_index} "
+                                f"(attempt {failure_count}/{self._unit_failure_limit})"
                             )
                             await asyncio.sleep(min(2.0, 0.5 * failure_count))
                             await invoke_queue.put(task)
@@ -461,8 +465,14 @@ class ScoringPipeline:
                             provider=provider_label,
                         )
                         self._log(
-                            f"Invoker success: row={task.unit.row_index} block={task.unit.block_index} "
-                            f"cache_hit={from_cache} provider={result.provider.value} scores={score_len}"
+                            "LLM scored row {row} block {block} via {provider} "
+                            "(cache_hit={cache_hit}, scores={scores})".format(
+                                row=task.unit.row_index + 1,
+                                block=task.unit.block_index,
+                                provider=provider_label,
+                                cache_hit=from_cache,
+                                scores=score_len,
+                            )
                         )
                         if error_trail:
                             for provider, status, _reason in error_trail:
@@ -487,7 +497,7 @@ class ScoringPipeline:
         except Exception:
             self._terminate.set()
             await validation_queue.put(None)
-            self._log("Invoker encountered fatal exception")
+            self._log("Invoker stopped after fatal error")
             logger.exception("Invoker crashed; termination signal sent")
             raise
 
@@ -516,8 +526,12 @@ class ScoringPipeline:
                     if outcome.should_cache and self.score_cache and outcome.cache_key:
                         await self.score_cache.set(outcome.cache_key, outcome.result)
                     self._log(
-                        f"Validator accepted: row={payload.task.unit.row_index} block={payload.task.unit.block_index} "
-                        f"len={outcome.expected_len} partial={outcome.result.partial}"
+                        "Validated row {row} block {block} (scores={scores}, partial={partial})".format(
+                            row=payload.task.unit.row_index + 1,
+                            block=payload.task.unit.block_index,
+                            scores=outcome.expected_len,
+                            partial=outcome.result.partial,
+                        )
                     )
                     await writer_queue.put(outcome.sheet_update)
                 finally:
@@ -526,7 +540,7 @@ class ScoringPipeline:
             raise
         except Exception:
             self._terminate.set()
-            self._log("Validator encountered fatal exception")
+            self._log("Validator stopped after fatal error")
             logger.exception("Validator crashed")
             raise
         finally:
@@ -670,9 +684,7 @@ class ScoringPipeline:
                     self._completed_requests += len(snapshot_updates)
                     for entry in snapshot_updates:
                         await self.mark_unit_completed(entry.unit, entry.result)
-                    self._log(
-                        "Writer flush skipped Sheets update because no values were produced"
-                    )
+                    self._log("Skipped Sheets update: nothing new to write")
                     return
 
                 if self.sheet_batch_row_size and self.sheet_batch_row_size > 0:
@@ -725,9 +737,7 @@ class ScoringPipeline:
                     self._completed_requests += len(snapshot_updates)
                     for entry in snapshot_updates:
                         await self.mark_unit_completed(entry.unit, entry.result)
-                    self._log(
-                        "Writer flush skipped Sheets update because no values were produced"
-                    )
+                    self._log("Skipped Sheets update: nothing new to write")
                     return
 
                 await ensure_flush_capacity()
@@ -761,12 +771,12 @@ class ScoringPipeline:
                             for entry in snapshot_updates:
                                 await self.mark_unit_completed(entry.unit, entry.result)
                             self._log(
-                                "Writer flush success: rows={} entries={} attempts={} cells(text={} score={})".format(
-                                    len(distinct_rows),
-                                    len(snapshot_updates),
-                                    attempts + 1,
-                                    analysis_cells,
-                                    score_cells,
+                                "Wrote {rows} rows to Sheets (entries={entries}, tries={tries}, text_cells={text_cells}, score_cells={score_cells})".format(
+                                    rows=len(distinct_rows),
+                                    entries=len(snapshot_updates),
+                                    tries=attempts + 1,
+                                    text_cells=analysis_cells,
+                                    score_cells=score_cells,
                                 )
                             )
                             if distinct_rows:
@@ -779,31 +789,31 @@ class ScoringPipeline:
                             attempts += 1
                             if attempts >= self.writer_retry_limit:
                                 self._terminate.set()
-                                self._log(f"Writer flush failed after retries: error={exc}")
+                                self._log(f"Stopped writing after repeated errors: {exc}")
                                 logger.exception("Writer flush failed after retries", exc_info=exc)
                                 raise
                             await asyncio.sleep(delay)
                             delay *= self.writer_retry_backoff_multiplier
                             self._log(
-                                f"Writer retry scheduled: attempt={attempts + 1} delay={delay:.2f}"
+                                f"Retrying Sheets write (attempt {attempts + 1}, next delay {delay:.2f}s)"
                             )
                         except (TimeoutError, socket.timeout) as exc:
                             last_error = exc
                             attempts += 1
                             if attempts >= self.writer_retry_limit:
                                 self._terminate.set()
-                                self._log(f"Writer flush failed after retries: timeout={exc}")
+                                self._log(f"Stopped writing after repeated timeouts: {exc}")
                                 logger.exception("Writer flush failed after retries", exc_info=exc)
                                 raise
                             await asyncio.sleep(delay)
                             delay *= self.writer_retry_backoff_multiplier
                             self._log(
-                                f"Writer retry scheduled after timeout: attempt={attempts + 1} delay={delay:.2f}"
+                                f"Retrying after timeout (attempt {attempts + 1}, next delay {delay:.2f}s)"
                             )
                         except Exception as exc:
                             last_error = exc
                             self._terminate.set()
-                            self._log(f"Writer flush fatal error: {exc}")
+                            self._log(f"Sheets write failed with unexpected error: {exc}")
                             logger.exception("Writer flush fatal error", exc_info=exc)
                             raise
                     if last_error:
