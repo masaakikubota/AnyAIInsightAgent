@@ -305,6 +305,21 @@ def batch_update_values(
             raise GoogleSheetsError(f"シート更新に失敗しました: {exc}") from exc
 
 
+def clear_sheet(spreadsheet_id: str, sheet_name: str) -> None:
+    """Clear all values from the specified sheet."""
+
+    _require_google_clients()
+    with sheets_service() as service:
+        try:
+            service.spreadsheets().values().clear(
+                spreadsheetId=spreadsheet_id,
+                range=sheet_name,
+                body={},
+            ).execute()
+        except HttpError as exc:  # noqa: BLE001
+            raise GoogleSheetsError(f"シート '{sheet_name}' のクリアに失敗しました: {exc}") from exc
+
+
 def ensure_service_account_access(spreadsheet_id: str) -> None:
     email = get_service_account_email()
     with sheets_service() as service:

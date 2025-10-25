@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from typing import Optional
 
 import httpx
+
+_GEMINI_JSON_SEMAPHORE = asyncio.Semaphore(3)
 
 
 async def call_gemini_json(
@@ -40,10 +43,11 @@ async def call_gemini_json(
         ],
     }
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(url, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+    async with _GEMINI_JSON_SEMAPHORE:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
     try:
         return data["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as exc:  # noqa: BLE001 - defensive

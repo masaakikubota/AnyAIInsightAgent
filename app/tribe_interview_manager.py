@@ -3,9 +3,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
+from itertools import product
+from math import prod
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
+
+import httpx
 
 from .models import (
     TribeInterviewJobConfig,
@@ -17,6 +22,9 @@ from .models import (
 )
 from .services.google_sheets import (
     GoogleSheetsError,
+    batch_update_values,
+    clear_sheet,
+    column_index_to_a1,
     extract_spreadsheet_id,
     write_column_values,
     write_row_values,
@@ -50,6 +58,39 @@ TRIBE_ATTRIBUTE_FIELDS: Sequence[tuple[str, str]] = (
     ("health_behavior", "健康への投資行動 (Health Behavior)"),
     ("communication_tool", "コミュニケーション手段 (Communication Tool)"),
 )
+
+
+TRIBE_COMBINATION_KEYS: Sequence[str] = ("gender", "age", "region", "income_level")
+
+
+TRIBE_MECE_OPTIONS: dict[str, Sequence[str]] = {
+    "gender": ("女性", "男性", "ノンバイナリー", "ジェンダーフルイド", "その他"),
+    "age": (
+        "20代前半",
+        "20代後半",
+        "30代前半",
+        "30代後半",
+        "40代前半",
+        "40代後半",
+        "50代前半",
+        "50代後半",
+        "60代以上",
+    ),
+    "region": (
+        "首都圏都市部",
+        "首都圏郊外",
+        "地方主要都市",
+        "地方郊外",
+        "地方農村",
+    ),
+    "income_level": (
+        "低所得層",
+        "中所得層",
+        "中高所得層",
+        "高所得層",
+        "富裕層",
+    ),
+}
 
 
 class TribeInterviewJobManager:
@@ -262,20 +303,28 @@ class TribeInterviewJobManager:
         prompt = self._build_tribe_prompt(config)
 
         last_error: Exception | None = None
+        model_candidates = ("gemini-pro-latest", "gemini-flash-latest")
         backoff_base = 1.5
         for attempt in range(config.retry_limit):
-            try:
-                raw = await call_gemini_json(
-                    prompt,
-                    model="gemini-pro-latest",
-                    timeout=90.0,
-                )
-                tribes = self._parse_tribe_response(raw, config)
-                self._write_tribe_outputs(job_dir, config, tribes)
-                return tribes
-            except Exception as exc:  # noqa: BLE001
-                last_error = exc
-                await asyncio.sleep(backoff_base ** attempt + 0.5)
+            for model_name in model_candidates:
+                try:
+                    raw = await call_gemini_json(
+                        prompt,
+                        model=model_name,
+                        timeout=90.0,
+                    )
+                    tribes = self._parse_tribe_response(raw, config)
+                    self._write_tribe_outputs(job_dir, config, tribes)
+                    return tribes
+                except httpx.HTTPStatusError as exc:
+                    last_error = exc
+                    if model_name == "gemini-pro-latest" and exc.response.status_code in {429, 503}:
+                        continue
+                except Exception as exc:  # noqa: BLE001
+                    last_error = exc
+                    if model_name == "gemini-pro-latest":
+                        continue
+            await asyncio.sleep(backoff_base ** attempt + 0.5)
         raise RuntimeError(f"Tribe generation failed after {config.retry_limit} attempts: {last_error}")
 
     @staticmethod
@@ -283,16 +332,26 @@ class TribeInterviewJobManager:
         attribute_list = "\n".join(
             f"- {header} (key: {key})" for key, header in TRIBE_ATTRIBUTE_FIELDS
         )
+        mece_guidance = []
+        for key, header in TRIBE_ATTRIBUTE_FIELDS:
+            options = TRIBE_MECE_OPTIONS.get(key)
+            if options:
+                mece_guidance.append(f"- {header}: {', '.join(options)}")
+        mece_block = "\n".join(mece_guidance)
+
         return (
             "You are an insights strategist creating distinct consumer tribes.\n"
             f"Product category: {config.product_category}\n"
             f"Country/Region context: {config.country_region}\n"
-            f"Create up to {config.max_tribes} unique tribes.\n"
+            f"Generate between 3 and {config.max_tribes} tribes. It is acceptable to return fewer than {config.max_tribes} segments if diversity would otherwise suffer.\n"
+            "Ensure Gender, Age, Region, and Income Level selections are mutually exclusive and collectively cover the category needs.\n"
+            "Use only the allowed value buckets below (do not invent new phrasings or combine ranges).\n"
+            f"Allowed options:\n{mece_block}\n\n"
             "For each tribe, respond with a JSON object using the keys listed below. "
-            "Values must be concise Japanese phrases (<= 60 characters)."\
+            "Values must be concise Japanese phrases (<= 50 characters) and must use exactly one of the allowed buckets when provided."
             "\nKeys:\n"
             f"{attribute_list}\n"
-            "Return a JSON array of tribe objects. Do not include extra commentary."
+            "Return a JSON array of tribe objects with no extra commentary."
         )
 
     def _parse_tribe_response(
@@ -322,7 +381,7 @@ class TribeInterviewJobManager:
                 value = str(item.get(key, "")).strip()
                 if not value:
                     raise ValueError(f"Tribe entry #{idx} missing value for '{key}'")
-                tribe[key] = value
+                tribe[key] = self._normalize_mece_value(key, value)
             duplicate_key = tuple(tribe[k] for k in key_subset)
             if duplicate_key in seen_keys:
                 continue
@@ -332,6 +391,50 @@ class TribeInterviewJobManager:
         if not normalized:
             raise ValueError("No valid tribe records generated")
         return normalized
+
+    @staticmethod
+    def _normalize_mece_value(key: str, raw_value: str) -> str:
+        value = str(raw_value).strip()
+        options = TRIBE_MECE_OPTIONS.get(key)
+        if not options:
+            return value
+        if value in options:
+            return value
+
+        normalized = value.replace("〜", "~").replace("～", "~").replace("―", "-").replace("－", "-")
+        parts = [part.strip() for part in re.split(r"[~\-]", normalized) if part.strip()]
+        for part in parts:
+            if part in options:
+                return part
+
+        replacements = {
+            "女性層": "女性",
+            "男性層": "男性",
+            "ノンバイナリー層": "ノンバイナリー",
+            "ジェンダーレス": "ジェンダーフルイド",
+            "中産階級": "中所得層",
+            "中流層": "中所得層",
+            "中の上": "中高所得層",
+            "高所得者": "高所得層",
+            "富裕層以上": "富裕層",
+        }
+        mapped = replacements.get(value)
+        if mapped and mapped in options:
+            return mapped
+
+        digit_match = re.match(r"(\d{2})代", value)
+        if digit_match:
+            prefix = digit_match.group(1)
+            for option in options:
+                if option.startswith(f"{prefix}代"):
+                    return option
+
+        for option in options:
+            if option in value:
+                return option
+
+        allowed = ", ".join(options)
+        raise ValueError(f"Value '{value}' for {key} must map to one of: {allowed}")
 
     def _write_tribe_outputs(
         self,
@@ -368,10 +471,61 @@ class TribeInterviewJobManager:
             values=["Tribe ID", *ids],
         )
 
+    def _generate_combinations(self, tribes: Sequence[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Expand core tribe attributes while keeping persona prompts tractable."""
+
+        if not tribes:
+            return []
+
+        core_options: list[list[str]] = []
+        for key in TRIBE_COMBINATION_KEYS:
+            values = sorted({tribe.get(key, "").strip() for tribe in tribes if tribe.get(key)})
+            if not values:
+                values = [""]
+            core_options.append(values)
+
+        combo_count = prod(len(values) for values in core_options)
+        if combo_count == 0:
+            return []
+        if combo_count > 2_000:
+            logging.getLogger(__name__).warning(
+                "Tribe combination space is still large (%s rows) after MECE reduction.",
+                f"{combo_count:,}",
+            )
+
+        attribute_keys = [key for key, _ in TRIBE_ATTRIBUTE_FIELDS]
+        combinations: List[Dict[str, str]] = []
+
+        for combo_values in product(*core_options):
+            core_mapping = dict(zip(TRIBE_COMBINATION_KEYS, combo_values))
+            source = self._select_best_match(tribes, core_mapping)
+            row: Dict[str, str] = {}
+            for key in attribute_keys:
+                if key in core_mapping:
+                    row[key] = core_mapping[key]
+                else:
+                    row[key] = source.get(key, "")
+            combinations.append(row)
+
+        return combinations
+
     @staticmethod
-    def _generate_combinations(tribes: Sequence[Dict[str, str]]) -> List[Dict[str, str]]:
-        # 現段階ではトライブ行そのものを組み合わせとして扱う。
-        return list(tribes)
+    def _select_best_match(tribes: Sequence[Dict[str, str]], core_mapping: Dict[str, str]) -> Dict[str, str]:
+        """Return the tribe whose attributes best align with the requested core mapping."""
+
+        best: Optional[Dict[str, str]] = None
+        best_score = -1
+        for tribe in tribes:
+            score = 0
+            for key, target in core_mapping.items():
+                if tribe.get(key) == target:
+                    score += 1
+            if score > best_score:
+                best = tribe
+                best_score = score
+                if score == len(core_mapping):
+                    break
+        return best or tribes[0]
 
     def _write_combination_outputs(
         self,
@@ -387,26 +541,44 @@ class TribeInterviewJobManager:
         except GoogleSheetsError as exc:
             raise RuntimeError(f"スプレッドシートIDの取得に失敗しました: {exc}") from exc
 
+        sheet_name = config.sheet_names.tribe_combination
         headers = [header for _, header in TRIBE_ATTRIBUTE_FIELDS]
         rows = [[combo[key] for key, _ in TRIBE_ATTRIBUTE_FIELDS] for combo in combinations]
 
-        write_table_with_headers(
+        clear_sheet(spreadsheet_id, sheet_name)
+
+        full_headers = ["Combination ID", *headers]
+        write_row_values(
             spreadsheet_id,
-            config.sheet_names.tribe_combination,
-            headers,
-            rows,
-            start_row=1,
-            start_col=2,
+            sheet_name,
+            row_index=1,
+            start_col=1,
+            values=full_headers,
         )
 
-        ids = [f"Combo-{idx:02d}" for idx in range(1, len(rows) + 1)]
-        write_column_values(
-            spreadsheet_id,
-            config.sheet_names.tribe_combination,
-            column_index=1,
-            start_row=1,
-            values=["Combination ID", *ids],
-        )
+        if not rows:
+            return
+
+        batch_size = 500
+        start_row = 2
+        start_col_letter = column_index_to_a1(0)
+        end_col_letter = column_index_to_a1(len(full_headers) - 1)
+        quoted_sheet = f"'{sheet_name}'"
+
+        for batch_start in range(0, len(rows), batch_size):
+            batch_rows = rows[batch_start : batch_start + batch_size]
+            payload: List[List[str]] = []
+            for offset, values in enumerate(batch_rows, start=batch_start + 1):
+                combo_id = f"Combo-{offset:02d}"
+                payload.append([combo_id, *values])
+
+            row_start = start_row + batch_start
+            row_end = row_start + len(payload) - 1
+            range_name = f"{quoted_sheet}!{start_col_letter}{row_start}:{end_col_letter}{row_end}"
+            batch_update_values(
+                spreadsheet_id,
+                updates=[{"range": range_name, "values": payload}],
+            )
 
     async def _generate_personas(
         self,

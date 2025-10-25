@@ -9,7 +9,7 @@
 ### 入力パラメータ
 - `product_category`: ユーザ入力。例: "ヘアケア"
 - `country_region`: ユーザ入力。例: "JP_Kanto"
-- `max_tribes`: 最大 10 行（固定）
+- `max_tribes`: 最大 5 行（固定）
 - `attribute_headers`: 下表の 18 属性を順番どおりに並べる。
 
 | Column | Header (JP/EN) |
@@ -38,35 +38,39 @@
 
 ### 要求フォーマット
 - JSON 配列で返却。各要素が 18 属性をキーに持つディクショナリ。
-- 文字列長は 60 文字以内を目安に簡潔にまとめる。
+- 文字列長は 50 文字以内を目安に簡潔にまとめる。
 - 文化的背景（country_region）とカテゴリ特性（product_category）を必ず反映すること。
+- Gender / Age / Region / 年収レベル (Income Level) は、定義済みの MECE バケットから選択し、曖昧な表現（例: "50代前半～50代後半"）や重複値を避ける。
+- 多様性を優先し、5 行未満で完了してもよい。
 
 ### プロンプト草案
 ```
-You are an insights strategist creating up to {max_tribes} distinct consumer tribes.
+You are an insights strategist creating between 3 and {max_tribes} distinct consumer tribes. You may return fewer than {max_tribes} segments if a mutually exclusive split is not feasible.
 Product category: {product_category}
 Country/Region context: {country_region}
 
-For each tribe, provide concise descriptors (<= 60 Japanese characters) for the following attributes:
+For each tribe, provide concise descriptors (<= 50 Japanese characters) for the following attributes:
 - Gender
 - Age
 ... (list all headers in English with Japanese translation)
 
 Output MUST be valid JSON array where each object includes all attribute keys exactly as listed above.
-Use natural Japanese phrases. Avoid duplicates across tribes.
+Use natural Japanese phrases. Avoid duplicates across tribes and use only the allowed value buckets for Gender / Age / Region / Income Level.
 ```
 
 ### 検証ルール
 - JSON 解析が成功するか。
-- 要素数 <= 10。
+- 要素数 <= 5。
 - 全属性キーが存在し、空文字は不可。
 - 重複レコードは排除（Gender, Age, Region の三つで重複判定予定）。
 
 ---
 
 ## 2. トライブ組み合わせ（アルゴリズム）
-- トライブ表の各列を独立カテゴリとして扱い、全組み合わせを生成して `Tribe_Combination` へ出力。
-- 組み合わせが膨大な場合でも制限は設けない。但し実行時には警告ログを残す。
+- Gender / Age / Region / 年収レベル (Income Level) の MECE バケットを軸に直積を作成し、コアとなる組み合わせを生成。
+- 生成したコア組み合わせごとに、最も一致度が高いトライブ行から残りの属性を補完する。
+- 生成件数が 2,000 行を超える場合は警告ログを出す（処理は継続）。
+- Google Sheets への書き込みは 500 行ずつのバッチで実施し、API タイムアウトを回避する。
 - 出力ヘッダは `Tribe_SetUp` と完全一致。
 
 ---
@@ -155,7 +159,7 @@ class TribeInterviewJobConfig(BaseModel):
     persona_per_combination: int
     interviews_per_persona: int
     sheet_names: SheetNameConfig
-    max_tribes: int = 10
+    max_tribes: int = 5
     retry_limit: int = 5
     spreadsheet_id: str
     image_paths: list[str] = []
@@ -176,4 +180,3 @@ class SheetNameConfig(BaseModel):
 1. JSON バリデーションロジックの実装方針を決定。
 2. UI から渡すパラメータの命名と整合を確認。
 3. テンプレート質問リストを別ファイルに抽出予定。
-
