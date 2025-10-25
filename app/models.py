@@ -393,7 +393,7 @@ class TribeInterviewJobConfig(BaseModel):
     tagline_detail: Optional[str] = None
     image_paths: List[str] = Field(default_factory=list)
     retry_limit: conint(ge=1, le=10) = 5
-    max_tribes: conint(ge=1, le=10) = 10
+    max_tribes: conint(ge=1, le=5) = 5
     persona_prompt_template: Optional[str] = None
     interview_questions: Optional[List[str]] = None
 
