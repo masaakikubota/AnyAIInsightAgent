@@ -40,15 +40,12 @@
         padding: 0.45rem 1rem;
         border-radius: 999px;
         border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
-        background: linear-gradient(135deg,
-          color-mix(in srgb, #ffffff, var(--anyai-border) 4%),
-          color-mix(in srgb, #ffffff, var(--anyai-border) 12%)
-        );
+        background: color-mix(in srgb, #ffffff, var(--anyai-border) 6%);
         color: color-mix(in srgb, var(--anyai-text), transparent 25%);
         font-weight: 600;
         cursor: pointer;
         transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease,
-          box-shadow 0.2s ease, transform 0.15s ease;
+          box-shadow 0.2s ease;
         user-select: none;
       }
 
@@ -71,16 +68,13 @@
       }
 
       .mode-pill:not([aria-checked="true"]) {
-        border-color: color-mix(in srgb, var(--anyai-border), transparent 30%);
+        background: color-mix(in srgb, #ffffff, var(--anyai-border) 6%);
+        border-color: color-mix(in srgb, var(--anyai-border), transparent 25%);
       }
 
       .mode-pill:not([aria-checked="true"]):hover {
         border-color: color-mix(in srgb, var(--anyai-border), var(--anyai-primary, #2955ff) 28%);
         color: color-mix(in srgb, var(--anyai-text), transparent 10%);
-        background: linear-gradient(135deg,
-          color-mix(in srgb, #ffffff, var(--anyai-primary, #2955ff) 12%),
-          color-mix(in srgb, #ffffff, var(--anyai-primary, #2955ff) 20%)
-        );
       }
 
       .mode-pill:focus-within {
@@ -89,16 +83,10 @@
       }
 
       .mode-pill[aria-checked="true"] {
-        background: linear-gradient(135deg,
-          color-mix(in srgb, var(--anyai-primary, #2955ff), white 12%),
-          color-mix(in srgb, var(--anyai-primary, #2955ff), black 6%)
-        );
-        border-color: color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 12%);
+        background: var(--anyai-primary, #2955ff);
+        border-color: var(--anyai-primary, #2955ff);
         color: #ffffff;
-        box-shadow:
-          0 0 0 3px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 80%),
-          0 12px 28px rgba(41, 85, 255, 0.25);
-        transform: translateY(-1px);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 80%);
       }
 
       .mode-ssr {
@@ -246,30 +234,19 @@
         border-left: 0;
         border-top-left-radius: 0;
         border-bottom-left-radius: 0;
+        background: var(--anyai-primary, #2955ff);
+        color: var(--anyai-text-inverse, #ffffff);
         font-weight: 600;
-        transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease;
-      }
-
-      .field-with-action .input-action-btn:not(.btn-soft-accent) {
-        border: none;
         box-shadow: 0 4px 10px rgba(31, 36, 50, 0.12);
+        transition: box-shadow 0.2s ease, background-color 0.2s ease;
       }
 
-      .field-with-action .input-action-btn:not(.btn-soft-accent):hover,
-      .field-with-action .input-action-btn:not(.btn-soft-accent):focus-visible {
+      .field-with-action .input-action-btn:hover,
+      .field-with-action .input-action-btn:focus-visible {
+        background: var(--anyai-primary-600, #1f3de6);
         box-shadow: 0 6px 16px rgba(31, 36, 50, 0.16);
         outline: none;
-      }
-
-      .field-with-action .input-action-btn.btn-soft-accent:hover,
-      .field-with-action .input-action-btn.btn-soft-accent:focus-visible {
-        transform: translateY(-1px);
-      }
-
-      .field-with-action .input-action-btn.btn-soft-accent {
-        border-left: 0;
-        border-top-left-radius: 0;
-        border-bottom-left-radius: 0;
+        color: var(--anyai-text-inverse, #ffffff);
       }
 
 .anyai-form-fields {
@@ -661,114 +638,6 @@
         --queue-toast-accent: var(--anyai-danger, #d14343);
       }
 
-      .queue-status {
-        display: flex;
-        align-items: center;
-        gap: var(--anyai-space-2);
-        font-size: var(--anyai-fs-2);
-      }
-
-      .queue-status-label {
-        color: var(--anyai-text-subtle);
-        font-weight: 600;
-      }
-
-      .queue-chip {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 2px 12px;
-        border-radius: 999px;
-        font-size: var(--anyai-fs-1);
-        font-weight: 600;
-        line-height: 1.2;
-        border: 1px solid transparent;
-      }
-
-      .queue-chip--idle {
-        background: transparent;
-        border-color: transparent;
-        color: color-mix(in srgb, var(--anyai-text), transparent 35%);
-        padding: 0;
-      }
-
-      .queue-chip--active {
-        background: color-mix(in srgb, var(--anyai-primary), transparent 82%);
-        border-color: color-mix(in srgb, var(--anyai-primary), transparent 58%);
-        color: color-mix(in srgb, var(--anyai-primary), black 18%);
-      }
-
-      .queue-status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 999px;
-        flex: 0 0 auto;
-      }
-
-      .queue-status-dot--idle {
-        background: color-mix(in srgb, #fcbf49, transparent 30%);
-        box-shadow: 0 0 0 3px color-mix(in srgb, #fcbf49, transparent 70%);
-      }
-
-      @keyframes queue-status-pulse {
-        0% { box-shadow: 0 0 0 0 rgba(18, 161, 80, 0.28); }
-        70% { box-shadow: 0 0 0 6px rgba(18, 161, 80, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(18, 161, 80, 0); }
-      }
-
-      .queue-status-dot--active {
-        background: var(--anyai-success, #12a150);
-        animation: queue-status-pulse 1.8s ease-out infinite;
-      }
-
-      .queue-actions {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-      }
-
-      .queue-edit-button,
-      .queue-save-button {
-        position: relative;
-      }
-
-      .queue-edit-button {
-        z-index: 2;
-        font-size: 1.2rem;
-        line-height: 1;
-        letter-spacing: -2px;
-      }
-
-      .queue-save-button {
-        box-shadow: 0 6px 18px rgba(45, 91, 255, 0.18);
-      }
-
-      .queue-save-button:hover,
-      .queue-save-button:focus-visible {
-        box-shadow: 0 8px 20px rgba(45, 91, 255, 0.18);
-      }
-
-      .queue-save-button[aria-busy="true"] {
-        box-shadow: 0 6px 16px rgba(45, 91, 255, 0.16);
-      }
-
-      .queue-delete-button {
-        box-shadow: 0 6px 18px rgba(209, 67, 67, 0.18);
-      }
-
-      .queue-delete-button:hover,
-      .queue-delete-button:focus-visible {
-        box-shadow: 0 8px 22px rgba(209, 67, 67, 0.2);
-      }
-
-      .queue-delete-button[aria-busy="true"] {
-        box-shadow: 0 6px 16px rgba(209, 67, 67, 0.16);
-      }
-
-      .queue-save-button {
-        z-index: 1;
-      }
-
       .actions-row { display: flex; gap: var(--anyai-space-3); flex-wrap: wrap; align-items: center; }
       .band-title { margin: 0; font-size: var(--anyai-fs-3); font-weight: 600; }
       .callout {
@@ -781,7 +650,7 @@
       .status-badge {
         display: inline-flex;
         align-items: center;
-        padding: 0.2rem 0.85rem;
+        padding: 0.125rem 0.5rem;
         border-radius: 999px;
         font-size: var(--anyai-fs-2);
         font-weight: 600;
@@ -798,12 +667,9 @@
         border-color: color-mix(in srgb, var(--anyai-danger), transparent 65%);
       }
       .status-badge[data-state="info"] {
-        background: linear-gradient(135deg,
-          color-mix(in srgb, #fce9b5, transparent 20%),
-          color-mix(in srgb, #fdecc3, transparent 10%)
-        );
-        color: color-mix(in srgb, #c68a20, black 5%);
-        border-color: color-mix(in srgb, #f7d494, transparent 45%);
+        background: color-mix(in srgb, var(--anyai-primary), transparent 88%);
+        color: var(--anyai-primary-700);
+        border-color: color-mix(in srgb, var(--anyai-primary), transparent 70%);
       }
 
       .validation-meta {
@@ -855,148 +721,6 @@
         border: 2px solid color-mix(in srgb, var(--anyai-text), transparent 40%);
         border-top-color: var(--anyai-primary);
         animation: anyai-btn-spin 0.9s linear infinite;
-      }
-
-      .btn.btn-primary {
-        background: linear-gradient(135deg, #2d5bff 0%, #5a7dff 100%);
-        color: #ffffff;
-        border: none;
-        box-shadow: 0 10px 24px rgba(45, 91, 255, 0.24);
-        transition: box-shadow 0.2s ease, transform 0.15s ease, background 0.2s ease;
-      }
-
-      .btn.btn-primary:hover,
-      .btn.btn-primary:focus-visible {
-        background: linear-gradient(135deg, #335fff 0%, #6f8bff 100%);
-        box-shadow: 0 12px 28px rgba(51, 95, 255, 0.28);
-        transform: translateY(-1px);
-        outline: none;
-        color: #ffffff;
-      }
-
-      .btn.btn-primary:active {
-        background: linear-gradient(135deg, #2954ff 0%, #5a7dff 100%);
-        box-shadow: 0 8px 20px rgba(41, 84, 255, 0.24);
-        transform: translateY(0);
-      }
-
-      .btn.btn-primary[aria-busy="true"] {
-        box-shadow: 0 10px 24px rgba(45, 91, 255, 0.18);
-        transform: none;
-      }
-
-      :root {
-        --btn-soft-neutral-start: #f8f9fb;
-        --btn-soft-neutral-end: #eef1f6;
-        --btn-soft-neutral-hover-start: #f1f3f7;
-        --btn-soft-neutral-hover-end: #e4e8ef;
-        --btn-soft-neutral-border: color-mix(in srgb, var(--anyai-border), transparent 15%);
-        --btn-soft-neutral-text: color-mix(in srgb, var(--anyai-text), transparent 35%);
-        --btn-strong-blue-start: color-mix(in srgb, var(--anyai-primary, #2955ff), white 15%);
-        --btn-strong-blue-end: color-mix(in srgb, var(--anyai-primary, #2955ff), black 6%);
-        --btn-strong-blue-hover-start: color-mix(in srgb, var(--anyai-primary, #2955ff), white 10%);
-        --btn-strong-blue-hover-end: color-mix(in srgb, var(--anyai-primary, #2955ff), black 12%);
-        --btn-danger-start: color-mix(in srgb, var(--anyai-danger, #d14343), white 18%);
-        --btn-danger-end: color-mix(in srgb, var(--anyai-danger, #d14343), black 4%);
-        --btn-danger-hover-start: color-mix(in srgb, var(--anyai-danger, #d14343), white 12%);
-        --btn-danger-hover-end: color-mix(in srgb, var(--anyai-danger, #d14343), black 8%);
-      }
-
-      .btn-soft-accent {
-        background: linear-gradient(135deg, var(--btn-soft-neutral-start), var(--btn-soft-neutral-end));
-        color: var(--btn-soft-neutral-text);
-        border: 1px solid var(--btn-soft-neutral-border);
-        box-shadow: 0 6px 16px rgba(17, 24, 39, 0.08);
-        transition: box-shadow 0.2s ease, transform 0.15s ease, background 0.2s ease, color 0.2s ease;
-      }
-
-      .btn-soft-accent:hover,
-      .btn-soft-accent:focus-visible {
-        background: linear-gradient(135deg, var(--btn-soft-neutral-hover-start), var(--btn-soft-neutral-hover-end));
-        box-shadow: 0 10px 22px rgba(17, 24, 39, 0.12);
-        outline: none;
-        color: color-mix(in srgb, var(--anyai-text), transparent 20%);
-        transform: translateY(-1px);
-      }
-
-      .btn-soft-accent:active {
-        background: linear-gradient(135deg,
-          color-mix(in srgb, var(--btn-soft-neutral-hover-start), white 50%),
-          color-mix(in srgb, var(--btn-soft-neutral-hover-end), white 45%)
-        );
-        box-shadow: 0 6px 14px rgba(17, 24, 39, 0.1);
-        transform: translateY(0);
-      }
-
-      .btn-soft-accent[aria-busy="true"] {
-        box-shadow: 0 6px 14px rgba(17, 24, 39, 0.08);
-        transform: none;
-      }
-
-      .btn-soft-accent:disabled {
-        opacity: 0.6;
-        box-shadow: none;
-        cursor: not-allowed;
-        transform: none;
-      }
-
-      .btn-strong-accent {
-        background: linear-gradient(135deg, var(--btn-strong-blue-start), var(--btn-strong-blue-end));
-        color: #ffffff;
-        border: none;
-        box-shadow: 0 12px 28px rgba(41, 85, 255, 0.22);
-        transition: box-shadow 0.2s ease, transform 0.15s ease, background 0.2s ease;
-      }
-
-      .btn-strong-accent:hover,
-      .btn-strong-accent:focus-visible {
-        background: linear-gradient(135deg, var(--btn-strong-blue-hover-start), var(--btn-strong-blue-hover-end));
-        box-shadow: 0 16px 32px rgba(41, 85, 255, 0.28);
-        transform: translateY(-1px);
-        outline: none;
-      }
-
-      .btn-strong-accent:active {
-        transform: translateY(0);
-        box-shadow: 0 10px 24px rgba(41, 85, 255, 0.24);
-      }
-
-      .btn-strong-accent[aria-busy="true"] {
-        transform: none;
-        box-shadow: 0 12px 24px rgba(41, 85, 255, 0.2);
-      }
-
-      .btn-strong-accent:disabled {
-        opacity: 0.65;
-        box-shadow: none;
-        cursor: not-allowed;
-        transform: none;
-      }
-
-      .btn.btn-danger {
-        background: linear-gradient(135deg, var(--btn-danger-start), var(--btn-danger-end));
-        color: #ffffff;
-        border: none;
-        box-shadow: 0 10px 24px rgba(209, 67, 67, 0.22);
-        transition: box-shadow 0.2s ease, transform 0.15s ease, background 0.2s ease;
-      }
-
-      .btn.btn-danger:hover,
-      .btn.btn-danger:focus-visible {
-        background: linear-gradient(135deg, var(--btn-danger-hover-start), var(--btn-danger-hover-end));
-        box-shadow: 0 12px 26px rgba(209, 67, 67, 0.28);
-        outline: none;
-        transform: translateY(-1px);
-      }
-
-      .btn.btn-danger:active {
-        transform: translateY(0);
-        box-shadow: 0 8px 20px rgba(209, 67, 67, 0.24);
-      }
-
-      .btn.btn-danger[aria-busy="true"] {
-        transform: none;
-        box-shadow: 0 8px 18px rgba(209, 67, 67, 0.2);
       }
 
       @keyframes anyai-btn-spin {
@@ -1099,7 +823,7 @@
                       <p class="field-hint">対象のGoogleシートURLまたはIDを入力し、Setでシート一覧を読み込みます。</p>
                       <div class="field-with-action">
                         <input type="text" id="spreadsheet_url" name="spreadsheet_url" placeholder="https://docs.google.com/spreadsheets/d/..." required />
-                        <button type="button" class="btn btn-primary input-action-btn" id="btn-spreadsheet-set">Set</button>
+                        <button type="button" class="btn btn-outline input-action-btn" id="btn-spreadsheet-set">Set</button>
                       </div>
                     </div>
                     <div class="field" id="analysis-sheet-field">
@@ -1325,8 +1049,8 @@
               </section>
 
               <div class="anyai-form-actions" id="scoring-action-area">
-                <button type="button" class="btn btn-soft-accent" id="btn-check-status">CheckSheetInfo</button>
-                <button type="button" class="btn btn-secondary btn-strong-accent" id="btn-queue-add-action" style="display:none;">Add to Queue</button>
+                <button type="button" class="btn btn-outline" id="btn-check-status">CheckSheetInfo</button>
+                <button type="button" class="btn btn-secondary" id="btn-queue-add-action" style="display:none;">Add to Queue</button>
                 <button type="button" class="btn btn-primary" id="btn-queue-add-start" style="display:none;">Run</button>
               </div>
             </div>
@@ -1338,14 +1062,17 @@
                 <h2 class="mt-0">ジョブキュー</h2>
                 <button id="btn-queue-start" class="btn btn-primary" type="button">キュー開始</button>
               </div>
-              <div id="queue-status" class="queue-status"></div>
+              <div id="queue-status" class="muted"></div>
+              <div class="actions-row">
+                <button class="btn btn-outline" id="btn-queue-add" type="button">Add to Queue</button>
+              </div>
               <div id="queue-list" class="stack-sm"></div>
             </div>
 
             <div id="validation-status-card" class="anyai-support-card" style="display:none;">
               <div class="support-header">
                 <h2 class="mt-0">検証状況</h2>
-                <span id="validation-status-badge" class="status-badge" data-state="info">待機中</span>
+                <span id="validation-status-badge" class="status-badge" data-state="info">情報</span>
               </div>
               <p id="validation-status-message" class="muted" role="status" aria-live="polite"></p>
               <div id="validation-status-meta" class="validation-meta"></div>
@@ -1354,7 +1081,7 @@
             <div id="job-log-card" class="anyai-support-card">
               <div class="support-header">
                 <h2 class="mt-0">実行ログ</h2>
-                <button type="button" class="btn btn-soft-accent" id="btn-log-refresh">更新</button>
+                <button type="button" class="btn btn-outline" id="btn-log-refresh">更新</button>
               </div>
               <pre id="job-log-content" class="log-viewer" tabindex="0">ジョブを開始するとログが表示されます。</pre>
             </div>
@@ -1378,8 +1105,8 @@
     </div>
 
     <div class="anyai-action-bar" role="region" aria-label="スコアリング操作">
-      <button type="button" class="btn btn-soft-accent" data-proxy-for="btn-check-status">CheckSheetInfo</button>
-      <button type="button" class="btn btn-soft-accent" data-proxy-for="btn-queue-add-action">Add to Queue</button>
+      <button type="button" class="btn btn-outline" data-proxy-for="btn-check-status">CheckSheetInfo</button>
+      <button type="button" class="btn btn-secondary" data-proxy-for="btn-queue-add-action">Add to Queue</button>
       <button type="button" class="btn btn-primary" data-proxy-for="btn-queue-add-start">Run</button>
     </div>
 
@@ -1790,14 +1517,11 @@
       function syncAnalysisSheetSelection() {
         if (!sheetKeywordInput) return;
         const ssrEnabled = isSSREnabled();
-        const hasSheetOptions = Boolean(
-          sheetKeywordInput && sheetKeywordInput.options && sheetKeywordInput.options.length > 1
-        );
         const scoreValue = getScoreSheetKeyword();
         const scorePlaceholder =
           (scoreSheetKeywordInput && scoreSheetKeywordInput.dataset.placeholder) || 'Setで読み込んでください';
 
-        if (ssrEnabled && hasSheetOptions) {
+        if (ssrEnabled) {
           sheetKeywordInput.disabled = false;
           const previousPlaceholder = sheetKeywordInput.dataset.previousPlaceholder;
           if (previousPlaceholder !== undefined) {
@@ -1806,9 +1530,7 @@
             delete sheetKeywordInput.dataset.previousPlaceholder;
           }
         } else {
-          if (!hasSheetOptions) {
-            delete sheetKeywordInput.dataset.previousPlaceholder;
-          } else if (sheetKeywordInput.dataset.previousPlaceholder === undefined) {
+          if (sheetKeywordInput.dataset.previousPlaceholder === undefined) {
             sheetKeywordInput.dataset.previousPlaceholder = sheetKeywordInput.dataset.placeholder || '';
           }
 
@@ -1825,11 +1547,7 @@
           }
 
           sheetKeywordInput.disabled = true;
-          const linkedPlaceholder = ssrEnabled && !hasSheetOptions
-            ? 'Setで読み込んでください'
-            : scoreValue
-              ? 'スコアシートと同じ'
-              : scorePlaceholder;
+          const linkedPlaceholder = scoreValue ? 'スコアシートと同じ' : scorePlaceholder;
           sheetKeywordInput.dataset.placeholder = linkedPlaceholder;
           updateCustomSelectPlaceholder(sheetKeywordInput, linkedPlaceholder);
           if (sheetGidInput) {
@@ -1924,10 +1642,12 @@
 
           validationStatusCard.style.display = '';
           if (validationStatusBadge) {
-            const labelMap = { success: '検証済み', error: '要対応', info: '待機中', idle: '待機中' };
-            validationStatusBadge.textContent = labelMap[normalizedStatus] || '待機中';
-            const badgeState = normalizedStatus === 'idle' ? 'info' : normalizedStatus;
-            validationStatusBadge.setAttribute('data-state', badgeState);
+            const labelMap = { success: '検証済み', error: '要対応', info: '情報', idle: '情報' };
+            validationStatusBadge.textContent = labelMap[normalizedStatus] || '情報';
+            validationStatusBadge.setAttribute(
+              'data-state',
+              normalizedStatus === 'idle' ? 'info' : normalizedStatus,
+            );
           }
 
           if (validationStatusMessage) {
@@ -2042,7 +1762,7 @@
           logContent.scrollTop = logContent.scrollHeight;
         } catch (err) {
           if (manual) {
-            showQueueToast('ログの取得に失敗しました。', { state: 'error' });
+            alert('ログの取得に失敗しました。');
           } else {
             console.warn('Failed to load job log', err);
           }
@@ -2157,7 +1877,7 @@
         if (!queueToast) return;
         const state = options.state || 'success';
         const duration =
-          typeof options.duration === 'number' ? options.duration : 3000;
+          typeof options.duration === 'number' ? options.duration : 3200;
         if (queueToastTimer) {
           clearTimeout(queueToastTimer);
           queueToastTimer = null;
@@ -2964,11 +2684,8 @@
         const fd = new FormData(kf);
         fd.set('persist', document.getElementById('persist').checked ? 'true' : 'false');
         const r = await fetch('/settings', { method:'POST', body: fd });
-        if(!r.ok){
-          showQueueToast('APIキー保存に失敗しました', { state: 'error' });
-          return;
-        }
-        showQueueToast('APIキーを反映しました', { state: 'success' });
+        if(!r.ok){ alert('APIキー保存に失敗しました'); return; }
+        alert('APIキーを反映しました');
       });
 
       const form = jobForm;
@@ -3034,7 +2751,7 @@
           const fd = buildJobFormData('queue');
           const res = await fetch('/jobs', { method: 'POST', body: fd });
           if (!res.ok) {
-            showQueueToast('キュー追加に失敗', { state: 'error' });
+            showQueueToast('キュー追加に失敗', { state: 'error', duration: 0 });
             return;
           }
           await refreshQueue();
@@ -3123,9 +2840,7 @@
         cancelButton.disabled = true;
         try {
           const res = await fetch(`/jobs/${currentJobId}/cancel`, { method: 'POST' });
-          if (!res.ok) {
-            showQueueToast('キャンセルに失敗しました', { state: 'error' });
-          }
+          if (!res.ok) { alert('キャンセルに失敗しました'); }
           await refreshQueue();
           await updateProgress(currentJobId);
         } finally {
@@ -3142,30 +2857,7 @@
           list.innerHTML = '';
           const items = j.items || [];
           const runningId = j.current;
-          if (queueStatus) {
-            queueStatus.innerHTML = '';
-            if (j.running) {
-              const label = document.createElement('span');
-              label.className = 'queue-status-label';
-              label.textContent = '稼働中';
-              const dot = document.createElement('span');
-              dot.className = 'queue-status-dot queue-status-dot--active';
-              const chip = document.createElement('span');
-              chip.className = 'queue-chip queue-chip--active';
-              chip.textContent = runningId || '実行中';
-              queueStatus.appendChild(label);
-              queueStatus.appendChild(dot);
-              queueStatus.appendChild(chip);
-            } else {
-              const label = document.createElement('span');
-              label.className = 'queue-status-label';
-              label.textContent = '待機中';
-              const dot = document.createElement('span');
-              dot.className = 'queue-status-dot queue-status-dot--idle';
-              queueStatus.appendChild(label);
-              queueStatus.appendChild(dot);
-            }
-          }
+          queueStatus.textContent = j.running ? `稼働中: ${runningId || ''}` : '待機中';
           if (runningId) {
             currentJobId = runningId;
             resultSection.style.display = 'block';
@@ -3183,23 +2875,17 @@
             row.style.alignItems = 'center';
             row.innerHTML = `<code>${it.job_id}</code> <span class="muted">[${it.mode}]</span> <span>${it.sheet_name||''}</span> <span class="muted">status: ${it.status}</span>`;
             const right = document.createElement('div');
-            right.className = 'right queue-actions';
+            right.className = 'right';
 
             const up = document.createElement('button'); up.className='btn btn-ghost'; up.textContent='↑';
             up.onclick = async ()=>{ const pos = Math.max(0, idx-1); const fd=new FormData(); fd.set('position', pos); await fetch(`/queue/${it.job_id}/move`, {method:'POST', body:fd}); refreshQueue(); };
             const down = document.createElement('button'); down.className='btn btn-ghost'; down.textContent='↓';
             down.onclick = async ()=>{ const pos = idx+1; const fd=new FormData(); fd.set('position', pos); await fetch(`/queue/${it.job_id}/move`, {method:'POST', body:fd}); refreshQueue(); };
-            const edit = document.createElement('button');
-            edit.className = 'btn btn-soft-accent queue-edit-button';
-            edit.setAttribute('aria-label', '編集');
-            edit.textContent = '✎';
+            const edit = document.createElement('button'); edit.className='btn btn-outline'; edit.textContent='編集';
             edit.onclick = async ()=>{
               try{
                 const r = await fetch(`/jobs/${it.job_id}/config`);
-                if(!r.ok){
-                  showQueueToast('設定取得に失敗しました', { state: 'error' });
-                  return;
-                }
+                if(!r.ok){ alert('設定取得に失敗'); return; }
                 const txt = await r.text();
                 const cfg = JSON.parse(txt);
                 // Populate form with cfg
@@ -3268,34 +2954,24 @@
                 }
                 applyMode(currentMode);
                 form.dataset.editing = it.job_id;
-                showQueueToast('フォームに読み込みました。下の「編集を保存」で反映できます。', { state: 'info' });
+                alert('フォームに読み込みました。下の「編集を保存」で反映できます。');
                 validation.markDirty(false);
                 showValidationBanner('info', '読み込んだ設定です。シート検証を再実行してください。');
                 validation.updateCard('info', '読み込んだ設定です。Set→シート選択で検証を完了してください。', null);
                 updateQueueActionState();
               }catch{}
             };
-            const save = document.createElement('button'); save.className='btn btn-primary queue-save-button'; save.textContent='編集を保存';
+            const save = document.createElement('button'); save.className='btn btn-primary'; save.textContent='編集を保存';
             save.onclick = async ()=>{
               const ej = form.dataset.editing;
-              if(!ej){
-                showQueueToast('編集対象が読み込まれていません', { state: 'error' });
-                return;
-              }
+              if(!ej){ alert('編集対象が読み込まれていません'); return; }
               const fd = buildJobFormData();
               const r = await fetch(`/queue/${ej}/edit`, { method:'POST', body: fd });
-              if(!r.ok){
-                showQueueToast('保存に失敗しました', { state: 'error' });
-                return;
-              }
-              showQueueToast('保存しました', { state: 'success' });
-              form.dataset.editing='';
+              if(!r.ok){ alert('保存に失敗'); return; }
+              alert('保存しました'); form.dataset.editing='';
               refreshQueue();
             };
-            const del = document.createElement('button');
-            del.className = 'btn btn-danger queue-delete-button';
-            del.setAttribute('aria-label', '削除');
-            del.textContent = '✕';
+            const del = document.createElement('button'); del.className='btn btn-danger'; del.textContent='削除';
             del.onclick = async ()=>{ await fetch(`/queue/${it.job_id}`, { method:'DELETE' }); refreshQueue(); };
 
             right.appendChild(up); right.appendChild(down); right.appendChild(edit); right.appendChild(save); right.appendChild(del);
