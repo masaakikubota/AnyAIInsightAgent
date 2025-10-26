@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/static/anyai/assets/AnyAI_Logo_For_Loading.png">
+  <title>AnyAI Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/anyai/core/anyai.tokens.css">
+  <link rel="stylesheet" href="/static/anyai/core/anyai.components.css">
+  <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css">
+  <link rel="stylesheet" href="/static/anyai/tool-layout.css">
+  <script defer src="/static/anyai/vendor/lucide.js"></script>
+  <script defer src="/static/anyai/sidebar.js"></script>
+  <script defer src="/static/anyai/core/anyai.js"></script>
+  <style>
+    .settings-card {
+      display: flex;
+      flex-direction: column;
+      gap: var(--anyai-space-5);
+      background: var(--anyai-panel);
+      border-radius: var(--anyai-radius-3);
+      border: 1px solid var(--anyai-border);
+      padding: var(--anyai-space-6);
+    }
+
+    .settings-grid {
+      display: grid;
+      gap: var(--anyai-space-4);
+    }
+
+    @media (min-width: 720px) {
+      .settings-grid {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+    }
+
+    .field-block {
+      display: flex;
+      flex-direction: column;
+      gap: var(--anyai-space-2);
+    }
+
+    .input-row {
+      display: flex;
+      gap: var(--anyai-space-2);
+      align-items: center;
+    }
+
+    .input-row input[type="password"],
+    .input-row input[type="text"] {
+      flex: 1;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--anyai-space-2);
+      padding: 0 var(--anyai-space-3);
+      border-radius: var(--anyai-radius-pill, 999px);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .status-badge.is-ready {
+      background: color-mix(in srgb, var(--anyai-success), white 88%);
+      color: var(--anyai-success-900, var(--anyai-success));
+    }
+
+    .status-badge.is-missing {
+      background: color-mix(in srgb, var(--anyai-danger), white 88%);
+      color: var(--anyai-danger-900, var(--anyai-danger));
+    }
+
+    .message {
+      padding: var(--anyai-space-3) var(--anyai-space-4);
+      border-radius: var(--anyai-radius-2);
+      font-size: 0.9rem;
+      border: 1px solid transparent;
+    }
+
+    .message[data-state="success"] {
+      background: color-mix(in srgb, var(--anyai-success), white 90%);
+      color: var(--anyai-success-900, var(--anyai-success));
+      border-color: color-mix(in srgb, var(--anyai-success), transparent 60%);
+    }
+
+    .message[data-state="error"] {
+      background: color-mix(in srgb, var(--anyai-danger), white 90%);
+      color: var(--anyai-danger-900, var(--anyai-danger));
+      border-color: color-mix(in srgb, var(--anyai-danger), transparent 60%);
+    }
+
+    .message[data-state="info"] {
+      background: var(--anyai-bg-subtle);
+      color: var(--anyai-text-subtle);
+      border-color: var(--anyai-border);
+    }
+  </style>
+</head>
+<body>
+  <div class="anyai-layout">
+    <aside class="anyai-sidebar" data-active-tool="settings"></aside>
+    <main class="anyai-content">
+      <div class="anyai-app">
+        <header class="anyai-app-header">
+          <div>
+            <h1 class="anyai-title">APIキー設定</h1>
+            <p class="anyai-subtitle">Comment Enhancer や動画スイート機能で利用する OpenAI / Gemini の APIキーを管理します。</p>
+          </div>
+        </header>
+
+        <section class="settings-card" aria-labelledby="section-keys">
+          <div>
+            <h2 id="section-keys" class="mt-0">キーの状態</h2>
+            <p class="text-subtle">キーはサーバープロセスの環境変数として登録され、任意で <code>.env</code> に保存できます。</p>
+          </div>
+
+          <div class="settings-grid" role="list">
+            <div class="field-block" role="listitem">
+              <div class="input-row">
+                <label for="openai-key" class="text-strong">OpenAI API Key</label>
+                <span class="status-badge" data-status="openai">-</span>
+              </div>
+              <div class="input-row">
+                <input id="openai-key" name="openai-key" type="password" autocomplete="off" placeholder="sk-..." class="input">
+                <button type="button" class="btn btn-subtle" data-toggle-password="openai-key">表示</button>
+              </div>
+              <p class="field-hint">例: <code>gpt-4.1</code> 系列を利用するには有効な OpenAI APIキーが必要です。</p>
+            </div>
+
+            <div class="field-block" role="listitem">
+              <div class="input-row">
+                <label for="gemini-key" class="text-strong">Gemini API Key</label>
+                <span class="status-badge" data-status="gemini">-</span>
+              </div>
+              <div class="input-row">
+                <input id="gemini-key" name="gemini-key" type="password" autocomplete="off" placeholder="AIza..." class="input">
+                <button type="button" class="btn btn-subtle" data-toggle-password="gemini-key">表示</button>
+              </div>
+              <p class="field-hint">動画分析・レビュー機能では Gemini Flash / Pro モデルが使用されます。</p>
+            </div>
+          </div>
+
+          <form id="keys-form" class="column gap-4">
+            <label class="checkbox">
+              <input type="checkbox" id="persist-keys">
+              <span>保存して再起動後も利用する（<code>.env</code> に書き込み）</span>
+            </label>
+            <div class="message" id="status-message" data-state="info">
+              キーを入力して「保存」を押すと即座に反映されます。
+            </div>
+            <div class="row gap-3">
+              <button type="submit" class="btn btn-primary">保存</button>
+              <button type="button" class="btn btn-outline" id="refresh-status">再読み込み</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="settings-card">
+          <h2 class="mt-0">ヘルプ</h2>
+          <ul class="list-disc">
+            <li>OpenAIキーが未設定の場合、Comment Enhancer は実行できません。</li>
+            <li>キーを更新した後は自動的に全ワーカープロセスへ反映されます。</li>
+            <li>誤ったキーで保存した場合は空欄のまま再度保存し、正しいキーを入力してください。</li>
+          </ul>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const statusBadges = {
+      openai: document.querySelector('[data-status="openai"]'),
+      gemini: document.querySelector('[data-status="gemini"]'),
+    };
+    const messageEl = document.getElementById('status-message');
+    const formEl = document.getElementById('keys-form');
+    const persistEl = document.getElementById('persist-keys');
+    const refreshBtn = document.getElementById('refresh-status');
+    const inputs = {
+      openai: document.getElementById('openai-key'),
+      gemini: document.getElementById('gemini-key'),
+    };
+
+    const STATUS_TEXT = {
+      ready: '設定済み',
+      missing: '未設定',
+    };
+
+    function setMessage(text, state = 'info') {
+      messageEl.textContent = text;
+      messageEl.dataset.state = state;
+    }
+
+    function setStatusBadge(kind, isReady) {
+      const badge = statusBadges[kind];
+      if (!badge) return;
+      badge.textContent = isReady ? STATUS_TEXT.ready : STATUS_TEXT.missing;
+      badge.classList.toggle('is-ready', isReady);
+      badge.classList.toggle('is-missing', !isReady);
+    }
+
+    async function fetchStatus() {
+      try {
+        const resp = await fetch('/settings');
+        if (!resp.ok) {
+          throw new Error(`status ${resp.status}`);
+        }
+        const data = await resp.json();
+        const keys = data?.keys || {};
+        setStatusBadge('openai', Boolean(keys.openai));
+        setStatusBadge('gemini', Boolean(keys.gemini));
+        setMessage('最新のキー状態を取得しました。', 'info');
+      } catch (error) {
+        console.error(error);
+        setMessage(`キー状態の取得に失敗しました: ${error.message}`, 'error');
+      }
+    }
+
+    formEl.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const openaiValue = inputs.openai.value.trim();
+      const geminiValue = inputs.gemini.value.trim();
+      const persist = persistEl.checked;
+
+      if (!openaiValue && !geminiValue && !persist) {
+        setMessage('更新対象がありません。キーを入力するか、保存オプションを選択してください。', 'error');
+        return;
+      }
+
+      const formData = new FormData();
+      if (openaiValue) {
+        formData.append('openai_api_key', openaiValue);
+      }
+      if (geminiValue) {
+        formData.append('gemini_api_key', geminiValue);
+      }
+      if (persist) {
+        formData.append('persist', 'true');
+      }
+
+      try {
+        const resp = await fetch('/settings', {
+          method: 'POST',
+          body: formData,
+        });
+        const result = await resp.json();
+        if (!resp.ok) {
+          const detail = result?.detail || result?.error || 'unknown error';
+          throw new Error(detail);
+        }
+
+        inputs.openai.value = '';
+        inputs.gemini.value = '';
+        persistEl.checked = false;
+
+        setMessage('APIキーを保存しました。すぐに反映されます。', 'success');
+        await fetchStatus();
+      } catch (error) {
+        console.error(error);
+        setMessage(`APIキーの保存に失敗しました: ${error.message}`, 'error');
+      }
+    });
+
+    refreshBtn.addEventListener('click', () => {
+      fetchStatus();
+    });
+
+    document.querySelectorAll('[data-toggle-password]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const targetId = button.dataset.togglePassword;
+        const input = document.getElementById(targetId);
+        if (!input) return;
+        const isHidden = input.type === 'password';
+        input.type = isHidden ? 'text' : 'password';
+        button.textContent = isHidden ? '隠す' : '表示';
+      });
+    });
+
+    fetchStatus();
+  </script>
+</body>
+</html>

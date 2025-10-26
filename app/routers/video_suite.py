@@ -183,12 +183,20 @@ async def run_comment_enhancer(request: Request) -> JSONResponse:
     if not client_secrets_path:
         raise HTTPException(status_code=400, detail="Could not find a client_secrets .json file.")
 
+    raw_model = (data.get("model_name") or "gpt-4.1").strip()
+    provider = (data.get("model_provider") or ("gemini" if raw_model.startswith("gemini") else "openai")).strip().lower()
+    if provider == "gemini":
+        model_name = workers.normalize_gemini_model(raw_model)
+    else:
+        model_name = raw_model
+
     config = {
         "sheet_url": sheet_url,
         "source_sheet": "RawData_Video",
         "output_sheet": "RawData_VideoComment",
         "workers": workers_count,
-        "model": data.get("model_name", "gpt-4.1"),
+        "model": model_name or "gpt-4.1",
+        "provider": "gemini" if provider == "gemini" else "openai",
         "prompt_file": data.get("prompt_file") or "config/comment_enhancer_prompt.txt",
         "client_secrets": str(client_secrets_path),
         "job_type": "comment_enhancer",

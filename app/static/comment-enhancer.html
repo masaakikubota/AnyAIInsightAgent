@@ -58,11 +58,97 @@
     .history-list li { cursor:pointer; border:1px solid var(--anyai-border); border-radius:var(--anyai-radius-2); padding:var(--anyai-space-3) var(--anyai-space-4); transition:background .15s ease; }
     .history-list li:hover { background:var(--anyai-bg-subtle); }
 
-    .mode-options { display:flex; flex-wrap:wrap; gap:var(--anyai-space-3); align-items:center; }
-    .mode-options label { display:inline-flex; align-items:center; gap:var(--anyai-space-2); font-weight:600; }
-
     .field-inline { display:flex; align-items:center; gap:var(--anyai-space-3); }
     .field-inline label { font-weight:400; }
+
+    .key-card {
+      display: flex;
+      flex-direction: column;
+      gap: var(--anyai-space-5);
+      background: var(--anyai-panel);
+      border: 1px solid var(--anyai-border);
+      border-radius: var(--anyai-radius-3);
+      padding: var(--anyai-space-6);
+    }
+
+    .key-grid {
+      display: grid;
+      gap: var(--anyai-space-4);
+    }
+
+    @media (min-width: 720px) {
+      .key-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    .input-row {
+      display: flex;
+      align-items: center;
+      gap: var(--anyai-space-2);
+    }
+
+    .input-row input[type="password"],
+    .input-row input[type="text"] {
+      flex: 1;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--anyai-space-2);
+      padding: 0 var(--anyai-space-3);
+      border-radius: var(--anyai-radius-pill, 999px);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .status-badge.is-ready {
+      background: color-mix(in srgb, var(--anyai-success), white 88%);
+      color: var(--anyai-success-900, var(--anyai-success));
+    }
+
+    .status-badge.is-missing {
+      background: color-mix(in srgb, var(--anyai-danger), white 88%);
+      color: var(--anyai-danger-900, var(--anyai-danger));
+    }
+
+    .message {
+      padding: var(--anyai-space-3) var(--anyai-space-4);
+      border-radius: var(--anyai-radius-2);
+      font-size: 0.9rem;
+      border: 1px solid transparent;
+    }
+
+    .message[data-state="success"] {
+      background: color-mix(in srgb, var(--anyai-success), white 90%);
+      color: var(--anyai-success-900, var(--anyai-success));
+      border-color: color-mix(in srgb, var(--anyai-success), transparent 60%);
+    }
+
+    .message[data-state="error"] {
+      background: color-mix(in srgb, var(--anyai-danger), white 90%);
+      color: var(--anyai-danger-900, var(--anyai-danger));
+      border-color: color-mix(in srgb, var(--anyai-danger), transparent 60%);
+    }
+
+    .message[data-state="info"] {
+      background: var(--anyai-bg-subtle);
+      color: var(--anyai-text-subtle);
+      border-color: var(--anyai-border);
+    }
+
+    .model-grid {
+      display: grid;
+      gap: var(--anyai-space-4);
+    }
+
+    @media (min-width: 640px) {
+      .model-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
 
     @media (max-width: 720px) {
       #log-container { height: 240px; }
@@ -79,7 +165,51 @@
           <h1 id="enhancer-heading" class="mt-0">コメント改善をバッチ処理</h1>
           <p class="field-hint">スプレッドシートのコメント列を取り込み、指定モデルで改善案を生成します。</p>
 
-          <form id="enhancer-form" class="anyai-form" aria-labelledby="enhancer-config-heading">
+          <form id="enhancer-form" class="anyai-form" aria-labelledby="enhancer-config-heading" autocomplete="off">
+            <section class="key-card" aria-labelledby="key-heading">
+              <div>
+                <h2 id="key-heading" class="mt-0">APIキー設定</h2>
+                <p class="field-hint">Comment Enhancer と関連機能で利用する OpenAI / Gemini のキーを管理します。</p>
+              </div>
+              <div class="key-grid">
+                <div class="field" role="group" aria-labelledby="openai-key-label">
+                  <div class="input-row">
+                    <label id="openai-key-label" for="openai-key" class="text-strong">OpenAI API Key</label>
+                    <span class="status-badge" data-status="openai">-</span>
+                  </div>
+                  <div class="input-row">
+                    <input id="openai-key" name="openai-key" type="password" class="input" placeholder="sk-..." autocomplete="off">
+                    <button type="button" class="btn btn-subtle" data-toggle-password="openai-key">表示</button>
+                  </div>
+                  <p class="field-hint">GPT 系列（gpt-4.1 / gpt-5-nano など）を利用する場合に必要です。</p>
+                </div>
+                <div class="field" role="group" aria-labelledby="gemini-key-label">
+                  <div class="input-row">
+                    <label id="gemini-key-label" for="gemini-key" class="text-strong">Gemini API Key</label>
+                    <span class="status-badge" data-status="gemini">-</span>
+                  </div>
+                  <div class="input-row">
+                    <input id="gemini-key" name="gemini-key" type="password" class="input" placeholder="AIza..." autocomplete="off">
+                    <button type="button" class="btn btn-subtle" data-toggle-password="gemini-key">表示</button>
+                  </div>
+                  <p class="field-hint">Gemini Flash/Pro モデルを選択した場合に使用されます。</p>
+                </div>
+              </div>
+              <div class="message" id="key-message" data-state="info">
+                キーを入力し「保存」を押すと即時反映されます。.env に永続化する場合はチェックを付けてください。
+              </div>
+              <div class="field">
+                <label class="checkbox">
+                  <input type="checkbox" id="persist-keys">
+                  <span>.env に保存して次回起動後も利用する</span>
+                </label>
+              </div>
+              <div class="field field-inline">
+                <button type="button" class="btn btn-primary" id="save-keys-button">保存</button>
+                <button type="button" class="btn btn-outline" id="refresh-key-status">再読み込み</button>
+              </div>
+            </section>
+
             <section class="anyai-form-section" aria-labelledby="sheet-heading">
               <header>
                 <h2 id="sheet-heading" class="mt-0">対象シート</h2>
@@ -106,18 +236,20 @@
             <section class="anyai-form-section" aria-labelledby="model-heading">
               <header>
                 <h2 id="model-heading" class="mt-0">モデル選択</h2>
-                <p class="field-hint">改善処理に利用する OpenAI モデルを選択します。</p>
+                <p class="field-hint">Scoring UI と同じ選択肢からメインモデルを指定できます。</p>
               </header>
-              <div class="anyai-form-fields">
+              <div class="model-grid">
                 <div class="field">
-                  <label>OpenAI モデル</label>
-                  <div class="mode-options">
-                    <label><input type="radio" name="model-name" value="gpt-4.1" checked> <span>GPT-4.1</span></label>
-                  </div>
-                  <details class="field-info">
-                    <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>利用ガイド</span></summary>
-                    <div class="info-panel">現在は GPT-4.1 のみ対応しています。モデル追加時はここに選択肢が増えます。</div>
-                  </details>
+                  <label for="model-select">利用モデル</label>
+                  <select id="model-select" class="input">
+                    <option value="gemini-flash-lite-latest">Gemini Flash Lite (latest)</option>
+                    <option value="gemini-flash-latest">Gemini Flash (latest)</option>
+                    <option value="gemini-pro-latest">Gemini Pro (latest)</option>
+                    <option value="gpt-5-nano">GPT-5 Nano</option>
+                    <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
+                    <option value="gpt-4.1" selected>GPT-4.1</option>
+                  </select>
+                  <p class="field-hint">Gemini 系はテキスト生成に Gemini API、GPT 系は OpenAI API を利用します。</p>
                 </div>
                 <div class="field field-inline">
                   <button type="button" class="btn btn-outline" id="stop-button" disabled>停止</button>
@@ -199,8 +331,25 @@
     const historyEmpty = document.getElementById('history-empty');
     const queuePanel = document.getElementById('queue-panel');
     const refreshQueueButton = document.getElementById('btn-refresh-queue');
+    const modelSelect = document.getElementById('model-select');
+    const keySaveButton = document.getElementById('save-keys-button');
+    const keyRefreshButton = document.getElementById('refresh-key-status');
+    const keyMessage = document.getElementById('key-message');
+    const persistCheckbox = document.getElementById('persist-keys');
+    const keyInputs = {
+      openai: document.getElementById('openai-key'),
+      gemini: document.getElementById('gemini-key'),
+    };
+    const statusBadges = {
+      openai: document.querySelector('[data-status="openai"]'),
+      gemini: document.querySelector('[data-status="gemini"]'),
+    };
+
     let currentProcessId = null;
     let eventSource = null;
+    let isJobRunning = false;
+    const keyStatus = { openai: false, gemini: false };
+    const missingKeyNotice = { openai: false, gemini: false };
 
     const HISTORY_KEY = 'anyai_sheet_history_v3';
     const MAX_HISTORY = 10;
@@ -213,12 +362,82 @@
       logContainer.scrollTop = logContainer.scrollHeight;
     }
 
+    function setKeyMessage(text, state = 'info') {
+      keyMessage.textContent = text;
+      keyMessage.dataset.state = state;
+    }
+
+    function setStatusBadge(kind, ready) {
+      const badge = statusBadges[kind];
+      if (!badge) return;
+      badge.textContent = ready ? '設定済み' : '未設定';
+      badge.classList.toggle('is-ready', ready);
+      badge.classList.toggle('is-missing', !ready);
+    }
+
+    function detectProvider(modelValue) {
+      if (!modelValue) return 'openai';
+      return modelValue.startsWith('gemini') ? 'gemini' : 'openai';
+    }
+
+    function updateRunButtonAvailability() {
+      if (isJobRunning) {
+        runButton.disabled = true;
+        return;
+      }
+      const provider = detectProvider(modelSelect.value);
+      if (provider === 'gemini') {
+        runButton.disabled = !keyStatus.gemini;
+      } else {
+        runButton.disabled = !keyStatus.openai;
+      }
+    }
+
+    function maybeLogMissing(provider) {
+      if (keyStatus[provider]) {
+        missingKeyNotice[provider] = false;
+        return;
+      }
+      if (missingKeyNotice[provider]) return;
+      if (provider === 'gemini') {
+        log('-> Gemini APIキーが未設定です。上部の「APIキー設定」で登録してください。', true);
+      } else {
+        log('-> OpenAI APIキーが未設定です。上部の「APIキー設定」で登録してください。', true);
+      }
+      missingKeyNotice[provider] = true;
+    }
+
+    async function refreshKeyStatus(showLog = false) {
+      try {
+        const resp = await fetch('/settings');
+        if (!resp.ok) throw new Error(`status ${resp.status}`);
+        const data = await resp.json();
+        keyStatus.openai = Boolean(data?.keys?.openai);
+        keyStatus.gemini = Boolean(data?.keys?.gemini);
+        setStatusBadge('openai', keyStatus.openai);
+        setStatusBadge('gemini', keyStatus.gemini);
+        setKeyMessage('キーを入力し「保存」を押すと即時反映されます。.env に永続化する場合はチェックを付けてください。', 'info');
+        if (showLog) {
+          log('-> APIキーの状態を更新しました。');
+        }
+      } catch (error) {
+        setKeyMessage(`APIキー状態の取得に失敗しました: ${error.message}`, 'error');
+        if (showLog) {
+          log(`-> APIキー状態の取得に失敗: ${error}`, true);
+        }
+      } finally {
+        updateRunButtonAvailability();
+        maybeLogMissing(detectProvider(modelSelect.value));
+      }
+    }
+
     const queueManager = (window.AnyAIQueueManager && queuePanel)
       ? window.AnyAIQueueManager.init({ root: queuePanel, log })
       : null;
 
     function finalizeUI() {
-      runButton.disabled = false;
+      isJobRunning = false;
+      updateRunButtonAvailability();
       runButton.textContent = '実行';
       stopButton.disabled = true;
       if (eventSource) {
@@ -280,6 +499,13 @@
 
     renderHistory();
 
+    refreshKeyStatus(false);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        refreshKeyStatus(false);
+      }
+    });
+
     if (refreshQueueButton) {
       refreshQueueButton.addEventListener('click', () => {
         if (queueManager && typeof queueManager.refresh === 'function') {
@@ -288,6 +514,68 @@
         renderHistory();
       });
     }
+
+    document.querySelectorAll('[data-toggle-password]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const targetId = button.dataset.togglePassword;
+        const input = document.getElementById(targetId);
+        if (!input) return;
+        const hidden = input.type === 'password';
+        input.type = hidden ? 'text' : 'password';
+        button.textContent = hidden ? '隠す' : '表示';
+      });
+    });
+
+    keySaveButton.addEventListener('click', async () => {
+      const openaiValue = keyInputs.openai.value.trim();
+      const geminiValue = keyInputs.gemini.value.trim();
+      const persist = persistCheckbox.checked;
+
+      if (!openaiValue && !geminiValue && !persist) {
+        setKeyMessage('更新対象がありません。キーを入力するか、保存オプションを選択してください。', 'error');
+        return;
+      }
+
+      const formData = new FormData();
+      if (openaiValue) {
+        formData.append('openai_api_key', openaiValue);
+      }
+      if (geminiValue) {
+        formData.append('gemini_api_key', geminiValue);
+      }
+      if (persist) {
+        formData.append('persist', 'true');
+      }
+
+      try {
+        const resp = await fetch('/settings', { method: 'POST', body: formData });
+        const result = await resp.json();
+        if (!resp.ok) {
+          const detail = result?.detail || result?.error || 'unknown error';
+          throw new Error(detail);
+        }
+
+        keyInputs.openai.value = '';
+        keyInputs.gemini.value = '';
+        persistCheckbox.checked = false;
+        setKeyMessage('APIキーを保存しました。処理にすぐ反映されます。', 'success');
+        log('-> APIキーを保存しました。');
+        await refreshKeyStatus(true);
+      } catch (error) {
+        setKeyMessage(`APIキーの保存に失敗しました: ${error.message}`, 'error');
+        log(`-> APIキーの保存に失敗: ${error}`, true);
+      }
+    });
+
+    keyRefreshButton.addEventListener('click', () => {
+      setKeyMessage('最新の状態を取得中です...', 'info');
+      refreshKeyStatus(true);
+    });
+
+    modelSelect.addEventListener('change', () => {
+      updateRunButtonAvailability();
+      maybeLogMissing(detectProvider(modelSelect.value));
+    });
 
     stopButton.addEventListener('click', async () => {
       if (!currentProcessId) {
@@ -311,6 +599,18 @@
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
 
+      const provider = detectProvider(modelSelect.value);
+      if (provider === 'gemini' && !keyStatus.gemini) {
+        log('-> Gemini モデルを使用するには Gemini APIキーが必要です。上部の設定で登録してください。', true);
+        updateRunButtonAvailability();
+        return;
+      }
+      if (provider === 'openai' && !keyStatus.openai) {
+        log('-> GPT 系モデルを使用するには OpenAI APIキーが必要です。上部の設定で登録してください。', true);
+        updateRunButtonAvailability();
+        return;
+      }
+
       if (eventSource) {
         eventSource.close();
         eventSource = null;
@@ -319,12 +619,14 @@
       const payload = {
         sheet_url: document.getElementById('sheet-url').value,
         workers: document.getElementById('workers').value,
-        model_name: document.querySelector('input[name="model-name"]:checked').value,
+        model_name: modelSelect.value,
+        model_provider: provider,
       };
 
       logContainer.innerHTML = '';
       log('-> AnyAICommentEnhancer を開始します...');
-      runButton.disabled = true;
+      isJobRunning = true;
+      updateRunButtonAvailability();
       runButton.textContent = '実行中...';
       stopButton.disabled = false;
 
@@ -388,6 +690,7 @@
             log('-> ログストリームが切断されました。', true);
           }
           finalizeUI();
+          refreshKeyStatus(false);
         });
         eventSource.addEventListener('complete', (evt) => {
           log(`-> ${evt.data}`);
@@ -400,6 +703,7 @@
         });
       } catch (error) {
         log(`Network or server error: ${error}`, true);
+        refreshKeyStatus(false);
         finalizeUI();
       }
     });

@@ -95,6 +95,10 @@ def create_app() -> FastAPI:
     def kol_reviewer_page() -> str:
         return _load_static_page("kol-reviewer.html")
 
+    @app.get("/settings-ui", response_class=HTMLResponse)
+    def settings_ui_page() -> str:
+        return _load_static_page("settings.html")
+
     return app
 
 
