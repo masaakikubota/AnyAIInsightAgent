@@ -1320,7 +1320,7 @@ def _call_gemini_text_summary(client, model_name: str, prompt: str, log_q: multi
             model=model_name,
             contents=prompt,
             config=genai_types.GenerateContentConfig(
-                http_options=genai_types.HttpOptions(timeout=600)
+                http_options=genai_types.HttpOptions(timeout=6000)
             ),
         )
     except Exception as e:
@@ -1333,6 +1333,12 @@ def _call_gemini_text_summary(client, model_name: str, prompt: str, log_q: multi
         code_value = str(code_attr).lower() if code_attr else ""
         code_name_value = str(code_name).lower() if code_name else ""
         message_lower = message.lower()
+        is_timeout = (
+            (RequestsReadTimeout is not None and isinstance(e, RequestsReadTimeout))
+            or (RequestsConnectTimeout is not None and isinstance(e, RequestsConnectTimeout))
+            or isinstance(e, (TimeoutError, socket.timeout))
+            or "timed out" in message_lower
+        )
         if (
             status_code == 401
             or "api key" in message_lower
@@ -1346,6 +1352,9 @@ def _call_gemini_text_summary(client, model_name: str, prompt: str, log_q: multi
                 queue=log_q,
             )
             raise GeminiAuthenticationError(message) from e
+        if is_timeout:
+            log_message("   - Gemini リクエストがタイムアウトしました。再試行します...", is_error=True, queue=log_q)
+            raise concurrent.futures.TimeoutError(message) from e
         log_message(f"   - Gemini text generation error: {e}", is_error=True, queue=log_q)
         raise
 
@@ -1463,17 +1472,71 @@ def comment_enhancer_main_logic(config: dict, log_q: multiprocessing.Queue):
             gemini_key = os.getenv("GEMINI_API_KEY")
             if not gemini_key:
                 raise ValueError("GEMINI_API_KEY is not set. Place it in .env or confidential/Keys.txt")
-            client = genai.Client(api_key=gemini_key)
+            primary_client = genai.Client(api_key=gemini_key)
             model_name = _normalize_gemini_model(model_name or DEFAULT_GEMINI_MODEL)
         else:
             openai_key = os.getenv("OPENAI_API_KEY")
             if not openai_key:
                 raise ValueError("OPENAI_API_KEY is not set. Place it in .env or confidential/Keys.txt")
-            client = OpenAI(api_key=openai_key)
+            primary_client = OpenAI(api_key=openai_key)
             model_name = model_name or "gpt-4.1"
             llm_provider = "openai"
+
+        fallback_model = config.get("fallback_model")
+        fallback_provider = (config.get("fallback_provider") or "").strip().lower() or None
+        fallback_client = None
+        if fallback_model and fallback_provider:
+            fallback_model = str(fallback_model).strip()
+            if not fallback_model:
+                fallback_model = None
+                fallback_provider = None
+        if fallback_model and fallback_provider:
+            if fallback_provider == llm_provider:
+                fallback_client = primary_client
+                if fallback_provider == "gemini":
+                    fallback_model = _normalize_gemini_model(fallback_model)
+            elif fallback_provider == "gemini":
+                fallback_key = os.getenv("GEMINI_API_KEY")
+                if fallback_key:
+                    fallback_client = genai.Client(api_key=fallback_key)
+                    fallback_model = _normalize_gemini_model(fallback_model)
+                else:
+                    log_message("-> フォールバックGeminiモデルが設定されていますが GEMINI_API_KEY が未設定です。フォールバックを無効化します。", is_error=True, queue=log_q)
+                    fallback_model = None
+                    fallback_provider = None
+            else:
+                fallback_key = os.getenv("OPENAI_API_KEY")
+                if fallback_key:
+                    fallback_client = OpenAI(api_key=fallback_key)
+                else:
+                    log_message("-> フォールバックOpenAIモデルが設定されていますが OPENAI_API_KEY が未設定です。フォールバックを無効化します。", is_error=True, queue=log_q)
+                    fallback_model = None
+                    fallback_provider = None
+
         config["model"] = model_name
         config["provider"] = llm_provider
+        config["fallback_model"] = fallback_model
+        config["fallback_provider"] = fallback_provider
+
+        try:
+            max_row_concurrency = int(config.get("max_row_concurrency") or workers)
+        except (TypeError, ValueError):
+            max_row_concurrency = workers
+        max_row_concurrency = max(1, max_row_concurrency)
+        try:
+            fallback_max_row_concurrency = int(config.get("fallback_max_row_concurrency") or max_row_concurrency)
+        except (TypeError, ValueError):
+            fallback_max_row_concurrency = max_row_concurrency
+        fallback_max_row_concurrency = max(1, fallback_max_row_concurrency)
+        if llm_provider == "gemini" and max_row_concurrency < workers:
+            log_message(f"-> Geminiモード: 同時実行数を {max_row_concurrency} に制限します（タイムアウト対策）。", queue=log_q)
+        if fallback_model and fallback_provider == "gemini" and fallback_max_row_concurrency < max_row_concurrency:
+            log_message(
+                f"-> フォールバックGeminiは同時実行数 {fallback_max_row_concurrency} で実行します。",
+                queue=log_q,
+            )
+        if fallback_model and fallback_provider:
+            log_message(f"-> フォールバックモデル: {fallback_provider} / {fallback_model}", queue=log_q)
 
         # Row-by-row processing: for each row, process all comments in parallel, then write, then next row
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1492,6 +1555,10 @@ def comment_enhancer_main_logic(config: dict, log_q: multiprocessing.Queue):
                 continue
 
             # Build per-row tasks
+            if llm_provider == "gemini":
+                context_len = len(video_context or "")
+                if context_len > 20000:
+                    log_message(f"[Row {row_idx}] VIDEO_CONTEXT length is {context_len} chars (Gemini).", queue=log_q)
             row_tasks = []  # list of (comment_n, original_comment)
             for col_idx, comment_n in comment_cols:
                 original_comment = (row[col_idx - 1].strip() if len(row) >= col_idx else "")
@@ -1502,19 +1569,58 @@ def comment_enhancer_main_logic(config: dict, log_q: multiprocessing.Queue):
             if not row_tasks:
                 continue
 
-            row_workers = min(workers, len(row_tasks))
-            log_message(f"[Row {row_idx}] Processing {len(row_tasks)} comments with concurrency={row_workers}...", queue=log_q)
+            primary_workers = min(workers, len(row_tasks), max_row_concurrency)
+            row_workers = primary_workers
+            if fallback_model and fallback_provider == "gemini":
+                row_workers = min(row_workers, fallback_max_row_concurrency)
+            row_workers = max(1, row_workers)
+            if row_workers != primary_workers:
+                log_message(
+                    f"[Row {row_idx}] Processing {len(row_tasks)} comments with concurrency={row_workers} (primary limit {primary_workers}).",
+                    queue=log_q,
+                )
+            else:
+                log_message(f"[Row {row_idx}] Processing {len(row_tasks)} comments with concurrency={row_workers}...", queue=log_q)
 
             # Execute per-row tasks
+            def _invoke_model(provider_name: str, client_ref, model_ref: str, prompt_text: str) -> str:
+                if provider_name == "gemini":
+                    return _call_gemini_text_summary(client_ref, model_ref, prompt_text, log_q)
+                return _call_openai_text(client_ref, model_ref, prompt_text, log_q)
+
             def _work_one(task):
                 n, comment = task
                 if _is_non_language_like(comment):
                     return (n, "")
                 prompt = _build_comment_prompt(prompt_template, video_context, comment)
                 if llm_provider == "gemini":
-                    text = _call_gemini_text_summary(client, model_name, prompt, log_q)
-                else:
-                    text = _call_openai_text(client, model_name, prompt, log_q)
+                    prompt_len = len(prompt)
+                    if prompt_len > 20000:
+                        log_message(f"   - Gemini promptが非常に長いためタイムアウトの可能性があります (Row {row_idx}, Comment_{n}, {prompt_len} chars).", queue=log_q)
+                try:
+                    text = _invoke_model(llm_provider, primary_client, model_name, prompt)
+                except LLMAuthenticationError:
+                    raise
+                except Exception as primary_error:
+                    if fallback_model and fallback_provider and fallback_client:
+                        log_message(
+                            f"   - Primary model error on Row {row_idx} (Comment_{n}): {primary_error}. Trying fallback {fallback_provider}:{fallback_model}",
+                            is_error=True,
+                            queue=log_q,
+                        )
+                        try:
+                            text = _invoke_model(fallback_provider, fallback_client, fallback_model, prompt)
+                        except LLMAuthenticationError:
+                            raise
+                        except Exception as fallback_error:
+                            log_message(
+                                f"   - Fallback model error on Row {row_idx} (Comment_{n}): {fallback_error}",
+                                is_error=True,
+                                queue=log_q,
+                            )
+                            raise RuntimeError(f"Fallback {fallback_provider} failed: {fallback_error}") from fallback_error
+                    else:
+                        raise
                 if len(text) > MAX_CELL_LEN:
                     text = text[:MAX_CELL_LEN - 20] + "... [TRUNCATED]"
                 return (n, text)
@@ -1536,8 +1642,8 @@ def comment_enhancer_main_logic(config: dict, log_q: multiprocessing.Queue):
                     except Exception as e:
                         tn = futures[fut][0]
                         log_message(f"   - Error on Row {row_idx} (Comment_{tn}): {e}", is_error=True, queue=log_q)
-                        n, text = tn, f"ERROR: {type(e).__name__}: {e}"[:MAX_CELL_LEN]
-                        results_for_row.append((n, text))
+                        # エラー発生時はセルを上書きしない
+                        continue
 
                 if auth_failure is not None:
                     log_message(

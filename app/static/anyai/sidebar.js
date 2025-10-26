@@ -28,6 +28,13 @@
         { id: 'video-comment-review', href: '/video-comment-review', text: 'Review', tooltip: 'Video Comment Review', icon: 'file-text' },
         { id: 'kol-reviewer', href: '/kol-reviewer', text: 'KOL', tooltip: 'KOL Reviewer', icon: 'star' }
       ]
+    },
+    {
+      id: 'api',
+      label: 'API',
+      items: [
+        { id: 'settings-api', href: '/settings', text: 'API', tooltip: 'API Keys', icon: 'key' }
+      ]
     }
   ];
 

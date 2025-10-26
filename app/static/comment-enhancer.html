@@ -61,24 +61,330 @@
     .field-inline { display:flex; align-items:center; gap:var(--anyai-space-3); }
     .field-inline label { font-weight:400; }
 
-    .key-card {
+    .anyai-form-fields {
+      gap: var(--anyai-space-3, 12px);
+    }
+
+    .field .field-hint {
+      margin-top: var(--anyai-space-1, 4px);
+    }
+
+    .sheet-selection-grid {
+      width: 100%;
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--anyai-space-3);
+      align-items: start;
+    }
+
+    .sheet-selection-grid > .field:first-of-type {
+      grid-column: 1 / -1;
+    }
+
+    .sheet-selection-grid details.field-info-inline .info-panel {
+      width: 100%;
+      box-sizing: border-box;
+      font-size: var(--anyai-fs-1);
+    }
+
+    .sheet-selection-grid .field {
+      position: relative;
+    }
+
+    .sheet-selection-grid .field select {
+      width: 100%;
+      border-radius: var(--anyai-radius-2);
+      border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
+      background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='none' stroke='%23545d72' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.2' d='m3 5 4 4 4-4'/%3E%3C/svg%3E")
+          right 12px center / 14px 14px no-repeat,
+        #ffffff;
+      padding: 6px 40px 6px 12px;
+      font: inherit;
+      line-height: 1.4;
+      color: inherit;
+      appearance: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+    }
+
+    .sheet-selection-grid .field select:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='none' stroke='%238490a8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.2' d='m3 5 4 4 4-4'/%3E%3C/svg%3E")
+          right 12px center / 14px 14px no-repeat,
+        #f5f7fb;
+      color: color-mix(in srgb, currentColor, transparent 25%);
+      border-color: color-mix(in srgb, var(--anyai-border), transparent 10%);
+    }
+
+    .sheet-selection-grid .field select:not(:disabled):hover {
+      border-color: color-mix(in srgb, var(--anyai-border), var(--anyai-primary, #2955ff) 28%);
+      box-shadow: 0 4px 10px rgba(36, 43, 68, 0.06);
+    }
+
+    .sheet-selection-grid .field select:not(:disabled):focus-visible {
+      outline: none;
+      border-color: color-mix(in srgb, var(--anyai-border), var(--anyai-primary, #2955ff) 40%);
+      box-shadow:
+        0 0 0 4px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 85%),
+        0 6px 18px rgba(36, 43, 68, 0.08);
+    }
+
+    .sheet-selection-grid .field select option,
+    .sheet-selection-grid .field select optgroup {
+      background: #ffffff;
+      color: var(--anyai-text, #1f2432);
+    }
+
+    .custom-select {
+      position: relative;
+      width: 100%;
+    }
+
+    .custom-select-native {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      border: 0;
+      clip: rect(0 0 0 0);
+      clip-path: inset(100%);
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .custom-select-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--anyai-space-3);
+      padding: 6px 40px 6px 12px;
+      border-radius: var(--anyai-radius-2);
+      border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
+      background: #ffffff;
+      color: var(--anyai-text, #1f2432);
+      font: inherit;
+      line-height: 1.4;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+      position: relative;
+    }
+
+    .custom-select-toggle::after {
+      content: "";
+      width: 14px;
+      height: 14px;
+      flex: 0 0 auto;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='none' stroke='%23545d72' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.2' d='m3 5 4 4 4-4'/%3E%3C/svg%3E") center / contain no-repeat;
+      transition: transform 0.2s ease;
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .custom-select-label {
+      flex: 1 1 auto;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding-right: var(--anyai-space-2);
+    }
+
+    .custom-select.is-open .custom-select-toggle {
+      border-radius: var(--anyai-radius-2) var(--anyai-radius-2) 0 0;
+      border-color: color-mix(in srgb, var(--anyai-border), var(--anyai-primary, #2955ff) 40%);
+      box-shadow:
+        0 0 0 4px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 85%),
+        0 10px 30px rgba(36, 43, 68, 0.08);
+    }
+
+    .custom-select.is-open .custom-select-toggle::after {
+      transform: rotate(180deg);
+    }
+
+    .custom-select:not(.has-value) .custom-select-label {
+      color: color-mix(in srgb, var(--anyai-text), transparent 35%);
+    }
+
+    .custom-select.is-disabled .custom-select-toggle {
+      cursor: not-allowed;
+      background: #f5f7fb;
+      color: color-mix(in srgb, var(--anyai-text), transparent 35%);
+    }
+
+    .custom-select.is-disabled .custom-select-toggle::after {
+      filter: grayscale(1) opacity(0.65);
+    }
+
+    .custom-select-menu {
+      position: absolute;
+      left: 0;
+      top: calc(100% - 1px);
+      width: 100%;
+      background: #ffffff;
+      border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
+      border-top: 0;
+      border-radius: 0 0 var(--anyai-radius-2) var(--anyai-radius-2);
+      box-shadow: 0 22px 40px rgba(36, 43, 68, 0.16);
+      max-height: 280px;
+      overflow-y: auto;
+      padding: 4px 0;
+      z-index: 70;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(6px);
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+
+    .custom-select.is-open .custom-select-menu {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    .custom-select-option {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      padding: 10px 14px;
+      background: transparent;
+      border: 0;
+      font: inherit;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    .custom-select-option:hover,
+    .custom-select-option:focus-visible {
+      outline: none;
+      background: color-mix(in srgb, var(--anyai-primary), transparent 90%);
+    }
+
+    .custom-select-option.is-selected {
+      background: color-mix(in srgb, var(--anyai-primary), transparent 85%);
+      font-weight: 600;
+    }
+
+    .custom-select-option.is-disabled {
+      color: color-mix(in srgb, var(--anyai-text), transparent 45%);
+      cursor: not-allowed;
+    }
+
+    .custom-select-option.is-disabled:hover {
+      background: transparent;
+    }
+
+    .anyai-form-section {
       display: flex;
       flex-direction: column;
-      gap: var(--anyai-space-5);
-      background: var(--anyai-panel);
-      border: 1px solid var(--anyai-border);
-      border-radius: var(--anyai-radius-3);
-      padding: var(--anyai-space-6);
+      gap: var(--anyai-space-3, 12px);
+      background: var(--anyai-form-band, #f1f5f9);
+      border-radius: var(--anyai-radius-2, 12px);
+      padding: var(--anyai-space-5, 20px) var(--anyai-space-6, 28px);
+      border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 85%);
     }
 
-    .key-grid {
-      display: grid;
-      gap: var(--anyai-space-4);
+    .anyai-form-section + .anyai-form-section {
+      margin-top: 0;
     }
 
-    @media (min-width: 720px) {
-      .key-grid {
+    .anyai-form-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--anyai-space-3, 12px);
+      background: none;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+    }
+
+    .anyai-form-section > header,
+    .anyai-form-group > header {
+      margin-bottom: 0;
+    }
+
+    .anyai-form-section > header > h2.mt-0,
+    .anyai-form-group > header > h3.mt-0 {
+      margin-bottom: 0;
+    }
+
+    .field-with-action {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+    }
+
+    .field-with-action input[type="text"] {
+      flex: 1 1 auto;
+      min-width: 0;
+      border-top-right-radius: 0;
+      border-bottom-right-radius: 0;
+      border-right: 0;
+    }
+
+    .field-with-action .input-action-btn {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 var(--anyai-space-4, 16px);
+      min-width: 72px;
+      border-radius: 0 var(--anyai-radius-2, 12px) var(--anyai-radius-2, 12px) 0;
+      border-left: 0;
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+      background: var(--anyai-primary, #2955ff);
+      color: var(--anyai-text-inverse, #ffffff);
+      font-weight: 600;
+      box-shadow: 0 4px 10px rgba(31, 36, 50, 0.12);
+      transition: box-shadow 0.2s ease, background-color 0.2s ease;
+    }
+
+    .field-with-action .input-action-btn:hover,
+    .field-with-action .input-action-btn:focus-visible {
+      background: var(--anyai-primary-600, #1f3de6);
+      box-shadow: 0 6px 16px rgba(31, 36, 50, 0.16);
+      outline: none;
+      color: var(--anyai-text-inverse, #ffffff);
+    }
+
+    .sheet-selection-grid .field details.field-info-inline {
+      margin-top: var(--anyai-space-2);
+    }
+
+    .sheet-selection-grid .field details.field-info-inline .info-panel {
+      margin-top: 0;
+      padding: var(--anyai-space-3) var(--anyai-space-4);
+      border-radius: 0 0 var(--anyai-radius-2) var(--anyai-radius-2);
+      border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 25%);
+      border-top: 0;
+      background: #ffffff;
+      box-shadow: 0 16px 30px rgba(36, 43, 68, 0.12);
+    }
+
+    .sheet-selection-grid .field details.field-info-inline[open] .info-toggle-icon {
+      background: var(--anyai-primary, #4a63ff);
+      color: var(--anyai-text-inverse, #ffffff);
+    }
+
+    .sheet-selection-grid .field .field-hint {
+      margin-top: var(--anyai-space-1);
+    }
+
+    @media (min-width: 960px) {
+      .sheet-selection-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .sheet-selection-grid > .field:first-of-type {
+        grid-column: 1 / -1;
       }
     }
 
@@ -88,30 +394,18 @@
       gap: var(--anyai-space-2);
     }
 
-    .input-row input[type="password"],
-    .input-row input[type="text"] {
+    .input-row .input {
       flex: 1;
     }
 
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
+    .input-row.input-row-compact {
       gap: var(--anyai-space-2);
-      padding: 0 var(--anyai-space-3);
-      border-radius: var(--anyai-radius-pill, 999px);
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
     }
 
-    .status-badge.is-ready {
-      background: color-mix(in srgb, var(--anyai-success), white 88%);
-      color: var(--anyai-success-900, var(--anyai-success));
-    }
-
-    .status-badge.is-missing {
-      background: color-mix(in srgb, var(--anyai-danger), white 88%);
-      color: var(--anyai-danger-900, var(--anyai-danger));
+    @media (min-width: 720px) {
+      .sheet-selection-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
 
     .message {
@@ -162,74 +456,60 @@
       <main class="anyai-content">
       <div class="anyai-app">
         <section class="anyai-app-primary" aria-labelledby="enhancer-heading">
-          <h1 id="enhancer-heading" class="mt-0">コメント改善をバッチ処理</h1>
+          <h1 id="enhancer-heading" class="mt-0 page-title-with-icon">
+            <span class="page-title-icon" aria-hidden="true"><i data-lucide="message-circle"></i></span>
+            <span>Commnet Enhancer</span>
+          </h1>
           <p class="field-hint">スプレッドシートのコメント列を取り込み、指定モデルで改善案を生成します。</p>
-
           <form id="enhancer-form" class="anyai-form" aria-labelledby="enhancer-config-heading" autocomplete="off">
-            <section class="key-card" aria-labelledby="key-heading">
-              <div>
-                <h2 id="key-heading" class="mt-0">APIキー設定</h2>
-                <p class="field-hint">Comment Enhancer と関連機能で利用する OpenAI / Gemini のキーを管理します。</p>
-              </div>
-              <div class="key-grid">
-                <div class="field" role="group" aria-labelledby="openai-key-label">
-                  <div class="input-row">
-                    <label id="openai-key-label" for="openai-key" class="text-strong">OpenAI API Key</label>
-                    <span class="status-badge" data-status="openai">-</span>
-                  </div>
-                  <div class="input-row">
-                    <input id="openai-key" name="openai-key" type="password" class="input" placeholder="sk-..." autocomplete="off">
-                    <button type="button" class="btn btn-subtle" data-toggle-password="openai-key">表示</button>
-                  </div>
-                  <p class="field-hint">GPT 系列（gpt-4.1 / gpt-5-nano など）を利用する場合に必要です。</p>
-                </div>
-                <div class="field" role="group" aria-labelledby="gemini-key-label">
-                  <div class="input-row">
-                    <label id="gemini-key-label" for="gemini-key" class="text-strong">Gemini API Key</label>
-                    <span class="status-badge" data-status="gemini">-</span>
-                  </div>
-                  <div class="input-row">
-                    <input id="gemini-key" name="gemini-key" type="password" class="input" placeholder="AIza..." autocomplete="off">
-                    <button type="button" class="btn btn-subtle" data-toggle-password="gemini-key">表示</button>
-                  </div>
-                  <p class="field-hint">Gemini Flash/Pro モデルを選択した場合に使用されます。</p>
-                </div>
-              </div>
-              <div class="message" id="key-message" data-state="info">
-                キーを入力し「保存」を押すと即時反映されます。.env に永続化する場合はチェックを付けてください。
-              </div>
-              <div class="field">
-                <label class="checkbox">
-                  <input type="checkbox" id="persist-keys">
-                  <span>.env に保存して次回起動後も利用する</span>
-                </label>
-              </div>
-              <div class="field field-inline">
-                <button type="button" class="btn btn-primary" id="save-keys-button">保存</button>
-                <button type="button" class="btn btn-outline" id="refresh-key-status">再読み込み</button>
-              </div>
-            </section>
-
             <section class="anyai-form-section" aria-labelledby="sheet-heading">
               <header>
-                <h2 id="sheet-heading" class="mt-0">対象シート</h2>
-                <p class="field-hint">URL と実行並列数を設定します。</p>
+                <h2 id="sheet-heading" class="mt-0">入力設定</h2>
+                <p class="field-hint">スコアリングと同じ形式でスプレッドシートとコメント出力先を設定します。</p>
               </header>
-              <div class="anyai-form-fields">
+              <div class="anyai-form-fields sheet-selection-grid">
                 <div class="field">
-                  <label for="sheet-url">Google Spreadsheet URL / ID</label>
-                  <p class="field-hint">共有可能な URL またはシート ID を貼り付けます。</p>
-                  <input class="input" type="text" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..." required>
+                  <label for="spreadsheet_url">スプレッドシートURL / ID</label>
+                  <p class="field-hint">対象のGoogleシートURLまたはIDを入力し、Setでシート一覧を読み込みます。</p>
+                  <div class="field-with-action">
+                    <input type="text" id="spreadsheet_url" name="spreadsheet_url" placeholder="https://docs.google.com/spreadsheets/d/..." required="" data-sharkid="__3">
+                    <button type="button" class="btn btn-outline input-action-btn" id="btn-spreadsheet-set">Set</button>
+                  </div>
                 </div>
-                <div class="field">
-                  <label for="workers">並列処理数</label>
-                  <p class="field-hint">同時実行するワーカー数（推奨: 50）。</p>
-                  <input class="input" type="number" id="workers" value="50" min="1" max="200">
-                  <details class="field-info">
+                <div class="field" id="analysis-sheet-field">
+                  <label for="sheet_keyword">分析テキスト シート</label>
+                  <select id="sheet_keyword" name="sheet_keyword" disabled data-placeholder="Setで読み込んでください" class="js-custom-select">
+                    <option value="">Setで読み込んでください</option>
+                  </select>
+                  <p class="field-hint">Setで取得したシート一覧から選択します。</p>
+                  <details class="field-info field-info-inline">
                     <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
-                    <div class="info-panel">429 対策が必要な場合は値を下げてください。最大 200 まで指定できます。</div>
+                    <div class="info-panel" id="sheet-keyword-help">自然言語の分析結果を書き込むシート名に含まれるキーワード。該当シートが1つのみである必要があります。</div>
                   </details>
                 </div>
+                <div class="field" id="output-sheet-field">
+                  <label for="score_sheet_keyword">コメント出力 シート</label>
+                  <select id="score_sheet_keyword" name="score_sheet_keyword" disabled data-placeholder="Setで読み込んでください" class="js-custom-select">
+                    <option value="">Setで読み込んでください</option>
+                  </select>
+                  <p class="field-hint">Setで取得したシート一覧から選択します。</p>
+                  <details class="field-info field-info-inline">
+                    <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
+                    <div class="info-panel" id="score-sheet-keyword-help">分析テキストと同じ位置にコメントを書き込むシート名に含まれるキーワード。</div>
+                  </details>
+                </div>
+                <input type="hidden" id="sheet_gid" name="sheet_gid" value="">
+                <input type="hidden" id="score_sheet_gid" name="score_sheet_gid" value="">
+              </div>
+              <div id="validation-banner" class="validation-banner" role="status" aria-live="polite"></div>
+              <div class="field">
+                <label for="workers">並列処理数</label>
+                <p class="field-hint">同時実行するワーカー数（推奨: 50）。</p>
+                <input class="input" type="number" id="workers" value="50" min="1" max="200">
+                <details class="field-info">
+                  <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
+                  <div class="info-panel">429 対策が必要な場合は値を下げてください。最大 200 まで指定できます。</div>
+                </details>
               </div>
             </section>
 
@@ -241,15 +521,36 @@
               <div class="model-grid">
                 <div class="field">
                   <label for="model-select">利用モデル</label>
-                  <select id="model-select" class="input">
-                    <option value="gemini-flash-lite-latest">Gemini Flash Lite (latest)</option>
-                    <option value="gemini-flash-latest">Gemini Flash (latest)</option>
-                    <option value="gemini-pro-latest">Gemini Pro (latest)</option>
-                    <option value="gpt-5-nano">GPT-5 Nano</option>
-                    <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
-                    <option value="gpt-4.1" selected>GPT-4.1</option>
+                  <select id="model-select" class="js-custom-select" data-placeholder="モデルを選択">
+                    <optgroup label="Gemini">
+                      <option value="gemini-flash-lite-latest" selected>Gemini Flash Lite (latest)</option>
+                      <option value="gemini-flash-latest">Gemini Flash (latest)</option>
+                      <option value="gemini-pro-latest">Gemini Pro (latest)</option>
+                    </optgroup>
+                    <optgroup label="OpenAI">
+                      <option value="gpt-5-nano">GPT-5 Nano</option>
+                      <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
+                      <option value="gpt-4.1">GPT-4.1</option>
+                    </optgroup>
                   </select>
                   <p class="field-hint">Gemini 系はテキスト生成に Gemini API、GPT 系は OpenAI API を利用します。</p>
+                </div>
+                <div class="field">
+                  <label for="fallback-model">フォールバックモデル</label>
+                  <select id="fallback-model" class="js-custom-select" data-placeholder="フォールバックなし（任意）">
+                    <option value="">フォールバックなし</option>
+                    <optgroup label="Gemini">
+                      <option value="gemini-flash-lite-latest">Gemini Flash Lite (latest)</option>
+                      <option value="gemini-flash-latest">Gemini Flash (latest)</option>
+                      <option value="gemini-pro-latest">Gemini Pro (latest)</option>
+                    </optgroup>
+                    <optgroup label="OpenAI">
+                      <option value="gpt-5-nano">GPT-5 Nano</option>
+                      <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
+                      <option value="gpt-4.1">GPT-4.1</option>
+                    </optgroup>
+                  </select>
+                  <p class="field-hint">メインモデルが失敗した場合に、ここで選択したモデルで再実行します。</p>
                 </div>
                 <div class="field field-inline">
                   <button type="button" class="btn btn-outline" id="stop-button" disabled>停止</button>
@@ -312,6 +613,7 @@
 
   <div class="anyai-action-bar" role="region" aria-label="コメント改善操作">
     <button type="button" class="btn btn-outline" id="btn-refresh-queue">再取得</button>
+    <button type="button" class="btn btn-outline" id="action-stop-button" disabled>停止</button>
     <button type="submit" class="btn btn-primary" id="run-button" form="enhancer-form">実行</button>
   </div>
 
@@ -326,32 +628,45 @@
     const logContainer = document.getElementById('log-container');
     const runButton = document.getElementById('run-button');
     const stopButton = document.getElementById('stop-button');
-    const sheetInput = document.getElementById('sheet-url');
+    const actionStopButton = document.getElementById('action-stop-button');
+    const stopButtons = [stopButton, actionStopButton].filter(Boolean);
+    const sheetInput = document.getElementById('spreadsheet_url');
+    const sheetSetButton = document.getElementById('btn-spreadsheet-set');
+    const validationBanner = document.getElementById('validation-banner');
+    const sheetKeywordInput = document.getElementById('sheet_keyword');
+    const scoreSheetKeywordInput = document.getElementById('score_sheet_keyword');
+    const sheetGidInput = document.getElementById('sheet_gid');
+    const scoreSheetGidInput = document.getElementById('score_sheet_gid');
     const historyList = document.getElementById('history-list');
     const historyEmpty = document.getElementById('history-empty');
     const queuePanel = document.getElementById('queue-panel');
     const refreshQueueButton = document.getElementById('btn-refresh-queue');
     const modelSelect = document.getElementById('model-select');
-    const keySaveButton = document.getElementById('save-keys-button');
-    const keyRefreshButton = document.getElementById('refresh-key-status');
-    const keyMessage = document.getElementById('key-message');
-    const persistCheckbox = document.getElementById('persist-keys');
-    const keyInputs = {
-      openai: document.getElementById('openai-key'),
-      gemini: document.getElementById('gemini-key'),
-    };
-    const statusBadges = {
-      openai: document.querySelector('[data-status="openai"]'),
-      gemini: document.querySelector('[data-status="gemini"]'),
-    };
+    const fallbackSelect = document.getElementById('fallback-model');
+    function setStopButtonsEnabled(enabled) {
+      stopButtons.forEach((btn) => {
+        btn.disabled = !enabled;
+        btn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+      });
+    }
+    setStopButtonsEnabled(false);
+    const customSelectRegistry = new WeakMap();
+    setupCustomSelect(sheetKeywordInput);
+    setupCustomSelect(scoreSheetKeywordInput);
+    setupCustomSelect(modelSelect);
+    setupCustomSelect(fallbackSelect);
 
     let currentProcessId = null;
     let eventSource = null;
     let isJobRunning = false;
     const keyStatus = { openai: false, gemini: false };
     const missingKeyNotice = { openai: false, gemini: false };
+    let resolvedSpreadsheetId = '';
+    let resolvedSheets = [];
+    let isSettingSheets = false;
+    let pendingSheetSelection = null;
 
-    const HISTORY_KEY = 'anyai_sheet_history_v3';
+    const HISTORY_KEY = 'anyai_sheet_history_v4';
     const MAX_HISTORY = 10;
 
     function log(message, isError = false) {
@@ -362,22 +677,307 @@
       logContainer.scrollTop = logContainer.scrollHeight;
     }
 
-    function setKeyMessage(text, state = 'info') {
-      keyMessage.textContent = text;
-      keyMessage.dataset.state = state;
-    }
-
-    function setStatusBadge(kind, ready) {
-      const badge = statusBadges[kind];
-      if (!badge) return;
-      badge.textContent = ready ? '設定済み' : '未設定';
-      badge.classList.toggle('is-ready', ready);
-      badge.classList.toggle('is-missing', !ready);
-    }
-
     function detectProvider(modelValue) {
       if (!modelValue) return 'openai';
       return modelValue.startsWith('gemini') ? 'gemini' : 'openai';
+    }
+
+    function setupCustomSelect(select) {
+      if (!select || customSelectRegistry.has(select)) return;
+
+      const placeholder = select.dataset.placeholder || '';
+      const wrapper = document.createElement('div');
+      wrapper.className = 'custom-select';
+
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'custom-select-toggle';
+      toggle.setAttribute('aria-haspopup', 'listbox');
+      toggle.setAttribute('aria-expanded', 'false');
+
+      const label = document.createElement('span');
+      label.className = 'custom-select-label';
+      label.textContent = placeholder;
+      toggle.appendChild(label);
+
+      const menu = document.createElement('div');
+      menu.className = 'custom-select-menu';
+      menu.setAttribute('role', 'listbox');
+      menu.hidden = true;
+      menu.tabIndex = -1;
+
+      const menuId = `${select.id || `custom-select-${Math.random().toString(36).slice(2)}`}-menu`;
+      menu.id = menuId;
+      toggle.setAttribute('aria-controls', menuId);
+      toggle.setAttribute('role', 'combobox');
+
+      const parent = select.parentNode;
+      parent.insertBefore(wrapper, select);
+      wrapper.appendChild(toggle);
+      wrapper.appendChild(menu);
+      wrapper.appendChild(select);
+
+      select.classList.add('custom-select-native');
+      select.tabIndex = -1;
+      select.setAttribute('aria-hidden', 'true');
+
+      const state = {
+        select,
+        wrapper,
+        toggle,
+        label,
+        menu,
+        placeholder,
+        isOpen: false,
+        focusIndex: -1,
+        optionButtons: [],
+        observers: [],
+      };
+
+      function refreshLabel() {
+        const selected = Array.from(select.selectedOptions || [])[0];
+        const text = selected ? selected.textContent : '';
+        label.textContent = text || state.placeholder || '';
+        state.wrapper.classList.toggle('has-value', Boolean(selected && selected.value));
+      }
+
+      function syncSelectedClass() {
+        const value = select.value;
+        state.optionButtons.forEach((btn) => {
+          const isSelected = btn.dataset.value === value;
+          btn.classList.toggle('is-selected', isSelected);
+          btn.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+        });
+      }
+
+      function focusOption(index) {
+        const enabledOptions = state.optionButtons.filter((btn) => !btn.disabled);
+        if (!enabledOptions.length) return;
+        const clamped = Math.max(0, Math.min(index, enabledOptions.length - 1));
+        const target = enabledOptions[clamped];
+        if (!target) return;
+        target.focus();
+        if (!target.id) {
+          const rawIndex = Math.max(0, state.optionButtons.indexOf(target));
+          target.id = `${state.menu.id}-option-${rawIndex}`;
+        }
+        state.toggle.setAttribute('aria-activedescendant', target.id);
+        state.focusIndex = clamped;
+        const containerRect = state.menu.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        if (targetRect.top < containerRect.top) {
+          state.menu.scrollTop -= containerRect.top - targetRect.top + 4;
+        } else if (targetRect.bottom > containerRect.bottom) {
+          state.menu.scrollTop += targetRect.bottom - containerRect.bottom + 4;
+        }
+      }
+
+      function focusSelected() {
+        const enabledOptions = state.optionButtons.filter((btn) => !btn.disabled);
+        const index = enabledOptions.findIndex((btn) => btn.dataset.value === select.value);
+        if (index >= 0) {
+          focusOption(index);
+        } else {
+          focusOption(0);
+        }
+      }
+
+      function closeMenu({ focusToggle = false } = {}) {
+        if (!state.isOpen) return;
+        state.isOpen = false;
+        state.wrapper.classList.remove('is-open');
+        state.menu.hidden = true;
+        state.toggle.setAttribute('aria-expanded', 'false');
+        state.toggle.removeAttribute('aria-activedescendant');
+        state.focusIndex = -1;
+        document.removeEventListener('pointerdown', handleDocumentPointer, true);
+        document.removeEventListener('keydown', handleDocumentKeydown, true);
+        if (focusToggle) {
+          state.toggle.focus();
+        }
+      }
+
+      function handleDocumentPointer(event) {
+        if (state.wrapper.contains(event.target)) return;
+        closeMenu();
+      }
+
+      function handleDocumentKeydown(event) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeMenu({ focusToggle: true });
+        }
+      }
+
+      function buildMenu() {
+        state.optionButtons.forEach((btn) => btn.remove());
+        state.optionButtons = [];
+
+        state.optionButtons = Array.from(select.options || []).map((option) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'custom-select-option';
+          button.dataset.value = option.value;
+          button.textContent = option.textContent || '';
+          button.disabled = option.disabled;
+          button.setAttribute('role', 'option');
+
+          if (option.dataset.sheetId) {
+            button.dataset.sheetId = option.dataset.sheetId;
+          }
+
+          button.addEventListener('click', () => {
+            if (option.disabled) return;
+            select.value = option.value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            closeMenu({ focusToggle: true });
+          });
+
+          button.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              button.click();
+            } else if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              focusOption(state.focusIndex - 1);
+            } else if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              focusOption(state.focusIndex + 1);
+            } else if (event.key === 'Home') {
+              event.preventDefault();
+              focusOption(0);
+            } else if (event.key === 'End') {
+              event.preventDefault();
+              const enabled = state.optionButtons.filter((btn) => !btn.disabled);
+              focusOption(enabled.length - 1);
+            } else if (event.key === 'Escape') {
+              event.preventDefault();
+              closeMenu({ focusToggle: true });
+            }
+          });
+          state.menu.appendChild(button);
+          return button;
+        });
+        syncSelectedClass();
+      }
+
+      function openMenu() {
+        if (state.isOpen || select.disabled) return;
+        buildMenu();
+        state.isOpen = true;
+        state.wrapper.classList.add('is-open');
+        state.menu.hidden = false;
+        state.toggle.setAttribute('aria-expanded', 'true');
+        document.addEventListener('pointerdown', handleDocumentPointer, true);
+        document.addEventListener('keydown', handleDocumentKeydown, true);
+        requestAnimationFrame(() => {
+          focusSelected();
+        });
+      }
+
+      function syncDisabled() {
+        const disabled = select.disabled;
+        state.toggle.disabled = disabled;
+        state.toggle.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+        state.wrapper.classList.toggle('is-disabled', disabled);
+        if (disabled) {
+          closeMenu();
+        }
+      }
+
+      state.toggle.addEventListener('click', () => {
+        if (state.isOpen) {
+          closeMenu();
+        } else {
+          openMenu();
+        }
+      });
+
+      state.toggle.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          openMenu();
+        }
+      });
+
+      state.menu.addEventListener('focusout', (event) => {
+        if (!state.wrapper.contains(event.relatedTarget)) {
+          closeMenu();
+        }
+      });
+
+      select.addEventListener('change', () => {
+        refreshLabel();
+        syncSelectedClass();
+      });
+
+      const optionObserver = new MutationObserver(() => {
+        buildMenu();
+        refreshLabel();
+      });
+      optionObserver.observe(select, { childList: true });
+
+      const attributeObserver = new MutationObserver(() => {
+        syncDisabled();
+      });
+      attributeObserver.observe(select, { attributes: true, attributeFilter: ['disabled'] });
+
+      state.observers.push(optionObserver, attributeObserver);
+
+      customSelectRegistry.set(select, {
+        state,
+        refreshLabel,
+        syncDisabled,
+        syncSelectedClass,
+        setPlaceholder(placeholderText) {
+          state.placeholder = placeholderText || '';
+          if (!select.value) {
+            state.label.textContent = state.placeholder;
+          }
+        },
+      });
+
+      refreshLabel();
+      syncDisabled();
+      buildMenu();
+    }
+
+    function updateCustomSelectPlaceholder(select, placeholderText) {
+      const entry = customSelectRegistry.get(select);
+      if (!entry) return;
+      entry.state.placeholder = placeholderText || '';
+      if (!select.value) {
+        entry.state.label.textContent = entry.state.placeholder;
+      }
+      entry.syncSelectedClass();
+    }
+
+    function syncCustomSelectDisabled(select) {
+      const entry = customSelectRegistry.get(select);
+      if (!entry) return;
+      entry.syncDisabled();
+    }
+
+    function refreshCustomSelect(select) {
+      const entry = customSelectRegistry.get(select);
+      if (!entry) return;
+      entry.refreshLabel();
+      entry.syncSelectedClass();
+    }
+
+    function extractKeyReady(info) {
+      if (typeof info === 'boolean') return info;
+      if (info && typeof info === 'object' && 'ready' in info) {
+        return Boolean(info.ready);
+      }
+      return Boolean(info);
+    }
+
+    function sheetSelectionsReady() {
+      const sheetValue = parseSheetValue(sheetInput?.value);
+      if (!sheetValue) return false;
+      if (!sheetKeywordInput || !scoreSheetKeywordInput) return false;
+      return Boolean(sheetKeywordInput.value) && Boolean(scoreSheetKeywordInput.value);
     }
 
     function updateRunButtonAvailability() {
@@ -385,12 +985,16 @@
         runButton.disabled = true;
         return;
       }
-      const provider = detectProvider(modelSelect.value);
-      if (provider === 'gemini') {
-        runButton.disabled = !keyStatus.gemini;
-      } else {
-        runButton.disabled = !keyStatus.openai;
+      if (!modelSelect) {
+        runButton.disabled = true;
+        return;
       }
+      if (!sheetSelectionsReady()) {
+        runButton.disabled = true;
+        return;
+      }
+      const provider = detectProvider(modelSelect.value);
+      runButton.disabled = !keyStatus[provider];
     }
 
     function maybeLogMissing(provider) {
@@ -400,34 +1004,32 @@
       }
       if (missingKeyNotice[provider]) return;
       if (provider === 'gemini') {
-        log('-> Gemini APIキーが未設定です。上部の「APIキー設定」で登録してください。', true);
+        log('-> Gemini APIキーが未設定です。左メニューの「API」で登録してください。', true);
       } else {
-        log('-> OpenAI APIキーが未設定です。上部の「APIキー設定」で登録してください。', true);
+        log('-> OpenAI APIキーが未設定です。左メニューの「API」で登録してください。', true);
       }
       missingKeyNotice[provider] = true;
     }
 
     async function refreshKeyStatus(showLog = false) {
       try {
-        const resp = await fetch('/settings');
+        const resp = await fetch('/settings/status');
         if (!resp.ok) throw new Error(`status ${resp.status}`);
         const data = await resp.json();
-        keyStatus.openai = Boolean(data?.keys?.openai);
-        keyStatus.gemini = Boolean(data?.keys?.gemini);
-        setStatusBadge('openai', keyStatus.openai);
-        setStatusBadge('gemini', keyStatus.gemini);
-        setKeyMessage('キーを入力し「保存」を押すと即時反映されます。.env に永続化する場合はチェックを付けてください。', 'info');
+        keyStatus.openai = extractKeyReady(data?.keys?.openai);
+        keyStatus.gemini = extractKeyReady(data?.keys?.gemini);
         if (showLog) {
           log('-> APIキーの状態を更新しました。');
         }
       } catch (error) {
-        setKeyMessage(`APIキー状態の取得に失敗しました: ${error.message}`, 'error');
         if (showLog) {
           log(`-> APIキー状態の取得に失敗: ${error}`, true);
         }
       } finally {
         updateRunButtonAvailability();
-        maybeLogMissing(detectProvider(modelSelect.value));
+        if (modelSelect) {
+          maybeLogMissing(detectProvider(modelSelect.value));
+        }
       }
     }
 
@@ -439,7 +1041,7 @@
       isJobRunning = false;
       updateRunButtonAvailability();
       runButton.textContent = '実行';
-      stopButton.disabled = true;
+      setStopButtonsEnabled(false);
       if (eventSource) {
         eventSource.close();
         eventSource = null;
@@ -449,6 +1051,153 @@
 
     function parseSheetValue(value) {
       return (value || '').trim();
+    }
+
+    function showValidationBanner(state, message) {
+      if (!validationBanner) return;
+      if (!state) {
+        validationBanner.removeAttribute('data-state');
+        validationBanner.textContent = message || '';
+        return;
+      }
+      validationBanner.setAttribute('data-state', state);
+      validationBanner.textContent = message || '';
+    }
+
+    function clearSheetSelections(message = 'Setで読み込んでください') {
+      const resetSelect = (selectEl) => {
+        if (!selectEl) return;
+        const placeholder = message || selectEl.dataset?.placeholder || 'Setで読み込んでください';
+        selectEl.innerHTML = `<option value="">${placeholder}</option>`;
+        selectEl.disabled = true;
+        selectEl.dataset.placeholder = placeholder;
+        updateCustomSelectPlaceholder(selectEl, placeholder);
+        syncCustomSelectDisabled(selectEl);
+        refreshCustomSelect(selectEl);
+      };
+      resetSelect(sheetKeywordInput);
+      resetSelect(scoreSheetKeywordInput);
+      resolvedSheets = [];
+      if (sheetGidInput) sheetGidInput.value = '';
+      if (scoreSheetGidInput) scoreSheetGidInput.value = '';
+      updateSheetSelectionInputs();
+      updateRunButtonAvailability();
+    }
+
+    function updateSheetSelectionInputs() {
+      if (sheetKeywordInput && sheetGidInput) {
+        const selected = sheetKeywordInput.selectedOptions && sheetKeywordInput.selectedOptions[0];
+        sheetGidInput.value = selected && selected.value ? (selected.dataset.sheetId || '') : '';
+      }
+      if (scoreSheetKeywordInput && scoreSheetGidInput) {
+        const selected = scoreSheetKeywordInput.selectedOptions && scoreSheetKeywordInput.selectedOptions[0];
+        scoreSheetGidInput.value = selected && selected.value ? (selected.dataset.sheetId || '') : '';
+      }
+    }
+
+    function applyPendingSheetSelection() {
+      if (!pendingSheetSelection) return;
+      if (pendingSheetSelection.sheetValue && parseSheetValue(sheetInput?.value) !== pendingSheetSelection.sheetValue) {
+        return;
+      }
+      const selectTarget = (selectEl, name, id) => {
+        if (!selectEl || !selectEl.options) return;
+        let matched = false;
+        if (id != null) {
+          const targetId = String(id);
+          for (const option of selectEl.options) {
+            if (option.dataset && option.dataset.sheetId === targetId) {
+              option.selected = true;
+              matched = true;
+              break;
+            }
+          }
+        }
+        if (!matched && name) {
+          const lower = name.toLowerCase();
+          for (const option of selectEl.options) {
+            if ((option.value || '').toLowerCase() === lower) {
+              option.selected = true;
+              matched = true;
+              break;
+            }
+          }
+        }
+        if (!matched) {
+          selectEl.value = '';
+        }
+        refreshCustomSelect(selectEl);
+      };
+      selectTarget(sheetKeywordInput, pendingSheetSelection.sourceName, pendingSheetSelection.sourceId);
+      selectTarget(scoreSheetKeywordInput, pendingSheetSelection.outputName, pendingSheetSelection.outputId);
+      pendingSheetSelection = null;
+      updateSheetSelectionInputs();
+      updateRunButtonAvailability();
+    }
+
+    function populateSheetOptions(sheets, opts = {}) {
+      resolvedSheets = Array.isArray(sheets) ? sheets : [];
+      const hasSheets = resolvedSheets.length > 0;
+      const placeholderLabel = hasSheets ? '対象シートを選択してください' : 'シートが見つかりません';
+      const {
+        analysisGid = sheetGidInput?.value,
+        scoreGid = scoreSheetGidInput?.value,
+        analysisName = sheetKeywordInput?.value,
+        scoreName = scoreSheetKeywordInput?.value,
+      } = opts;
+      const analysisNameLower = (analysisName || '').toLowerCase();
+      const scoreNameLower = (scoreName || '').toLowerCase();
+
+      const buildOptions = (selectEl, targetGid) => {
+        if (!selectEl) return;
+        selectEl.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = placeholderLabel;
+        selectEl.appendChild(placeholder);
+        selectEl.dataset.placeholder = placeholderLabel;
+        const targetNameLower = selectEl === sheetKeywordInput ? analysisNameLower : scoreNameLower;
+        resolvedSheets.forEach((item) => {
+          const option = document.createElement('option');
+          option.value = item.sheet_name;
+          option.textContent = item.sheet_name;
+          option.dataset.sheetId = String(item.sheet_id);
+          const matchesGid = targetGid && Number(targetGid) === Number(item.sheet_id);
+          const matchesName = !targetGid && targetNameLower && targetNameLower === item.sheet_name.toLowerCase();
+          if (matchesGid || matchesName) {
+            option.selected = true;
+          }
+          selectEl.appendChild(option);
+        });
+        selectEl.disabled = !hasSheets;
+        if (!selectEl.disabled && !selectEl.value && selectEl.options.length > 1) {
+          selectEl.value = '';
+        }
+        updateCustomSelectPlaceholder(selectEl, placeholderLabel);
+        syncCustomSelectDisabled(selectEl);
+        refreshCustomSelect(selectEl);
+      };
+
+      buildOptions(sheetKeywordInput, analysisGid);
+      buildOptions(scoreSheetKeywordInput, scoreGid);
+      updateSheetSelectionInputs();
+      if (hasSheets) {
+        applyPendingSheetSelection();
+      } else {
+        pendingSheetSelection = null;
+      }
+      updateRunButtonAvailability();
+    }
+
+    function getSelectedSheet(selectEl) {
+      if (!selectEl || selectEl.disabled) return null;
+      const name = parseSheetValue(selectEl.value);
+      if (!name) return null;
+      const option = selectEl.selectedOptions && selectEl.selectedOptions[0];
+      const rawId = option?.dataset?.sheetId;
+      const parsedId = rawId && rawId !== '' ? Number(rawId) : null;
+      const id = typeof parsedId === 'number' && !Number.isNaN(parsedId) ? parsedId : null;
+      return { name, id };
     }
 
     function loadHistory() {
@@ -463,12 +1212,21 @@
       localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
     }
 
-    function addToHistory(rawValue, title, status = 'queued') {
+    function addToHistory(rawValue, title, status = 'queued', sourceName = '', outputName = '', sourceId = null, outputId = null) {
       const value = parseSheetValue(rawValue);
       if (!value) return;
       const items = loadHistory().filter(entry => entry.value !== value);
       title = (title || '').trim();
-      items.unshift({ value, title, status, savedAt: new Date().toISOString() });
+      items.unshift({
+        value,
+        title,
+        status,
+        sourceName: sourceName || '',
+        outputName: outputName || '',
+        sourceId: sourceId ?? null,
+        outputId: outputId ?? null,
+        savedAt: new Date().toISOString(),
+      });
       if (items.length > MAX_HISTORY) items.length = MAX_HISTORY;
       saveHistory(items);
       renderHistory();
@@ -487,17 +1245,92 @@
         const title = entry.title || '';
         const li = document.createElement('li');
         const displayTitle = title || '(シート名未取得)';
-        li.innerHTML = `${displayTitle}<br><small class="text-subtle">状態: ${entry.status || 'queued'}</small>`;
+        const parts = [`状態: ${entry.status || 'queued'}`];
+        const detailParts = [];
+        if (entry.sourceName) {
+          detailParts.push(`元: ${entry.sourceName}`);
+        }
+        if (entry.outputName) {
+          detailParts.push(`出力: ${entry.outputName}`);
+        }
+        if (detailParts.length) {
+          parts.push(detailParts.join(' / '));
+        }
+        li.innerHTML = `${displayTitle}<br><small class="text-subtle">${parts.join(' | ')}</small>`;
         li.title = value;
         li.addEventListener('click', () => {
-          sheetInput.value = value;
+          const trimmed = parseSheetValue(value);
+          sheetInput.value = trimmed;
           sheetInput.focus();
+          pendingSheetSelection = {
+            sheetValue: trimmed,
+            sourceName: entry.sourceName || '',
+            outputName: entry.outputName || '',
+            sourceId: entry.sourceId ?? null,
+            outputId: entry.outputId ?? null,
+          };
+          void handleSheetSet(true);
         });
         historyList.appendChild(li);
       }
     }
 
+    async function handleSheetSet(fromHistory = false) {
+      if (isSettingSheets) return;
+      if (!sheetInput) return;
+      const url = parseSheetValue(sheetInput.value);
+      if (!url) {
+        showValidationBanner('error', 'スプレッドシートURLを入力してください。');
+        sheetInput.focus();
+        return;
+      }
+      isSettingSheets = true;
+      resolvedSpreadsheetId = '';
+      showValidationBanner('info', 'シート一覧を取得中です...');
+      clearSheetSelections();
+      if (sheetSetButton) {
+        sheetSetButton.disabled = true;
+        sheetSetButton.textContent = '取得中...';
+      }
+      try {
+        const res = await fetch('/sheets/list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ spreadsheet_url: url }),
+        });
+        let data = null;
+        try {
+          data = await res.json();
+        } catch (err) {
+          data = null;
+        }
+        if (!res.ok || !data || !data.ok) {
+          const message = (data && data.message) || `シート一覧の取得に失敗しました。（status ${res.status}）`;
+          throw new Error(message);
+        }
+        resolvedSpreadsheetId = data.spreadsheet_id || url;
+        populateSheetOptions(Array.isArray(data.sheets) ? data.sheets : []);
+        showValidationBanner('success', 'シート一覧を読み込みました。対象シートを選択してください。');
+        if (!fromHistory) {
+          log('-> シート一覧を取得しました。');
+        }
+      } catch (error) {
+        populateSheetOptions([]);
+        pendingSheetSelection = null;
+        showValidationBanner('error', `シート一覧の取得に失敗しました: ${error instanceof Error ? error.message : error}`);
+        log(`-> シート一覧の取得に失敗: ${error}`, true);
+      } finally {
+        if (sheetSetButton) {
+          sheetSetButton.disabled = false;
+          sheetSetButton.textContent = 'Set';
+        }
+        isSettingSheets = false;
+        updateRunButtonAvailability();
+      }
+    }
+
     renderHistory();
+    showValidationBanner('info', 'Set ボタンでシート一覧を読み込み、対象シートを選択してください。');
 
     refreshKeyStatus(false);
     document.addEventListener('visibilitychange', () => {
@@ -505,6 +1338,52 @@
         refreshKeyStatus(false);
       }
     });
+
+    if (sheetSetButton) {
+      sheetSetButton.addEventListener('click', () => {
+        void handleSheetSet(false);
+      });
+    }
+
+    if (sheetInput) {
+      sheetInput.addEventListener('input', () => {
+        resolvedSpreadsheetId = '';
+        pendingSheetSelection = null;
+        clearSheetSelections();
+        const trimmed = parseSheetValue(sheetInput.value);
+        if (trimmed) {
+          showValidationBanner('info', 'Set で最新のシート一覧を取得してください。');
+        } else {
+          showValidationBanner('info', 'Set ボタンでシート一覧を読み込み、対象シートを選択してください。');
+        }
+      });
+    }
+
+    if (sheetKeywordInput) {
+      sheetKeywordInput.addEventListener('change', () => {
+        updateSheetSelectionInputs();
+        updateRunButtonAvailability();
+        refreshCustomSelect(sheetKeywordInput);
+      });
+    }
+
+    if (scoreSheetKeywordInput) {
+      scoreSheetKeywordInput.addEventListener('change', () => {
+        updateSheetSelectionInputs();
+        updateRunButtonAvailability();
+        refreshCustomSelect(scoreSheetKeywordInput);
+      });
+    }
+
+    if (fallbackSelect) {
+      fallbackSelect.addEventListener('change', () => {
+        refreshCustomSelect(fallbackSelect);
+        const fallbackValue = parseSheetValue(fallbackSelect.value);
+        if (!fallbackValue) return;
+        const provider = detectProvider(fallbackValue);
+        maybeLogMissing(provider);
+      });
+    }
 
     if (refreshQueueButton) {
       refreshQueueButton.addEventListener('click', () => {
@@ -515,74 +1394,24 @@
       });
     }
 
-    document.querySelectorAll('[data-toggle-password]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const targetId = button.dataset.togglePassword;
-        const input = document.getElementById(targetId);
-        if (!input) return;
-        const hidden = input.type === 'password';
-        input.type = hidden ? 'text' : 'password';
-        button.textContent = hidden ? '隠す' : '表示';
-      });
-    });
-
-    keySaveButton.addEventListener('click', async () => {
-      const openaiValue = keyInputs.openai.value.trim();
-      const geminiValue = keyInputs.gemini.value.trim();
-      const persist = persistCheckbox.checked;
-
-      if (!openaiValue && !geminiValue && !persist) {
-        setKeyMessage('更新対象がありません。キーを入力するか、保存オプションを選択してください。', 'error');
-        return;
-      }
-
-      const formData = new FormData();
-      if (openaiValue) {
-        formData.append('openai_api_key', openaiValue);
-      }
-      if (geminiValue) {
-        formData.append('gemini_api_key', geminiValue);
-      }
-      if (persist) {
-        formData.append('persist', 'true');
-      }
-
-      try {
-        const resp = await fetch('/settings', { method: 'POST', body: formData });
-        const result = await resp.json();
-        if (!resp.ok) {
-          const detail = result?.detail || result?.error || 'unknown error';
-          throw new Error(detail);
+    if (modelSelect) {
+      modelSelect.addEventListener('change', () => {
+        updateRunButtonAvailability();
+        const provider = detectProvider(modelSelect.value);
+        maybeLogMissing(provider);
+        const fallbackValue = fallbackSelect ? parseSheetValue(fallbackSelect.value) : '';
+        if (fallbackValue) {
+          maybeLogMissing(detectProvider(fallbackValue));
         }
+      });
+    }
 
-        keyInputs.openai.value = '';
-        keyInputs.gemini.value = '';
-        persistCheckbox.checked = false;
-        setKeyMessage('APIキーを保存しました。処理にすぐ反映されます。', 'success');
-        log('-> APIキーを保存しました。');
-        await refreshKeyStatus(true);
-      } catch (error) {
-        setKeyMessage(`APIキーの保存に失敗しました: ${error.message}`, 'error');
-        log(`-> APIキーの保存に失敗: ${error}`, true);
-      }
-    });
-
-    keyRefreshButton.addEventListener('click', () => {
-      setKeyMessage('最新の状態を取得中です...', 'info');
-      refreshKeyStatus(true);
-    });
-
-    modelSelect.addEventListener('change', () => {
-      updateRunButtonAvailability();
-      maybeLogMissing(detectProvider(modelSelect.value));
-    });
-
-    stopButton.addEventListener('click', async () => {
+    async function handleStopClick() {
       if (!currentProcessId) {
         log('-> 停止対象のジョブがありません。', true);
         return;
       }
-      stopButton.disabled = true;
+      setStopButtonsEnabled(false);
       log('-> 停止信号を送信します...');
       try {
         await fetch('/stop-analysis', {
@@ -594,21 +1423,64 @@
       } catch (error) {
         log(`-> 停止リクエストでエラー: ${error}`, true);
       }
+    }
+
+    stopButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        void handleStopClick();
+      });
     });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
 
+      if (!modelSelect) {
+        log('-> モデル選択が利用できません。ページを再読み込みしてください。', true);
+        runButton.disabled = true;
+        return;
+      }
+
       const provider = detectProvider(modelSelect.value);
-      if (provider === 'gemini' && !keyStatus.gemini) {
-        log('-> Gemini モデルを使用するには Gemini APIキーが必要です。上部の設定で登録してください。', true);
+      if (!keyStatus[provider]) {
+        const message =
+          provider === 'gemini'
+            ? 'Gemini モデルを使用するには Gemini APIキーが必要です。左メニューの「API」で登録してください。'
+            : 'GPT 系モデルを使用するには OpenAI APIキーが必要です。左メニューの「API」で登録してください。';
+        log(`-> ${message}`, true);
         updateRunButtonAvailability();
         return;
       }
-      if (provider === 'openai' && !keyStatus.openai) {
-        log('-> GPT 系モデルを使用するには OpenAI APIキーが必要です。上部の設定で登録してください。', true);
+
+      const sheetValue = parseSheetValue(sheetInput?.value);
+      if (!sheetValue) {
+        showValidationBanner('error', 'スプレッドシートURLを入力してください。');
+        log('-> スプレッドシートURLが未入力です。', true);
         updateRunButtonAvailability();
         return;
+      }
+
+      const sourceSheet = getSelectedSheet(sheetKeywordInput);
+      if (!sourceSheet) {
+        showValidationBanner('error', '分析テキスト シートを選択してください。');
+        log('-> 分析テキスト シートを選択してください。', true);
+        updateRunButtonAvailability();
+        return;
+      }
+
+      const outputSheet = getSelectedSheet(scoreSheetKeywordInput);
+      if (!outputSheet) {
+        showValidationBanner('error', 'コメント出力 シートを選択してください。');
+        log('-> コメント出力 シートを選択してください。', true);
+        updateRunButtonAvailability();
+        return;
+      }
+
+      let fallbackModel = fallbackSelect ? parseSheetValue(fallbackSelect.value) : '';
+      let fallbackProvider = fallbackModel ? detectProvider(fallbackModel) : null;
+      if (fallbackModel && (!fallbackProvider || !keyStatus[fallbackProvider])) {
+        log(`-> フォールバックモデル (${fallbackModel}) のAPIキーが設定されていないため、フォールバックを無効化します。`, true);
+        fallbackModel = '';
+        fallbackProvider = null;
       }
 
       if (eventSource) {
@@ -617,18 +1489,27 @@
       }
 
       const payload = {
-        sheet_url: document.getElementById('sheet-url').value,
+        sheet_url: sheetValue,
         workers: document.getElementById('workers').value,
         model_name: modelSelect.value,
         model_provider: provider,
+        source_sheet_name: sourceSheet.name,
+        source_sheet_id: sourceSheet.id,
+        output_sheet_name: outputSheet.name,
+        output_sheet_id: outputSheet.id,
+        fallback_model: fallbackModel || null,
+        fallback_provider: fallbackProvider,
       };
+      if (resolvedSpreadsheetId) {
+        payload.spreadsheet_id = resolvedSpreadsheetId;
+      }
 
       logContainer.innerHTML = '';
       log('-> AnyAICommentEnhancer を開始します...');
       isJobRunning = true;
       updateRunButtonAvailability();
       runButton.textContent = '実行中...';
-      stopButton.disabled = false;
+      setStopButtonsEnabled(true);
 
       try {
         const resp = await loadingOverlay.run(() =>
@@ -650,7 +1531,7 @@
         const jobSheetUrl = result.sheet_url || payload.sheet_url;
         const jobTitle = result.sheet_title;
         const jobParams = { ...payload };
-        addToHistory(jobSheetUrl, jobTitle, 'queued');
+        addToHistory(jobSheetUrl, jobTitle, 'queued', sourceSheet.name, outputSheet.name, sourceSheet.id, outputSheet.id);
         log(`-> Process ID: ${currentProcessId}`);
 
         if (queueManager) {
@@ -676,7 +1557,16 @@
               queueManager.handleQueueEvent(queuePayload);
             }
             if (queuePayload.process_id === currentProcessId) {
-              addToHistory(queuePayload.sheet_url || jobSheetUrl, queuePayload.sheet_title || jobTitle, status);
+              const params = queuePayload.params || {};
+              addToHistory(
+                queuePayload.sheet_url || jobSheetUrl,
+                queuePayload.sheet_title || jobTitle,
+                status,
+                params.source_sheet_name || jobParams.source_sheet_name,
+                params.output_sheet_name || jobParams.output_sheet_name,
+                params.source_sheet_id ?? jobParams.source_sheet_id ?? null,
+                params.output_sheet_id ?? jobParams.output_sheet_id ?? null,
+              );
               renderHistory();
             }
           } catch (error) {
@@ -694,7 +1584,15 @@
         });
         eventSource.addEventListener('complete', (evt) => {
           log(`-> ${evt.data}`);
-          addToHistory(jobSheetUrl, jobTitle, 'completed');
+          addToHistory(
+            jobSheetUrl,
+            jobTitle,
+            'completed',
+            jobParams.source_sheet_name,
+            jobParams.output_sheet_name,
+            jobParams.source_sheet_id ?? null,
+            jobParams.output_sheet_id ?? null,
+          );
           if (queueManager) {
             queueManager.handleCompletion(currentProcessId);
           }

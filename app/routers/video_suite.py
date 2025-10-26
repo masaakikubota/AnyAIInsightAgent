@@ -179,6 +179,23 @@ async def run_comment_enhancer(request: Request) -> JSONResponse:
     if not sheet_url:
         raise HTTPException(status_code=400, detail="Missing required field: sheet_url")
 
+    def _parse_sheet_id(value: Any) -> int | None:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    source_sheet_name = (data.get("source_sheet_name") or "RawData_Video").strip()
+    output_sheet_name = (data.get("output_sheet_name") or "RawData_VideoComment").strip()
+    if not source_sheet_name:
+        raise HTTPException(status_code=400, detail="Missing required field: source_sheet_name")
+    if not output_sheet_name:
+        raise HTTPException(status_code=400, detail="Missing required field: output_sheet_name")
+
+    source_sheet_id = _parse_sheet_id(data.get("source_sheet_id"))
+    output_sheet_id = _parse_sheet_id(data.get("output_sheet_id"))
+    spreadsheet_id = (data.get("spreadsheet_id") or "").strip() or None
+
     client_secrets_path = workers.find_client_secrets_file()
     if not client_secrets_path:
         raise HTTPException(status_code=400, detail="Could not find a client_secrets .json file.")
@@ -190,16 +207,34 @@ async def run_comment_enhancer(request: Request) -> JSONResponse:
     else:
         model_name = raw_model
 
+    raw_fallback_model = (data.get("fallback_model") or "").strip()
+    fallback_provider = (data.get("fallback_provider") or "").strip().lower()
+    fallback_model: str | None = None
+    if raw_fallback_model:
+        if not fallback_provider:
+            fallback_provider = "gemini" if raw_fallback_model.startswith("gemini") else "openai"
+        if fallback_provider == "gemini":
+            fallback_model = workers.normalize_gemini_model(raw_fallback_model)
+        else:
+            fallback_model = raw_fallback_model
+    else:
+        fallback_provider = None
+
     config = {
         "sheet_url": sheet_url,
-        "source_sheet": "RawData_Video",
-        "output_sheet": "RawData_VideoComment",
+        "spreadsheet_id": spreadsheet_id,
+        "source_sheet": source_sheet_name,
+        "source_sheet_id": source_sheet_id,
+        "output_sheet": output_sheet_name,
+        "output_sheet_id": output_sheet_id,
         "workers": workers_count,
         "model": model_name or "gpt-4.1",
         "provider": "gemini" if provider == "gemini" else "openai",
         "prompt_file": data.get("prompt_file") or "config/comment_enhancer_prompt.txt",
         "client_secrets": str(client_secrets_path),
         "job_type": "comment_enhancer",
+        "fallback_model": fallback_model,
+        "fallback_provider": fallback_provider,
     }
 
     custom_prompt = data.get("prompt_file")
@@ -207,6 +242,13 @@ async def run_comment_enhancer(request: Request) -> JSONResponse:
         raise HTTPException(status_code=400, detail=f"Prompt file '{custom_prompt}' was not found.")
     if config["workers"] < 1:
         raise HTTPException(status_code=400, detail="workers must be >= 1")
+
+    if config["provider"] == "gemini":
+        config["max_row_concurrency"] = max(1, workers_count)
+    else:
+        config["max_row_concurrency"] = max(1, workers_count)
+    if config.get("fallback_provider") == "gemini":
+        config["fallback_max_row_concurrency"] = max(1, workers_count)
 
     sheet_title = ""
     try:

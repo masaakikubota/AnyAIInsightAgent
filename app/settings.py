@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -16,14 +16,40 @@ DEFAULT_GEMINI_API_KEY = ""
 DEFAULT_OPENAI_API_KEY = ""
 
 
-def keys_status() -> Dict[str, bool]:
+def _mask_key(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    token = value.strip()
+    if not token:
+        return ""
+    if len(token) <= 8:
+        if len(token) <= 2:
+            return token[0] + "*" * (len(token) - 1) if len(token) > 1 else token
+        head = token[:2]
+        tail = token[-2:]
+        return head + "*" * max(0, len(token) - 4) + tail
+    head = token[:4]
+    tail = token[-4:]
+    middle = "*" * (len(token) - 8)
+    return f"{head}{middle}{tail}"
+
+
+def keys_status() -> dict[str, dict[str, object]]:
+    gemini_value = os.getenv("GEMINI_API_KEY")
+    openai_value = os.getenv("OPENAI_API_KEY")
     return {
-        "gemini": bool(os.getenv("GEMINI_API_KEY")),
-        "openai": bool(os.getenv("OPENAI_API_KEY")),
+        "gemini": {
+            "ready": bool(gemini_value),
+            "masked": _mask_key(gemini_value),
+        },
+        "openai": {
+            "ready": bool(openai_value),
+            "masked": _mask_key(openai_value),
+        },
     }
 
 
-def set_keys(gemini: Optional[str] = None, openai: Optional[str] = None, persist: bool = False) -> Dict[str, bool]:
+def set_keys(gemini: Optional[str] = None, openai: Optional[str] = None, persist: bool = False) -> dict[str, dict[str, object]]:
     if gemini is not None:
         os.environ["GEMINI_API_KEY"] = gemini
     if openai is not None:

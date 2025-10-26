@@ -17,6 +17,19 @@
   <script defer src="/static/anyai/sidebar.js"></script>
   <script defer src="/static/anyai/core/anyai.js"></script>
   <style>
+    .anyai-app {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: var(--anyai-space-6);
+    }
+
+    .anyai-app > * {
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+
     .settings-card {
       display: flex;
       flex-direction: column;
@@ -25,11 +38,14 @@
       border-radius: var(--anyai-radius-3);
       border: 1px solid var(--anyai-border);
       padding: var(--anyai-space-6);
+      width: 100%;
+      box-sizing: border-box;
     }
 
     .settings-grid {
       display: grid;
       gap: var(--anyai-space-4);
+      width: 100%;
     }
 
     @media (min-width: 720px) {
@@ -48,11 +64,20 @@
       display: flex;
       gap: var(--anyai-space-2);
       align-items: center;
+      width: 100%;
+      flex-wrap: wrap;
+      box-sizing: border-box;
     }
 
     .input-row input[type="password"],
     .input-row input[type="text"] {
       flex: 1;
+      min-width: 0;
+    }
+
+    .input-row .btn {
+      flex: 0 0 auto;
+      white-space: nowrap;
     }
 
     .status-badge {
@@ -100,11 +125,37 @@
       color: var(--anyai-text-subtle);
       border-color: var(--anyai-border);
     }
+
+    .masked-key {
+      font-family: var(--anyai-font-mono, 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace);
+      font-size: 0.85rem;
+      color: var(--anyai-text-subtle);
+    }
+
+    .masked-key.is-empty {
+      font-style: italic;
+    }
+
+    .settings-card > * {
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .row > * {
+      flex: 0 0 auto;
+    }
   </style>
 </head>
 <body>
   <div class="anyai-layout">
-    <aside class="anyai-sidebar" data-active-tool="settings"></aside>
+    <aside class="anyai-sidebar" data-active-tool="settings-api"></aside>
     <main class="anyai-content">
       <div class="anyai-app">
         <header class="anyai-app-header">
@@ -130,6 +181,7 @@
                 <input id="openai-key" name="openai-key" type="password" autocomplete="off" placeholder="sk-..." class="input">
                 <button type="button" class="btn btn-subtle" data-toggle-password="openai-key">表示</button>
               </div>
+              <span class="masked-key" data-mask="openai">未設定</span>
               <p class="field-hint">例: <code>gpt-4.1</code> 系列を利用するには有効な OpenAI APIキーが必要です。</p>
             </div>
 
@@ -142,6 +194,7 @@
                 <input id="gemini-key" name="gemini-key" type="password" autocomplete="off" placeholder="AIza..." class="input">
                 <button type="button" class="btn btn-subtle" data-toggle-password="gemini-key">表示</button>
               </div>
+              <span class="masked-key" data-mask="gemini">未設定</span>
               <p class="field-hint">動画分析・レビュー機能では Gemini Flash / Pro モデルが使用されます。</p>
             </div>
           </div>
@@ -178,6 +231,10 @@
       openai: document.querySelector('[data-status="openai"]'),
       gemini: document.querySelector('[data-status="gemini"]'),
     };
+    const maskedLabels = {
+      openai: document.querySelector('[data-mask="openai"]'),
+      gemini: document.querySelector('[data-mask="gemini"]'),
+    };
     const messageEl = document.getElementById('status-message');
     const formEl = document.getElementById('keys-form');
     const persistEl = document.getElementById('persist-keys');
@@ -205,16 +262,40 @@
       badge.classList.toggle('is-missing', !isReady);
     }
 
+    function setMaskedValue(kind, masked) {
+      const el = maskedLabels[kind];
+      if (!el) return;
+      el.textContent = masked || '未設定';
+      el.classList.toggle('is-empty', !masked);
+    }
+
+    function parseKeyInfo(info) {
+      if (info && typeof info === 'object' && 'ready' in info) {
+        return {
+          ready: Boolean(info.ready),
+          masked: typeof info.masked === 'string' ? info.masked : '',
+        };
+      }
+      return {
+        ready: Boolean(info),
+        masked: '',
+      };
+    }
+
     async function fetchStatus() {
       try {
-        const resp = await fetch('/settings');
+        const resp = await fetch('/settings/status');
         if (!resp.ok) {
           throw new Error(`status ${resp.status}`);
         }
         const data = await resp.json();
         const keys = data?.keys || {};
-        setStatusBadge('openai', Boolean(keys.openai));
-        setStatusBadge('gemini', Boolean(keys.gemini));
+        const openaiInfo = parseKeyInfo(keys.openai);
+        const geminiInfo = parseKeyInfo(keys.gemini);
+        setStatusBadge('openai', openaiInfo.ready);
+        setMaskedValue('openai', openaiInfo.masked);
+        setStatusBadge('gemini', geminiInfo.ready);
+        setMaskedValue('gemini', geminiInfo.masked);
         setMessage('最新のキー状態を取得しました。', 'info');
       } catch (error) {
         console.error(error);
