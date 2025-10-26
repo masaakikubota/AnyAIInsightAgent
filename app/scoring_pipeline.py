@@ -5,17 +5,20 @@ import socket
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, TYPE_CHECKING
 from contextlib import suppress
 
 import logging
 
 from .models import Category, Provider, RunConfig, ScoreResult
-from .services.google_sheets import GoogleSheetsError, batch_update_values
-from .services.scoring import cache_key, clamp_and_round, score_with_fallback
 from .services.clients import GEMINI_MODEL_VIDEO
+from .services.google_sheets import GoogleSheetsError, batch_update_values
 from .services.video import download_video_to_path, upload_video_to_gemini
 from .services.sheet_updates import build_row_value_ranges
+from .services.scoring import cache_key, clamp_and_round, score_with_fallback
+
+if TYPE_CHECKING:
+    from .services.sheet_writer import SharedSheetWriter
 
 
 logger = logging.getLogger(__name__)
@@ -53,6 +56,9 @@ class SheetUpdate:
     scores: Sequence[Optional[float]]
     analyses: Sequence[Optional[str]] = ()
     cleanup_path: Optional[str] = None
+    on_complete: Optional[Callable[[PipelineUnit, ScoreResult], Awaitable[None]]] = None
+    log_callback: Optional[Callable[[str], None]] = None
+    stats: Optional[PipelineStats] = None
 
 
 @dataclass(frozen=True)
@@ -99,6 +105,7 @@ class ScoringPipeline:
         sheet_batch_row_size: Optional[int] = None,
         video_mode: bool = False,
         event_logger: Optional[Callable[[str], None]] = None,
+        shared_writer: Optional["SharedSheetWriter"] = None,
     ) -> None:
         self.cfg = cfg
         self.rows = rows
@@ -158,6 +165,7 @@ class ScoringPipeline:
             thread_name_prefix="scoring-validation",
         )
         self._log_callback = event_logger
+        self._shared_writer = shared_writer
         provider_model_map: Dict[Provider, str] = {}
         if getattr(cfg, "primary_model", None):
             provider_model_map[cfg.primary_provider] = str(cfg.primary_model)
@@ -170,6 +178,7 @@ class ScoringPipeline:
         self._request_lock: Optional[asyncio.Lock] = None
         self._unit_failure_limit = 3
         self._unit_failures: Dict[Tuple[int, int], int] = {}
+        self._fatal_status_codes: set[int] = {400, 401, 403, 404, 422}
 
     def _log(self, message: str) -> None:
         if not self._log_callback:
@@ -186,7 +195,9 @@ class ScoringPipeline:
     async def run(self, units: Iterable[PipelineUnit]) -> PipelineStats:
         invoke_queue: asyncio.Queue[Optional[ScoringTask]] = asyncio.Queue(maxsize=self.invoke_queue_size)
         validation_queue: asyncio.Queue[Optional[ValidationPayload]] = asyncio.Queue()
-        writer_queue: asyncio.Queue[Optional[SheetUpdate]] = asyncio.Queue()
+        writer_queue: Optional[asyncio.Queue[Optional[SheetUpdate]]] = None
+        if self._shared_writer is None:
+            writer_queue = asyncio.Queue()
 
         units_list = list(units)
         self._total_requests = 0
@@ -203,9 +214,15 @@ class ScoringPipeline:
             for _ in range(self.invoke_concurrency)
         ]
         validator_task = asyncio.create_task(self._validator(validation_queue, writer_queue))
-        writer_task = asyncio.create_task(self._writer(writer_queue))
+        writer_task = (
+            asyncio.create_task(self._writer(writer_queue))
+            if self._shared_writer is None and writer_queue is not None
+            else None
+        )
 
-        tasks = [producer_task, *invoker_tasks, validator_task, writer_task]
+        tasks = [producer_task, *invoker_tasks, validator_task]
+        if writer_task is not None:
+            tasks.append(writer_task)
         try:
             await asyncio.gather(*tasks)
         except Exception:
@@ -217,6 +234,7 @@ class ScoringPipeline:
             raise
         finally:
             await self._shutdown_validation_executor()
+            await self._drain_cleanup_queue()
 
         self._log(
             f"Pass complete: tasks={self._stats.processed_units}, flushes={self._stats.flush_count}, cache_hits={self._stats.cache_hits}"
@@ -237,7 +255,8 @@ class ScoringPipeline:
         for _ in range(self.invoke_concurrency):
             await self._safe_put(invoke_queue, None)
             await self._safe_put(validation_queue, None)
-        await self._safe_put(writer_queue, None)
+        if writer_queue is not None:
+            await self._safe_put(writer_queue, None)
 
     async def _safe_put(self, queue: asyncio.Queue, item: object, timeout: float = 0.5) -> None:
         try:
@@ -287,6 +306,57 @@ class ScoringPipeline:
         if provider:
             message = f"{message} provider={provider}"
         logger.debug(message)
+
+    def _is_fatal_error(self, error_trail: Sequence[Tuple[str, int, str]]) -> bool:
+        for _provider, status, _reason in error_trail:
+            if status and status in self._fatal_status_codes:
+                return True
+        return False
+
+    async def _emit_blank_payload(
+        self,
+        *,
+        task: ScoringTask,
+        validation_queue: asyncio.Queue[Optional[ValidationPayload]],
+        error_trail: Sequence[Tuple[str, int, str]],
+        request_idx: int,
+        total_requests: int,
+        stage: str,
+        failure_key: Optional[Tuple[int, int]] = None,
+    ) -> None:
+        blank_len = len(task.categories)
+        blank_scores: List[Optional[float]] = [None] * blank_len
+        missing = list(range(blank_len)) if blank_len else None
+        blank_result = ScoreResult(
+            provider=self.cfg.primary_provider,
+            model=str(self.cfg.primary_model or ""),
+            scores=list(blank_scores),
+            analyses=None,
+            pre_scores=list(blank_scores),
+            absolute_scores=None,
+            relative_rank_scores=None,
+            anchor_labels=None,
+            missing_indices=missing,
+            partial=bool(missing),
+        )
+        self._log_request_event(
+            stage=stage,
+            index=request_idx,
+            total=total_requests,
+            unit=task.unit,
+            provider=self.cfg.primary_provider.value,
+        )
+        payload = ValidationPayload(
+            task=task,
+            result=blank_result,
+            error_trail=error_trail,
+            from_cache=True,
+        )
+        await validation_queue.put(payload)
+        if failure_key is not None:
+            self._unit_failures.pop(failure_key, None)
+        if task.cleanup_path:
+            await self._cleanup_queue.put(task.cleanup_path)
 
     def _log_sheet_update(self, *, start_row: int, end_row: int) -> None:
         total = max(self._total_requests, 1)
@@ -398,61 +468,49 @@ class ScoringPipeline:
                             for provider, status, _reason in error_trail:
                                 if status == 429:
                                     self._stats.rate_429_count += 1
+                        fatal_error = self._is_fatal_error(error_trail)
                         self._log_request_event(
                             stage="error",
                             index=request_idx,
                             total=total_requests,
                             unit=task.unit,
                         )
-                        failure_count = self._unit_failures.get(failure_key, 0) + 1
-                        self._unit_failures[failure_key] = failure_count
-                        if failure_count >= self._unit_failure_limit:
-                            logger.warning(
-                                "score.unit.giveup row=%s block=%s failures=%s trail=%s",
-                                task.unit.row_index + 1,
-                                task.unit.block_index,
-                                failure_count,
-                                error_trail,
-                            )
-                            blank_len = len(task.categories)
-                            blank_scores: List[Optional[float]] = [None] * blank_len
-                            missing = list(range(blank_len)) if blank_len else None
-                            blank_result = ScoreResult(
-                                provider=self.cfg.primary_provider,
-                                model=str(self.cfg.primary_model or ""),
-                                scores=list(blank_scores),
-                                analyses=None,
-                                pre_scores=list(blank_scores),
-                                absolute_scores=None,
-                                relative_rank_scores=None,
-                                anchor_labels=None,
-                                missing_indices=missing,
-                                partial=bool(missing),
-                            )
-                            self._log_request_event(
-                                stage="giveup",
-                                index=request_idx,
-                                total=total_requests,
-                                unit=task.unit,
-                                provider=self.cfg.primary_provider.value,
-                            )
-                            payload = ValidationPayload(
-                                task=task,
-                                result=blank_result,
-                                error_trail=error_trail,
-                                from_cache=True,
-                            )
-                            await validation_queue.put(payload)
-                            self._unit_failures.pop(failure_key, None)
-                            if task.cleanup_path:
-                                await self._cleanup_queue.put(task.cleanup_path)
-                        else:
+                        if fatal_error:
                             self._log(
-                                f"Retrying row {task.unit.row_index + 1} block {task.unit.block_index} "
-                                f"(attempt {failure_count}/{self._unit_failure_limit})"
+                                "Fatal provider error for row {row} block {block}; skipping unit".format(
+                                    row=task.unit.row_index + 1,
+                                    block=task.unit.block_index,
+                                )
                             )
-                            await asyncio.sleep(min(2.0, 0.5 * failure_count))
-                            await invoke_queue.put(task)
+                            await self._emit_blank_payload(
+                                task=task,
+                                validation_queue=validation_queue,
+                                error_trail=error_trail,
+                                request_idx=request_idx,
+                                total_requests=total_requests,
+                                stage="skip",
+                                failure_key=failure_key,
+                            )
+                        else:
+                            failure_count = self._unit_failures.get(failure_key, 0) + 1
+                            self._unit_failures[failure_key] = failure_count
+                            if failure_count >= self._unit_failure_limit:
+                                await self._emit_blank_payload(
+                                    task=task,
+                                    validation_queue=validation_queue,
+                                    error_trail=error_trail,
+                                    request_idx=request_idx,
+                                    total_requests=total_requests,
+                                    stage="giveup",
+                                    failure_key=failure_key,
+                                )
+                            else:
+                                self._log(
+                                    f"Retrying row {task.unit.row_index + 1} block {task.unit.block_index} "
+                                    f"(attempt {failure_count}/{self._unit_failure_limit})"
+                                )
+                                await asyncio.sleep(min(2.0, 0.5 * failure_count))
+                                await invoke_queue.put(task)
                         continue
                     else:
                         score_len = len(result.scores or [])
@@ -504,7 +562,7 @@ class ScoringPipeline:
     async def _validator(
         self,
         validation_queue: asyncio.Queue[Optional[ValidationPayload]],
-        writer_queue: asyncio.Queue[Optional[SheetUpdate]],
+        writer_queue: Optional[asyncio.Queue[Optional[SheetUpdate]]],
     ) -> None:
         pending_invokers = self.invoke_concurrency
         loop = asyncio.get_running_loop()
@@ -533,7 +591,26 @@ class ScoringPipeline:
                             partial=outcome.result.partial,
                         )
                     )
-                    await writer_queue.put(outcome.sheet_update)
+                    update = outcome.sheet_update
+                    object.__setattr__(  # type: ignore[misc]
+                        update,
+                        "on_complete",
+                        self.mark_unit_completed,
+                    )
+                    object.__setattr__(  # type: ignore[misc]
+                        update,
+                        "log_callback",
+                        self._log,
+                    )
+                    object.__setattr__(  # type: ignore[misc]
+                        update,
+                        "stats",
+                        self._stats,
+                    )
+                    if self._shared_writer is not None:
+                        await self._shared_writer.enqueue(update)
+                    elif writer_queue is not None:
+                        await writer_queue.put(update)
                 finally:
                     validation_queue.task_done()
         except asyncio.CancelledError:
@@ -544,7 +621,8 @@ class ScoringPipeline:
             logger.exception("Validator crashed")
             raise
         finally:
-            await writer_queue.put(None)
+            if writer_queue is not None:
+                await writer_queue.put(None)
 
     def _run_validation(self, payload: ValidationPayload) -> ValidationOutcome:
         task = payload.task
@@ -736,7 +814,8 @@ class ScoringPipeline:
                     self._stats.flush_count += 1
                     self._completed_requests += len(snapshot_updates)
                     for entry in snapshot_updates:
-                        await self.mark_unit_completed(entry.unit, entry.result)
+                        callback = entry.on_complete or self.mark_unit_completed
+                        await callback(entry.unit, entry.result)
                     self._log("Skipped Sheets update: nothing new to write")
                     return
 
@@ -769,7 +848,8 @@ class ScoringPipeline:
                             self._stats.flush_count += 1
                             self._completed_requests += len(snapshot_updates)
                             for entry in snapshot_updates:
-                                await self.mark_unit_completed(entry.unit, entry.result)
+                                callback = entry.on_complete or self.mark_unit_completed
+                                await callback(entry.unit, entry.result)
                             self._log(
                                 "Wrote {rows} rows to Sheets (entries={entries}, tries={tries}, text_cells={text_cells}, score_cells={score_cells})".format(
                                     rows=len(distinct_rows),

@@ -5,10 +5,8 @@ import json
 import logging
 import shutil
 import time
+from contextlib import suppress
 from dataclasses import dataclass
-import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -24,6 +22,7 @@ from .services.google_sheets import (
     find_sheet,
 )
 from .services.sheet_updates import build_batched_value_ranges
+from .services.sheet_writer import SharedSheetWriter
 from .services.scoring_cache import CachePolicy, ScoreCache
 from .scoring_pipeline import PipelineUnit, ScoringPipeline
 
@@ -521,6 +520,23 @@ class JobManager:
         slowdown_history: list[dict] = []
         clean_batches = 0
         batch_num = 0
+        writer_log = lambda msg: log_stage("Writer", msg)  # noqa: E731
+        shared_writer = SharedSheetWriter(
+            spreadsheet_id=spreadsheet_id,
+            sheet_name=sheet_name,
+            score_sheet_name=score_sheet_name,
+            cfg=job.cfg,
+            flush_interval=job.cfg.writer_flush_interval_sec,
+            flush_unit_threshold=job.cfg.writer_flush_batch_size,
+            sheet_batch_row_size=job.cfg.sheet_chunk_rows,
+            writer_retry_limit=job.cfg.writer_retry_limit,
+            writer_retry_initial_delay=job.cfg.writer_retry_initial_delay_sec,
+            writer_retry_backoff_multiplier=job.cfg.writer_retry_backoff_multiplier,
+            writer_max_concurrent_flushes=getattr(job.cfg, "writer_max_flush_concurrency", 4),
+            log_callback=writer_log,
+        )
+        await shared_writer.start()
+
         try:
             count_progress = True
             for chunk_idx, chunk_units in enumerate(chunked_units):
@@ -612,6 +628,7 @@ class JobManager:
                             sheet_batch_row_size=job.cfg.sheet_chunk_rows,
                             video_mode=job.cfg.mode == "video",
                             event_logger=lambda msg, cid=chunk_idx + 1: log_chunk(cid, msg),
+                            shared_writer=shared_writer,
                         )
                         stats = await pipeline.run(pipeline_units)
                         rate_429_batch = stats.rate_429_count
@@ -679,6 +696,8 @@ class JobManager:
                                 last_error=None,
                                 retry_count=retries_used,
                             )
+                        # 完了したチャンクはメモリ節約のためクリア
+                        chunk_units.clear()
                         break
 
             # Retry passes for cells still blank (up to 4 additional passes)
@@ -687,10 +706,12 @@ class JobManager:
                     break
                 log_retry(retry_round + 1, "Scanning sheet for blank scores")
                 # Refresh rows to inspect blanks
-                rows = fetch_sheet_values(spreadsheet_id, sheet_name)
+                rows = await asyncio.to_thread(fetch_sheet_values, spreadsheet_id, sheet_name)
                 retry_units: List[Tuple[int, int, int]] = []
                 for row_abs_idx in active_row_indices:
                     for (ridx, block_index, col_offset) in blocks.get(row_abs_idx, []):
+                        if is_completed((ridx, block_index, col_offset)):
+                            continue
                         cats = read_categories_from_sheet(rows, job.cfg, row_abs_idx, col_offset)
                         if not cats:
                             continue
@@ -749,6 +770,7 @@ class JobManager:
                         sheet_batch_row_size=job.cfg.sheet_chunk_rows,
                         video_mode=job.cfg.mode == "video",
                         event_logger=lambda msg, rid=retry_round + 1: log_retry(rid, msg),
+                        shared_writer=shared_writer,
                     )
                     stats = await pipeline.run(pipeline_units)
                     rate_429_total += stats.rate_429_count
@@ -783,6 +805,8 @@ class JobManager:
             job_fail_reason = str(exc)
             raise
         finally:
+            with suppress(Exception):
+                await shared_writer.close()
             try:
                 await score_cache.reset(delete_file=True)
             except Exception:
