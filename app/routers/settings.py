@@ -8,8 +8,8 @@ from ..models import RunConfig
 router = APIRouter()
 
 
-@router.get("/settings")
-def get_settings(settings=Depends(get_app_settings)):
+@router.get("/settings/status")
+def get_settings_status(settings=Depends(get_app_settings)):
     return {"keys": settings.keys_status()}
 
 
