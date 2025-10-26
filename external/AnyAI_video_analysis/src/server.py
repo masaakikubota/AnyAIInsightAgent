@@ -967,6 +967,15 @@ output:
   empty_case: "Return empty string for emoji-only or non-linguistic comments."
 """.strip()
 
+class LLMAuthenticationError(RuntimeError):
+    """Raised when an LLM provider rejects the provided API key."""
+
+class OpenAIAuthenticationError(LLMAuthenticationError):
+    """Raised when OpenAI rejects the provided API key."""
+
+class GeminiAuthenticationError(LLMAuthenticationError):
+    """Raised when Gemini rejects the provided API key."""
+
 DEFAULT_VIDEO_COMMENT_SUMMARY_PROMPT = """
 name: AnyAI Video + Comment Reviewer PRO
 version: 2.1
@@ -1289,6 +1298,17 @@ def _call_openai_text(client: OpenAI, model_name: str, prompt: str, log_q: multi
                             text += p.get('text', '')
         return (text or "").strip()
     except Exception as e:
+        status_code = getattr(e, "status_code", None)
+        if status_code is None and getattr(e, "response", None) is not None:
+            status_code = getattr(e.response, "status_code", None)
+        message = str(e)
+        if status_code == 401 or "Incorrect API key" in message:
+            log_message(
+                "   - OpenAI APIキーの認証に失敗しました。設定画面で有効なキーを登録してください。",
+                is_error=True,
+                queue=log_q,
+            )
+            raise OpenAIAuthenticationError(message) from e
         log_message(f"   - OpenAI text generation error: {e}", is_error=True, queue=log_q)
         raise
 
@@ -1304,6 +1324,28 @@ def _call_gemini_text_summary(client, model_name: str, prompt: str, log_q: multi
             ),
         )
     except Exception as e:
+        message = str(e)
+        status_code = getattr(e, "status_code", None)
+        if status_code is None and getattr(e, "response", None) is not None:
+            status_code = getattr(e.response, "status_code", None)
+        code_attr = getattr(e, "code", None)
+        code_name = getattr(code_attr, "name", None) if hasattr(code_attr, "name") else None
+        code_value = str(code_attr).lower() if code_attr else ""
+        code_name_value = str(code_name).lower() if code_name else ""
+        message_lower = message.lower()
+        if (
+            status_code == 401
+            or "api key" in message_lower
+            or "permission denied" in message_lower
+            or code_value in {"permissiondenied", "unauthenticated"}
+            or code_name_value in {"permissiondenied", "unauthenticated"}
+        ):
+            log_message(
+                "   - Gemini APIキーの認証に失敗しました。設定画面で有効なキーを登録してください。",
+                is_error=True,
+                queue=log_q,
+            )
+            raise GeminiAuthenticationError(message) from e
         log_message(f"   - Gemini text generation error: {e}", is_error=True, queue=log_q)
         raise
 
@@ -1415,12 +1457,23 @@ def comment_enhancer_main_logic(config: dict, log_q: multiprocessing.Queue):
 
         prompt_template = _load_prompt_text(config.get("prompt_file"), DEFAULT_COMMENT_PROMPT_TEXT, log_q)
 
-        # Prepare OpenAI client
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if not openai_key:
-            raise ValueError("OPENAI_API_KEY is not set. Place it in .env or confidential/Keys.txt")
-        client = OpenAI(api_key=openai_key)
-        model_name = config.get("model", "gpt-4.1")
+        llm_provider = (config.get("provider") or ("gemini" if str(config.get("model") or "").startswith("gemini") else "openai")).lower()
+        model_name = (config.get("model") or "").strip()
+        if llm_provider == "gemini":
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            if not gemini_key:
+                raise ValueError("GEMINI_API_KEY is not set. Place it in .env or confidential/Keys.txt")
+            client = genai.Client(api_key=gemini_key)
+            model_name = _normalize_gemini_model(model_name or DEFAULT_GEMINI_MODEL)
+        else:
+            openai_key = os.getenv("OPENAI_API_KEY")
+            if not openai_key:
+                raise ValueError("OPENAI_API_KEY is not set. Place it in .env or confidential/Keys.txt")
+            client = OpenAI(api_key=openai_key)
+            model_name = model_name or "gpt-4.1"
+            llm_provider = "openai"
+        config["model"] = model_name
+        config["provider"] = llm_provider
 
         # Row-by-row processing: for each row, process all comments in parallel, then write, then next row
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1458,7 +1511,10 @@ def comment_enhancer_main_logic(config: dict, log_q: multiprocessing.Queue):
                 if _is_non_language_like(comment):
                     return (n, "")
                 prompt = _build_comment_prompt(prompt_template, video_context, comment)
-                text = _call_openai_text(client, model_name, prompt, log_q)
+                if llm_provider == "gemini":
+                    text = _call_gemini_text_summary(client, model_name, prompt, log_q)
+                else:
+                    text = _call_openai_text(client, model_name, prompt, log_q)
                 if len(text) > MAX_CELL_LEN:
                     text = text[:MAX_CELL_LEN - 20] + "... [TRUNCATED]"
                 return (n, text)
@@ -1466,14 +1522,31 @@ def comment_enhancer_main_logic(config: dict, log_q: multiprocessing.Queue):
             results_for_row = []  # list of (comment_n, text)
             with ThreadPoolExecutor(max_workers=row_workers) as ex:
                 futures = {ex.submit(_work_one, t): t for t in row_tasks}
+                auth_failure = None
                 for fut in as_completed(futures):
                     try:
                         n, text = fut.result()
+                        results_for_row.append((n, text))
+                    except LLMAuthenticationError as e:
+                        auth_failure = e
+                        for pending_fut in futures:
+                            if pending_fut is not fut:
+                                pending_fut.cancel()
+                        break
                     except Exception as e:
                         tn = futures[fut][0]
                         log_message(f"   - Error on Row {row_idx} (Comment_{tn}): {e}", is_error=True, queue=log_q)
                         n, text = tn, f"ERROR: {type(e).__name__}: {e}"[:MAX_CELL_LEN]
-                    results_for_row.append((n, text))
+                        results_for_row.append((n, text))
+
+                if auth_failure is not None:
+                    log_message(
+                        f"{'Gemini' if llm_provider == 'gemini' else 'OpenAI'} APIキーの認証に失敗したため、コメント改善処理を中断しました。設定画面からキーを更新してください。",
+                        is_error=True,
+                        queue=log_q,
+                    )
+                    log_q.put("---PROCESS_COMPLETE---")
+                    return
 
             # Accumulate row results; flush every 15 rows
             for comment_n, text in results_for_row:
