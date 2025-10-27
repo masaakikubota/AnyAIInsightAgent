@@ -77,14 +77,15 @@
 - グラフ
   - Plotlyベース。ズーム/凡例/PNG保存、ライト/ダーク対応。
 - カード/レイアウト
-  - anyai.components.css のカード/グリッド/モーダルを使用。
+  - `css/src/components.css` のカード/グリッド/モーダルを使用。
 - トースト/アラート
   - 成功/注意/警告/エラー（色とアイコン）。ユーザー操作に近接表示。
 
 ---
 
 ## 5. デザイン方針（AnyAI UI Master 準拠）
-- トークン: anyai.tokens.css（色/余白/フォント/シャドウ）。
+- スタイル構造: `/static/anyai/css/main.css` を全画面で共有し、`css/src/*.css` のパーシャル（tokens/components/layout/utilities）からビルドする。
+- トークン: `css/src/tokens.css`（色/余白/フォント/シャドウ）。
 - カラー: 
   - Primary: #5B6CFF、Success: #22C55E、Warning: #F59E0B、Danger: #EF4444。
   - Neutral: パネル/境界は控えめ。背景は高コントラスト。
@@ -182,5 +183,3 @@ Header [Logo] [Interview] [Persona] [Cleansing] [Dashboard] ... [User]
 - エラー率（API/レンダリング）
 - ダッシュボードの滞在時間・エクスポート利用率
 - Job成功率・平均完了時間
-
-

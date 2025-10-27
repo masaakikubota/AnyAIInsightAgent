@@ -9,10 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/anyai/core/anyai.tokens.css" />
-    <link rel="stylesheet" href="/static/anyai/core/anyai.components.css" />
-    <link rel="stylesheet" href="/static/anyai/core/anyai.utilities.css" />
-    <link rel="stylesheet" href="/static/anyai/tool-layout.css" />
+    <link rel="stylesheet" href="/static/anyai/css/main.css" />
     <script src="/static/anyai/loading-overlay.js"></script>
     <script defer src="/static/anyai/vendor/lucide.js"></script>
     <script defer src="/static/anyai/sidebar.js"></script>
@@ -60,19 +57,30 @@
         border-left: 0;
         border-top-left-radius: 0;
         border-bottom-left-radius: 0;
-        background: var(--anyai-primary, #2955ff);
-        color: var(--anyai-text-inverse, #ffffff);
         font-weight: 600;
-        box-shadow: 0 4px 10px rgba(31, 36, 50, 0.12);
-        transition: box-shadow 0.2s ease, background-color 0.2s ease;
+        transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease;
       }
 
-      .field-with-action .input-action-btn:hover,
-      .field-with-action .input-action-btn:focus-visible {
-        background: var(--anyai-primary-600, #1f3de6);
+      .field-with-action .input-action-btn:not(.btn-soft-accent) {
+        border: none;
+        box-shadow: 0 4px 10px rgba(31, 36, 50, 0.12);
+      }
+
+      .field-with-action .input-action-btn:not(.btn-soft-accent):hover,
+      .field-with-action .input-action-btn:not(.btn-soft-accent):focus-visible {
         box-shadow: 0 6px 16px rgba(31, 36, 50, 0.16);
         outline: none;
-        color: var(--anyai-text-inverse, #ffffff);
+      }
+
+      .field-with-action .input-action-btn.btn-soft-accent:hover,
+      .field-with-action .input-action-btn.btn-soft-accent:focus-visible {
+        transform: translateY(-1px);
+      }
+
+      .field-with-action .input-action-btn.btn-soft-accent {
+        border-left: 0;
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
       }
 
       .anyai-form-section {
@@ -370,7 +378,7 @@
                       <p class="field-hint">対象スプレッドシートを指定し、Setボタンでシート一覧を読み込みます。</p>
                       <div class="field-with-action">
                         <input type="text" id="sheet" name="sheet" placeholder="https://docs.google.com/spreadsheets/d/..." required />
-                        <button type="button" class="btn btn-outline input-action-btn" id="btn-sheet-set">Set</button>
+                        <button type="button" class="btn btn-primary input-action-btn" id="btn-sheet-set">Set</button>
                       </div>
                     </div>
                     <div class="field sheet-select-field">
