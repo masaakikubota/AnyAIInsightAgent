@@ -312,22 +312,135 @@ label { font-weight: 600; font-size: var(--anyai-fs-2); }
 
 /* ボタン */
 .btn {
+  --btn-surface: var(--anyai-primary);
+  --btn-label: var(--anyai-text-inverse);
+  --btn-border: transparent;
+  --btn-shadow: 0 10px 24px rgba(31, 36, 50, 0.18);
+  --btn-shadow-hover: 0 14px 28px rgba(31, 36, 50, 0.22);
+  --btn-shadow-active: 0 8px 18px rgba(31, 36, 50, 0.18);
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 10px 14px; border-radius: 10px; border: 1px solid transparent;
   font-weight: 600; text-decoration: none; cursor: pointer;
-  transition: transform var(--anyai-fast), box-shadow var(--anyai-fast), background var(--anyai-fast), color var(--anyai-fast);
+  transition: transform var(--anyai-fast), box-shadow var(--anyai-fast),
+    background var(--anyai-fast), color var(--anyai-fast);
   user-select: none;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--btn-surface), white 14%),
+    color-mix(in srgb, var(--btn-surface), black 8%)
+  );
+  color: var(--btn-label);
+  border-color: var(--btn-border);
+  box-shadow: var(--btn-shadow);
 }
-.btn:active { transform: translateY(1px); }
 
-.btn-primary { background: var(--anyai-primary); color: var(--anyai-text-inverse); }
-.btn-primary:hover { background: var(--anyai-primary-600); }
-.btn-outline { background: transparent; border-color: var(--anyai-border); }
-.btn-outline:hover { background: var(--anyai-bg-subtle); }
-.btn-ghost { background: transparent; border-color: transparent; }
-.btn-ghost:hover { background: var(--anyai-bg-subtle); }
-.btn-danger { background: var(--anyai-danger); color: var(--anyai-text-inverse); }
-.btn-success { background: var(--anyai-success); color: var(--anyai-text-inverse); }
+.btn:hover,
+.btn:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: var(--btn-shadow-hover);
+  outline: none;
+}
+
+.btn:active {
+  transform: translateY(0);
+  box-shadow: var(--btn-shadow-active);
+}
+
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.65;
+  pointer-events: none;
+  box-shadow: none;
+  transform: none;
+}
+
+.btn-primary {
+  --btn-surface: var(--anyai-primary);
+  --btn-label: var(--anyai-text-inverse);
+  --btn-border: transparent;
+  --btn-shadow: 0 10px 24px color-mix(in srgb, var(--anyai-primary), transparent 68%);
+  --btn-shadow-hover: 0 14px 32px color-mix(in srgb, var(--anyai-primary), transparent 62%);
+  --btn-shadow-active: 0 8px 20px color-mix(in srgb, var(--anyai-primary), transparent 72%);
+}
+
+.btn-outline {
+  --btn-surface: color-mix(in srgb, var(--anyai-bg), var(--anyai-border) 60%);
+  --btn-label: color-mix(in srgb, var(--anyai-text), transparent 15%);
+  --btn-border: color-mix(in srgb, var(--anyai-border), transparent 6%);
+  --btn-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+  --btn-shadow-hover: 0 10px 22px rgba(15, 23, 42, 0.12);
+  --btn-shadow-active: 0 6px 16px rgba(15, 23, 42, 0.1);
+}
+
+.btn-outline:hover,
+.btn-outline:focus-visible {
+  color: color-mix(in srgb, var(--anyai-text), transparent 5%);
+}
+
+.btn-ghost {
+  --btn-surface: color-mix(in srgb, var(--anyai-bg), var(--anyai-border) 28%);
+  --btn-label: color-mix(in srgb, var(--anyai-text), transparent 10%);
+  --btn-border: transparent;
+  --btn-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --btn-shadow-hover: 0 8px 18px rgba(15, 23, 42, 0.12);
+  --btn-shadow-active: 0 5px 14px rgba(15, 23, 42, 0.1);
+}
+
+.btn-danger {
+  --btn-surface: var(--anyai-danger);
+  --btn-label: var(--anyai-text-inverse);
+  --btn-shadow: 0 10px 24px color-mix(in srgb, var(--anyai-danger), transparent 70%);
+  --btn-shadow-hover: 0 14px 32px color-mix(in srgb, var(--anyai-danger), transparent 64%);
+  --btn-shadow-active: 0 8px 20px color-mix(in srgb, var(--anyai-danger), transparent 74%);
+}
+
+.btn-success {
+  --btn-surface: var(--anyai-success);
+  --btn-label: var(--anyai-text-inverse);
+  --btn-shadow: 0 10px 24px color-mix(in srgb, var(--anyai-success), transparent 70%);
+  --btn-shadow-hover: 0 14px 32px color-mix(in srgb, var(--anyai-success), transparent 64%);
+  --btn-shadow-active: 0 8px 20px color-mix(in srgb, var(--anyai-success), transparent 74%);
+}
+
+.btn-soft-accent {
+  --btn-surface: color-mix(in srgb, var(--anyai-border), white 65%);
+  --btn-label: color-mix(in srgb, var(--anyai-text), transparent 20%);
+  --btn-border: color-mix(in srgb, var(--anyai-border), transparent 20%);
+  --btn-shadow: 0 6px 16px rgba(17, 24, 39, 0.08);
+  --btn-shadow-hover: 0 10px 22px rgba(17, 24, 39, 0.12);
+  --btn-shadow-active: 0 6px 16px rgba(17, 24, 39, 0.1);
+}
+
+.btn-strong-accent,
+.btn-secondary {
+  --btn-surface: color-mix(in srgb, var(--anyai-primary), white 14%);
+  --btn-label: var(--anyai-text-inverse);
+  --btn-border: transparent;
+  --btn-shadow: 0 12px 28px color-mix(in srgb, var(--anyai-primary), transparent 64%);
+  --btn-shadow-hover: 0 16px 32px color-mix(in srgb, var(--anyai-primary), transparent 58%);
+  --btn-shadow-active: 0 10px 24px color-mix(in srgb, var(--anyai-primary), transparent 70%);
+}
+
+.btn[aria-busy="true"] {
+  position: relative;
+  pointer-events: none;
+}
+
+.btn[aria-busy="true"]::after {
+  content: "";
+  position: absolute;
+  inset: calc(50% - 0.75em) auto auto calc(50% - 0.75em);
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--btn-surface), transparent 72%);
+  border-top-color: color-mix(in srgb, var(--btn-surface), var(--btn-label) 30%);
+  animation: anyai-btn-spin 0.9s linear infinite;
+}
+
+@keyframes anyai-btn-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
 
 /* タグ/バッジ */
 .badge {
@@ -1181,4 +1294,3 @@ body {
 .max-lg{max-width:var(--anyai-content-lg);margin-inline:auto}
 .text-subtle{color:var(--anyai-text-subtle)}
 .text-danger{color:var(--anyai-danger)}.text-success{color:var(--anyai-success)}
-
