@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -164,15 +164,22 @@ _init_defaults_from_keys_file()
 
 
 def _write_env(gemini: Optional[str], openai: Optional[str]) -> None:
-    lines: list[str] = []
-    if ENV_PATH.exists():
-        lines = ENV_PATH.read_text(encoding="utf-8").splitlines()
-        # drop existing key lines
-        lines = [ln for ln in lines if not ln.startswith("GEMINI_API_KEY=") and not ln.startswith("OPENAI_API_KEY=")]
+    if gemini is None and openai is None and not ENV_PATH.exists():
+        return
+
+    env_map = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
+    if isinstance(env_map, dict):
+        env_map = {str(k): v for k, v in env_map.items() if v is not None}
+    else:
+        env_map = {}
 
     if gemini is not None:
-        lines.append(f"GEMINI_API_KEY={gemini}")
+        env_map["GEMINI_API_KEY"] = gemini
     if openai is not None:
-        lines.append(f"OPENAI_API_KEY={openai}")
+        env_map["OPENAI_API_KEY"] = openai
 
+    if not env_map and gemini is None and openai is None:
+        return
+
+    lines = [f"{key}={value}" for key, value in env_map.items()]
     ENV_PATH.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")

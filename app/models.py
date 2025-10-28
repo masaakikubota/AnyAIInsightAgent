@@ -42,6 +42,10 @@ class RunConfig(BaseModel):
     writer_retry_limit: conint(ge=1, le=10) = 5
     writer_retry_initial_delay_sec: confloat(ge=0.1, le=10.0) = 0.5
     writer_retry_backoff_multiplier: confloat(ge=1.0, le=5.0) = 2.0
+    max_rows_per_job: Optional[conint(ge=100, le=1000000)] = 300
+    slice_start_row: Optional[conint(ge=1)] = None
+    slice_end_row: Optional[conint(ge=1)] = None
+    parent_job_id: Optional[str] = None
 
     # Providers
     primary_provider: Provider = Provider.gemini
@@ -181,6 +185,16 @@ class RunConfig(BaseModel):
             self.system_prompt = (
                 self.ssr_system_prompt if self.enable_ssr else self.numeric_system_prompt
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_slice_bounds(self) -> "RunConfig":
+        if (
+            self.slice_start_row is not None
+            and self.slice_end_row is not None
+            and self.slice_end_row < self.slice_start_row
+        ):
+            raise ValueError("slice_end_row must be greater than or equal to slice_start_row")
         return self
 
     @property
