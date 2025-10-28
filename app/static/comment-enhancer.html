@@ -617,8 +617,10 @@
   <script>
     const loadingOverlay = window.AnyAILoading || {
       run: async (task) => task(),
+      wrap: async (promise) => promise,
       show: () => {},
       hide: () => {},
+      requireKeys: async () => true,
     };
 
     const form = document.getElementById('enhancer-form');

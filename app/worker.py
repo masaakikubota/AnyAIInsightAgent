@@ -22,6 +22,7 @@ from .services.google_sheets import (
     find_sheet,
 )
 from .services.sheet_updates import build_batched_value_ranges
+from .services.embeddings import embed_with_fallback, normalize_for_embedding
 from .services.sheet_writer import SharedSheetWriter
 from .services.scoring_cache import CachePolicy, ScoreCache
 from .scoring_pipeline import PipelineUnit, ScoringPipeline
@@ -66,6 +67,11 @@ def read_categories_from_sheet(
             break
         categories.append(Category(name=name, definition=definition, detail=detail))
     return categories
+
+
+def _category_embedding_text(category: Category) -> str:
+    parts = [category.name or "", category.definition or "", category.detail or ""]
+    return "\n".join(part for part in parts if part)
 
 
 def apply_updates_to_sheet(
@@ -231,6 +237,18 @@ class JobManager:
         p.mkdir(parents=True, exist_ok=True)
         return p
 
+    def _write_job_config(self, job: Job) -> None:
+        job_dir = self._job_dir(job.job_id)
+        (job_dir / "config.json").write_text(job.cfg.model_dump_json(indent=2), encoding="utf-8")
+
+    def _generate_split_job_id(self, parent_job_id: str, index: int) -> str:
+        suffix = index
+        while True:
+            candidate = f"{parent_job_id}-p{suffix:02d}"
+            if candidate not in self.jobs and not (self.base_dir / candidate).exists():
+                return candidate
+            suffix += 1
+
     def _job_logger(self, job_id: str) -> Callable[[str], None]:
         logger = self._job_logs.get(job_id)
         if logger:
@@ -377,11 +395,24 @@ class JobManager:
             f"Scanning rows starting at {start_idx + 1} (total rows inspected: {len(data_rows)})",
         )
 
-        active_row_indices: List[int] = []
+        all_active_row_indices: List[int] = []
         for idx, row in enumerate(data_rows):
             cell = row[utter_col] if utter_col < len(row) else ""
             if str(cell).strip():
-                active_row_indices.append(start_idx + idx)
+                all_active_row_indices.append(start_idx + idx)
+
+        slice_start_row = job.cfg.slice_start_row
+        slice_end_row = job.cfg.slice_end_row
+
+        def _within_slice(row_idx: int) -> bool:
+            row_number = row_idx + 1
+            if slice_start_row is not None and row_number < slice_start_row:
+                return False
+            if slice_end_row is not None and row_number > slice_end_row:
+                return False
+            return True
+
+        active_row_indices: List[int] = [idx for idx in all_active_row_indices if _within_slice(idx)]
 
         if not active_row_indices:
             job.total_rows = 0
@@ -396,15 +427,62 @@ class JobManager:
             )
             return
 
+        max_rows_per_job = int(job.cfg.max_rows_per_job or 0)
+        if (
+            job.cfg.slice_start_row is None
+            and job.cfg.slice_end_row is None
+            and max_rows_per_job > 0
+            and len(all_active_row_indices) > max_rows_per_job
+        ):
+            segments: List[List[int]] = [
+                all_active_row_indices[i : i + max_rows_per_job]
+                for i in range(0, len(all_active_row_indices), max_rows_per_job)
+            ]
+            base_cfg = job.cfg.model_copy(deep=True)
+            parent_id = base_cfg.parent_job_id or job_id
+            job.cfg.parent_job_id = parent_id
+            first_segment = segments[0]
+            job.cfg.slice_start_row = first_segment[0] + 1
+            job.cfg.slice_end_row = first_segment[-1] + 1
+            self._write_job_config(job)
+            log_stage(
+                "Setup",
+                f"Job exceeds {max_rows_per_job} rows; split into {len(segments)} jobs",
+            )
+            for split_index, segment in enumerate(segments[1:], start=2):
+                split_cfg = base_cfg.model_copy(
+                    update={
+                        "slice_start_row": segment[0] + 1,
+                        "slice_end_row": segment[-1] + 1,
+                        "parent_job_id": parent_id,
+                    }
+                )
+                new_job_id = self._generate_split_job_id(parent_id, split_index)
+                await self.create_job(new_job_id, split_cfg)
+                await self.add_to_queue(new_job_id)
+                log_stage(
+                    "Setup",
+                    f"Enqueued split job {new_job_id} covering rows {segment[0] + 1}-{segment[-1] + 1}",
+                )
+            slice_start_row = job.cfg.slice_start_row
+            slice_end_row = job.cfg.slice_end_row
+            active_row_indices = [idx for idx in all_active_row_indices if _within_slice(idx)]
+
         chunk_row_limit = max(1, job.cfg.chunk_row_limit)
         max_cols = job.cfg.max_category_cols
 
         blocks: Dict[int, List[Tuple[int, int, int]]] = {}
+        block_categories: Dict[int, List[Category]] = {}
         for row_abs_idx in active_row_indices:
             block_offset = 0
             block_index = 0
             while block_offset < max_cols:
-                cats = read_categories_from_sheet(rows, job.cfg, row_abs_idx, block_offset)
+                cats = block_categories.get(block_offset)
+                if cats is None:
+                    cats = read_categories_from_sheet(rows, job.cfg, row_abs_idx, block_offset)
+                    if not cats:
+                        break
+                    block_categories[block_offset] = cats
                 if not cats:
                     break
                 blocks.setdefault(row_abs_idx, []).append((row_abs_idx, block_index, block_offset))
@@ -468,6 +546,41 @@ class JobManager:
             _save_chunk_meta()
 
         _save_chunk_meta()
+
+        category_vector_cache: Dict[int, List[List[float]]] = {}
+        if block_categories:
+            unique_texts: dict[str, None] = {}
+            for cats in block_categories.values():
+                for category in cats:
+                    normalized = normalize_for_embedding(_category_embedding_text(category))
+                    unique_texts.setdefault(normalized, None)
+            embedding_lookup: Dict[str, List[float]] = {}
+            if unique_texts:
+                texts = list(unique_texts.keys())
+                vectors = await embed_with_fallback(texts, timeout=float(job.cfg.timeout_sec))
+                embedding_lookup = {
+                    text: list(vector)
+                    for text, vector in zip(texts, vectors)
+                }
+            for offset, cats in block_categories.items():
+                vectors: List[List[float]] = []
+                for category in cats:
+                    normalized = normalize_for_embedding(_category_embedding_text(category))
+                    vector = embedding_lookup.get(normalized)
+                    vectors.append(list(vector) if vector is not None else [])
+                category_vector_cache[offset] = vectors
+
+        def cached_category_reader(
+            rows_data: List[List[str]],
+            cfg_data: RunConfig,
+            row_index: int,
+            col_offset: int,
+        ) -> List[Category]:
+            cats = block_categories.get(col_offset)
+            if cats is None:
+                cats = read_categories_from_sheet(rows_data, cfg_data, row_index, col_offset)
+                block_categories[col_offset] = cats
+            return cats
 
         job.total_rows = sum(len(chunk_units) for chunk_units in chunked_units)
         log_stage(
@@ -614,7 +727,7 @@ class JobManager:
                             invoke_concurrency=min(current_conc, max(1, len(pipeline_units))),
                             rows=rows,
                             utter_col_index=utter_col,
-                            category_reader=read_categories_from_sheet,
+                            category_reader=cached_category_reader,
                             score_cache=score_cache,
                             mark_unit_completed=mark_unit,
                             flush_interval=job.cfg.writer_flush_interval_sec,
@@ -629,6 +742,7 @@ class JobManager:
                             video_mode=job.cfg.mode == "video",
                             event_logger=lambda msg, cid=chunk_idx + 1: log_chunk(cid, msg),
                             shared_writer=shared_writer,
+                            category_vectors=category_vector_cache,
                         )
                         stats = await pipeline.run(pipeline_units)
                         rate_429_batch = stats.rate_429_count
@@ -641,22 +755,18 @@ class JobManager:
                         )
 
                         if job.cfg.auto_slowdown:
-                            if rate_429_batch > 0 and current_conc > 1:
-                                new_conc = max(1, int(max(1, round(current_conc * 0.7))))
-                                if new_conc != current_conc:
-                                    slowdown_history.append({"batch": batch_num, "from": current_conc, "to": new_conc, "reason": "429"})
-                                    current_conc = new_conc
+                            if rate_429_batch > 0:
+                                slowdown_history.append(
+                                    {"batch": batch_num, "action": "pause", "reason": "429", "duration_sec": 120}
+                                )
+                                log_chunk(
+                                    chunk_idx + 1,
+                                    "Rate limit detected; pausing scoring for 120 seconds",
+                                )
+                                await asyncio.sleep(120)
                                 clean_batches = 0
                             else:
                                 clean_batches += 1
-                                if clean_batches >= 3 and current_conc < initial_conc:
-                                    new_conc = min(initial_conc, current_conc + 1)
-                                    if new_conc != current_conc:
-                                        slowdown_history.append(
-                                            {"batch": batch_num, "from": current_conc, "to": new_conc, "reason": "recover"}
-                                        )
-                                        current_conc = new_conc
-                                    clean_batches = 0
                     except Exception as exc:
                         retries_used += 1
                         if chunk_record:
@@ -756,7 +866,7 @@ class JobManager:
                         invoke_concurrency=min(current_conc, max(1, len(pipeline_units))),
                         rows=rows,
                         utter_col_index=utter_col,
-                        category_reader=read_categories_from_sheet,
+                        category_reader=cached_category_reader,
                         score_cache=score_cache,
                         mark_unit_completed=mark_unit_retry,
                         flush_interval=job.cfg.writer_flush_interval_sec,
@@ -771,6 +881,7 @@ class JobManager:
                         video_mode=job.cfg.mode == "video",
                         event_logger=lambda msg, rid=retry_round + 1: log_retry(rid, msg),
                         shared_writer=shared_writer,
+                        category_vectors=category_vector_cache,
                     )
                     stats = await pipeline.run(pipeline_units)
                     rate_429_total += stats.rate_429_count
@@ -782,20 +893,18 @@ class JobManager:
                     )
 
                     if job.cfg.auto_slowdown:
-                        if batch_agg["rate_429_batch"] > 0 and current_conc > 1:
-                            new_conc = max(1, int(max(1, round(current_conc * 0.7))))
-                            if new_conc != current_conc:
-                                slowdown_history.append({"batch": batch_num, "from": current_conc, "to": new_conc, "reason": "429"})
-                                current_conc = new_conc
+                        if batch_agg["rate_429_batch"] > 0:
+                            slowdown_history.append(
+                                {"batch": batch_num, "action": "pause", "reason": "429", "duration_sec": 120}
+                            )
+                            log_retry(
+                                retry_round + 1,
+                                "Rate limit detected during retry; pausing for 120 seconds",
+                            )
+                            await asyncio.sleep(120)
                             clean_batches = 0
                         else:
                             clean_batches += 1
-                            if clean_batches >= 3 and current_conc < initial_conc:
-                                new_conc = min(initial_conc, current_conc + 1)
-                                if new_conc != current_conc:
-                                    slowdown_history.append({"batch": batch_num, "from": current_conc, "to": new_conc, "reason": "recover"})
-                                    current_conc = new_conc
-                                clean_batches = 0
 
             job.status = JobStatus.cancelled if job.cancel_flag else JobStatus.completed
             log_stage("Done", f"Job finished with status {job.status.value}")
@@ -879,11 +988,6 @@ class JobManager:
             job.cfg.chunk_row_limit = chunk_rows
             job.cfg.writer_flush_batch_size = chunk_rows
 
-        if job.cfg.enable_ssr and job.cfg.batch_size != 1:
-            job.cfg.batch_size = 1
-            logger.debug(
-                "evt=ssr_concurrency_forced value=1 scope=worker job_id=%s", job.job_id
-            )
         if job.cfg.mode == "video":
             # VideoモードはGeminiのみを使用（ファイルベース推論のため）
             job.cfg.batch_size = 1

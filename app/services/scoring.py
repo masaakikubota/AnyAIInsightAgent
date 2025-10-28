@@ -98,6 +98,7 @@ async def score_with_fallback(
     cache: Optional[ScoreCache] = None,
     cache_write: bool = True,
     provider_model_map: Optional[Dict[Provider, str]] = None,
+    concept_vectors: Optional[Sequence[Sequence[float]]] = None,
 ) -> Tuple[ScoreResult, List[Tuple[str, int, str]], bool]:
     """Score via preferred provider with retries, then fallback.
 
@@ -219,6 +220,7 @@ async def score_with_fallback(
                         utterance=utterance,
                         categories=categories,
                         analyses=res.analyses,
+                        concept_vectors=concept_vectors,
                     )
                     res.pre_scores = list(has_result.absolute_scores)
                     res.likert_pmfs = None

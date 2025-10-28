@@ -5,7 +5,7 @@ import math
 import os
 import re
 from dataclasses import dataclass
-from typing import List, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from ..models import Category
 from .embeddings import cosine_similarity, embed_with_fallback, normalize_for_embedding
@@ -111,12 +111,22 @@ async def score_utterance(
     *,
     lambda_value: float = DEFAULT_LAMBDA,
     beta: float = DEFAULT_BETA,
+    concept_vectors: Optional[Sequence[Sequence[float]]] = None,
 ) -> HASResult:
     if len(categories) != len(analyses):
         raise ValueError("Categories and analyses length mismatch")
 
     anchors = [parse_anchor(text) for text in analyses]
-    utter_vec, concept_vecs = await _embed_utterance_and_concepts(utterance, categories)
+    if concept_vectors is not None and len(concept_vectors) != len(categories):
+        raise ValueError("Concept vector length mismatch")
+
+    if concept_vectors is None:
+        utter_vec, concept_vecs = await _embed_utterance_and_concepts(utterance, categories)
+    else:
+        normalized_utterance = normalize_for_embedding(utterance)
+        utter_embeddings = await embed_with_fallback([normalized_utterance])
+        utter_vec = utter_embeddings[0] if utter_embeddings else []
+        concept_vecs = [list(vec) for vec in concept_vectors]
     similarities: List[float] = [
         cosine_similarity(utter_vec, concept_vec) for concept_vec in concept_vecs
     ]

@@ -106,6 +106,7 @@ class ScoringPipeline:
         video_mode: bool = False,
         event_logger: Optional[Callable[[str], None]] = None,
         shared_writer: Optional["SharedSheetWriter"] = None,
+        category_vectors: Optional[Dict[int, Sequence[Sequence[float]]]] = None,
     ) -> None:
         self.cfg = cfg
         self.rows = rows
@@ -166,6 +167,7 @@ class ScoringPipeline:
         )
         self._log_callback = event_logger
         self._shared_writer = shared_writer
+        self._category_vectors = dict(category_vectors) if category_vectors else {}
         provider_model_map: Dict[Provider, str] = {}
         if getattr(cfg, "primary_model", None):
             provider_model_map[cfg.primary_provider] = str(cfg.primary_model)
@@ -448,6 +450,7 @@ class ScoringPipeline:
                         unit=task.unit,
                     )
                     try:
+                        concept_vectors = self._category_vectors.get(task.unit.col_offset)
                         result, error_trail, from_cache = await score_with_fallback(
                             utterance=task.utterance,
                             categories=list(task.categories),
@@ -461,6 +464,7 @@ class ScoringPipeline:
                             cache=self.score_cache,
                             cache_write=False,
                             provider_model_map=self._provider_model_map,
+                            concept_vectors=concept_vectors,
                         )
                     except Exception as exc:
                         error_trail = getattr(exc, "_trail", []) or []

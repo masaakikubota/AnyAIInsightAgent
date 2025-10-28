@@ -1221,9 +1221,10 @@
     <script>
       const loadingOverlay = window.AnyAILoading || {
         run: async (task) => task(),
+        wrap: (promise) => promise,
         show: () => {},
         hide: () => {},
-        wrap: (promise) => promise,
+        requireKeys: async () => true,
       };
 
       const modeForm = document.getElementById('mode-form');
@@ -2081,6 +2082,7 @@
 
       async function runWithOverlay(task){
         try {
+          await loadingOverlay.requireKeys();
           loadingOverlay.show();
         } catch (err) {
           console.warn('Failed to show loading overlay', err);
@@ -2864,6 +2866,7 @@
         const button = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
         const releaseBusy = button ? setButtonBusy(button, '追加中...') : null;
         try {
+          await loadingOverlay.requireKeys();
           const fd = buildJobFormData('queue');
           const res = await fetch('/jobs', { method: 'POST', body: fd });
           if (!res.ok) {
