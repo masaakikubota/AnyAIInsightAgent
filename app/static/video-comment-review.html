@@ -16,192 +16,496 @@
 <script defer src="/static/anyai/core/anyai.js"></script>
 <script defer src="/static/anyai/queue-manager.js"></script>
 <style>
-  .page { padding: var(--anyai-space-08) 0 var(--anyai-space-10); }
-  :root { color-scheme: light; }
   body { background: var(--anyai-app-bg, #f8f8fb); }
-  #log-container { height: 320px; overflow-y: auto; font-family: var(--anyai-font-mono); font-size: 0.9rem; white-space: pre-wrap; background: var(--anyai-surface-alt); padding: var(--anyai-space-04); border-radius: var(--anyai-radius-md); border: 1px solid var(--anyai-border); }
-  #history-list li { cursor: pointer; border: 1px solid var(--anyai-border); border-radius: var(--anyai-radius-sm); padding: var(--anyai-space-03) var(--anyai-space-04); transition: background .15s ease; }
-  #history-list li:hover { background: var(--anyai-surface-alt); }
-  .queue-header { display:flex; justify-content:space-between; align-items:center; gap:var(--anyai-space-04); }
-  .queue-header-actions { display:flex; gap:var(--anyai-space-02); }
-  .queue-card .card-body { display:flex; flex-direction:column; gap:var(--anyai-space-04); }
-  .queue-content { display:flex; gap:var(--anyai-space-04); flex:1; min-height:220px; }
-  .queue-list-container { flex:1; display:flex; flex-direction:column; gap:var(--anyai-space-03); overflow:hidden; }
-  .queue-details { flex:1; display:flex; flex-direction:column; gap:var(--anyai-space-03); }
-  .queue-details textarea { flex:1; resize:vertical; font-family:var(--anyai-font-mono); font-size:0.85rem; }
-  .queue-details a { word-break:break-all; font-size:0.85rem; color:var(--anyai-color-primary-600); }
-  .queue-controls { display:flex; flex-wrap:wrap; gap:var(--anyai-space-02); }
-  .queue-item { border:1px solid var(--anyai-border); border-radius:var(--anyai-radius-sm); padding:var(--anyai-space-03) var(--anyai-space-04); background:var(--anyai-surface); display:flex; flex-direction:column; gap:var(--anyai-space-02); cursor:pointer; }
-  .queue-item.is-active { border-color:var(--anyai-color-primary-500); box-shadow:0 0 0 1px var(--anyai-color-primary-300); }
-  .queue-item-sub { display:flex; justify-content:space-between; gap:var(--anyai-space-02); color:var(--anyai-text-muted); font-size:0.85rem; }
-  .queue-item-type { font-size:0.75rem; color:var(--anyai-text-muted); text-transform:uppercase; letter-spacing:0.04em; }
-  .queue-status { display:inline-flex; align-items:center; gap:var(--anyai-space-02); padding:0 var(--anyai-space-02); border-radius:var(--anyai-radius-pill); font-size:0.75rem; text-transform:uppercase; letter-spacing:0.03em; }
-  .queue-status-queued { background:var(--anyai-color-info-100); color:var(--anyai-color-info-700); }
-  .queue-status-running { background:var(--anyai-color-success-100); color:var(--anyai-color-success-700); }
-  .queue-status-paused { background:var(--anyai-color-warning-100); color:var(--anyai-color-warning-800); }
-  .queue-status-cancelled { background:var(--anyai-color-danger-100); color:var(--anyai-color-danger-700); }
-  .queue-status-completed { background:var(--anyai-color-neutral-200); color:var(--anyai-color-neutral-700); }
-  .queue-card .btn.btn-text { padding:0 var(--anyai-space-02); }
+
+  .mode-options {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--anyai-space-2);
+    flex-wrap: wrap;
+  }
+
+  .mode-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--anyai-space-2);
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
+    background: linear-gradient(135deg,
+      color-mix(in srgb, #ffffff, var(--anyai-border) 4%),
+      color-mix(in srgb, #ffffff, var(--anyai-border) 12%)
+    );
+    color: color-mix(in srgb, var(--anyai-text), transparent 25%);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+      box-shadow 0.2s ease, transform 0.15s ease;
+    user-select: none;
+  }
+
+  .mode-pill input[type="radio"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    border: 0;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(100%);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .mode-pill span {
+    font-size: var(--anyai-fs-2);
+    line-height: 1;
+  }
+
+  .mode-pill:not([aria-checked="true"]) {
+    border-color: color-mix(in srgb, var(--anyai-border), transparent 30%);
+  }
+
+  .mode-pill:not([aria-checked="true"]):hover {
+    border-color: color-mix(in srgb, var(--anyai-border), var(--anyai-primary, #2955ff) 28%);
+    color: color-mix(in srgb, var(--anyai-text), transparent 10%);
+    background: linear-gradient(135deg,
+      color-mix(in srgb, #ffffff, var(--anyai-primary, #2955ff) 12%),
+      color-mix(in srgb, #ffffff, var(--anyai-primary, #2955ff) 20%)
+    );
+  }
+
+  .mode-pill:focus-within {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 75%);
+  }
+
+  .mode-pill[aria-checked="true"] {
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--anyai-primary, #2955ff), white 12%),
+      color-mix(in srgb, var(--anyai-primary, #2955ff), black 6%)
+    );
+    border-color: color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 12%);
+    color: #ffffff;
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 80%),
+      0 12px 28px rgba(41, 85, 255, 0.25);
+    transform: translateY(-1px);
+  }
+
+  #history-list,
+  .history-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--anyai-space-3);
+  }
+
+  #history-list li,
+  .history-list li {
+    cursor: pointer;
+    border: 1px solid var(--anyai-border);
+    border-radius: var(--anyai-radius-2);
+    padding: var(--anyai-space-3) var(--anyai-space-4);
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  #history-list li:hover {
+    background: var(--anyai-bg-subtle);
+    border-color: color-mix(in srgb, var(--anyai-border), var(--anyai-primary) 18%);
+  }
+
+  #log-container {
+    height: 320px;
+    overflow: auto;
+    font-family: var(--anyai-font-mono);
+    font-size: 0.9rem;
+    white-space: pre-wrap;
+    background: var(--anyai-surface-alt);
+    padding: var(--anyai-space-4);
+    border-radius: var(--anyai-radius-2);
+    border: 1px solid var(--anyai-border);
+  }
+
+  .anyai-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--anyai-space-3);
+    margin-top: var(--anyai-space-4);
+  }
+
+  .queue-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--anyai-space-4);
+  }
+
+  .queue-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--anyai-space-3);
+  }
+
+  .queue-header-actions {
+    display: flex;
+    gap: var(--anyai-space-2);
+  }
+
+  .queue-content {
+    display: flex;
+    gap: var(--anyai-space-4);
+    flex: 1;
+    min-height: 220px;
+  }
+
+  .queue-list-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--anyai-space-3);
+    overflow: hidden;
+  }
+
+  .queue-list-container ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--anyai-space-2);
+    overflow-y: auto;
+    max-height: 240px;
+  }
+
+  .queue-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--anyai-space-3);
+  }
+
+  .queue-details textarea {
+    flex: 1;
+    resize: vertical;
+    font-family: var(--anyai-font-mono);
+    font-size: 0.85rem;
+  }
+
+  .queue-details a {
+    word-break: break-all;
+    font-size: 0.85rem;
+    color: var(--anyai-primary-700, #3348ff);
+  }
+
+  .queue-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--anyai-space-2);
+  }
+
+  .queue-item {
+    border: 1px solid var(--anyai-border);
+    border-radius: var(--anyai-radius-2);
+    padding: var(--anyai-space-3) var(--anyai-space-4);
+    background: var(--anyai-panel, #fff);
+    display: flex;
+    flex-direction: column;
+    gap: var(--anyai-space-2);
+    cursor: pointer;
+  }
+
+  .queue-item.is-active {
+    border-color: color-mix(in srgb, var(--anyai-primary), transparent 40%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--anyai-primary), transparent 70%);
+  }
+
+  .queue-item-sub {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--anyai-space-2);
+    color: var(--anyai-text-subtle);
+    font-size: 0.85rem;
+  }
+
+  .queue-item-type {
+    font-size: 0.75rem;
+    color: var(--anyai-text-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .queue-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--anyai-space-2);
+    padding: 0 var(--anyai-space-2);
+    border-radius: var(--anyai-radius-pill);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .queue-status-queued { background: var(--anyai-color-info-100); color: var(--anyai-color-info-700); }
+  .queue-status-running { background: var(--anyai-color-success-100); color: var(--anyai-color-success-700); }
+  .queue-status-paused { background: var(--anyai-color-warning-100); color: var(--anyai-color-warning-800); }
+  .queue-status-cancelled { background: var(--anyai-color-danger-100); color: var(--anyai-color-danger-700); }
+  .queue-status-completed { background: var(--anyai-color-neutral-200); color: var(--anyai-color-neutral-700); }
+
+  details.section-toggle > summary {
+    display: flex;
+    align-items: center;
+    gap: var(--anyai-space-3);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  details.section-toggle > summary::-webkit-details-marker { display: none; }
+
+  .caret {
+    margin-left: auto;
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid currentColor;
+    opacity: 0.8;
+    transition: transform 0.2s ease;
+  }
+
+  details.section-toggle:not(.section-toggle-left)[open] .caret { transform: rotate(180deg); }
+
+  details.section-toggle-left > summary {
+    gap: var(--anyai-space-3);
+  }
+
+  .section-toggle-left .caret {
+    margin: 0;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 0;
+    border-top: 8px solid currentColor;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+    transition: transform 0.2s ease;
+  }
+
+  .section-toggle-left[open] .caret {
+    transform: rotate(0deg);
+  }
+
+  @media (max-width: 720px) {
+    .anyai-form-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .anyai-form-actions .btn {
+      width: 100%;
+    }
+
+    .queue-content {
+      flex-direction: column;
+    }
+
+    #log-container {
+      height: 240px;
+    }
+  }
 </style>
 </head>
 <body>
   <div class="anyai-layout">
     <aside class="anyai-sidebar" data-active-tool="video-comment-review"></aside>
     <main class="anyai-content">
-      <div class="page container">
-  <h1 class="mb-4">AnyAIVideoSummarizer</h1>
-  <p class="text-subtle mb-4">`RawData_Video` のE列（動画内容）と `RawData_VideoComment` の同一行コメントを突合し、Geminiで詳細な二行サマリーを生成し `RawData_Video&lt;&gt;Comment` シートへ書き込みます。</p>
+      <div class="anyai-app">
+        <section class="anyai-app-primary" aria-labelledby="review-heading">
+          <h1 id="review-heading" class="mt-0 page-title-with-icon">
+            <span class="page-title-icon" aria-hidden="true"><i data-lucide="film"></i></span>
+            <span>AnyAIVideoSummarizer</span>
+          </h1>
+          <p class="field-hint">`RawData_Video` のE列（動画内容）と `RawData_VideoComment` の同一行コメントを突合し、Geminiで二行サマリーを生成して `RawData_Video&lt;&gt;Comment` シートへ書き込みます。</p>
 
-  <div class="row" style="gap:var(--anyai-space-05); align-items:flex-start;">
-    <div class="card" style="flex:2; min-width:340px;">
-      <div class="card-body">
-        <form id="review-form" class="column gap-4">
-          <div class="field">
-            <label for="sheet-url">Google Spreadsheet URL / ID</label>
-            <input class="input" type="text" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/... または シートID" required>
-          </div>
-          <div class="grid" style="gap:var(--anyai-space-04); grid-template-columns: repeat(auto-fit, minmax(220px,1fr));">
-            <div class="field">
-              <label for="start-row">開始行 (デフォルト: 2)</label>
-              <input class="input" type="number" id="start-row" value="2" min="2">
+          <form id="review-form" class="anyai-form" autocomplete="off">
+            <section class="anyai-form-section" aria-labelledby="sheet-config-heading">
+              <header>
+                <h2 id="sheet-config-heading" class="mt-0">実行設定</h2>
+                <p class="field-hint">対象スプレッドシートと行範囲、並列度を指定します。</p>
+              </header>
+
+              <div class="field">
+                <label for="sheet-url">Google Spreadsheet URL / ID</label>
+                <p class="field-hint">シートURLまたはIDを入力してください。</p>
+                <input class="input" type="text" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/... または シートID" required>
+              </div>
+
+              <div class="anyai-form-fields is-two-column">
+                <div class="field">
+                  <label for="start-row">開始行 (デフォルト: 2)</label>
+                  <input class="input" type="number" id="start-row" value="2" min="2">
+                </div>
+                <div class="field">
+                  <label for="end-row">終了行 (任意)</label>
+                  <input class="input" type="number" id="end-row" placeholder="空欄で最後まで">
+                </div>
+                <div class="field">
+                  <label id="review-model-label">Gemini モデル</label>
+                  <div class="mode-options" role="radiogroup" aria-labelledby="review-model-label">
+                    <label class="mode-pill" role="radio" aria-checked="true" tabindex="0">
+                      <input type="radio" name="model-name" value="gemini-flash-latest" checked>
+                      <span>Gemini Flash</span>
+                    </label>
+                    <label class="mode-pill" role="radio" aria-checked="false" tabindex="-1">
+                      <input type="radio" name="model-name" value="gemini-pro-latest">
+                      <span>Gemini Pro</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="workers">並列処理数</label>
+                  <input class="input" type="number" id="workers" value="10" min="1" max="50">
+                </div>
+                <div class="field">
+                  <label for="output-language">出力言語</label>
+                  <select class="input" id="output-language">
+                    <option value="Japanese" selected>日本語</option>
+                    <option value="English">English</option>
+                    <option value="Korean">한국어</option>
+                    <option value="Thai">ภาษาไทย</option>
+                    <option value="Vietnamese">Tiếng Việt</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label class="checkbox">
+                    <input type="checkbox" id="debug-mode">
+                    <span>デバッグモード（逐次処理＆エラー自動再実行ログ）</span>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section class="anyai-form-section" aria-labelledby="mapping-heading">
+              <header>
+                <h2 id="mapping-heading" class="mt-0">シート &amp; 列設定</h2>
+                <p class="field-hint">入力シートとサマリー書き込み列を調整します。</p>
+              </header>
+
+              <div class="anyai-form-fields is-two-column">
+                <div class="field">
+                  <label for="video-sheet-name">動画シート名</label>
+                  <input class="input" type="text" id="video-sheet-name" value="RawData_Video">
+                </div>
+                <div class="field">
+                  <label for="comment-sheet-name">コメントシート名</label>
+                  <input class="input" type="text" id="comment-sheet-name" value="RawData_VideoComment">
+                </div>
+                <div class="field">
+                  <label for="output-sheet-name">出力シート名</label>
+                  <input class="input" type="text" id="output-sheet-name" value="RawData_Video&lt;&gt;Comment">
+                </div>
+              </div>
+
+              <details class="section-toggle section-toggle-left">
+                <summary>
+                  <span class="caret" aria-hidden="true"></span>
+                  <span>列レンジ・バッチ設定 (任意)</span>
+                </summary>
+                <div class="anyai-form-fields is-two-column" style="margin-top: var(--anyai-space-4);">
+                  <div class="field">
+                    <label for="video-context-start-col">動画列 (開始)</label>
+                    <input class="input" type="text" id="video-context-start-col" value="E" maxlength="3">
+                  </div>
+                  <div class="field">
+                    <label for="video-context-end-col">動画列 (終了)</label>
+                    <input class="input" type="text" id="video-context-end-col" value="E" maxlength="3">
+                  </div>
+                  <div class="field">
+                    <label for="comment-start-col">コメント列 (開始)</label>
+                    <input class="input" type="text" id="comment-start-col" value="H" maxlength="3">
+                  </div>
+                  <div class="field">
+                    <label for="comment-end-col">コメント列 (終了)</label>
+                    <input class="input" type="text" id="comment-end-col" value="Q" maxlength="3">
+                  </div>
+                  <div class="field">
+                    <label for="output-col-letter">出力列</label>
+                    <input class="input" type="text" id="output-col-letter" value="F" maxlength="2">
+                  </div>
+                  <div class="field">
+                    <label for="batch-size">書き込みバッチ</label>
+                    <input class="input" type="number" id="batch-size" value="30" min="1" max="200">
+                  </div>
+                </div>
+              </details>
+            </section>
+
+            <div class="anyai-form-actions">
+              <button type="button" class="btn btn-outline" id="stop-button" disabled>停止</button>
+              <button type="submit" class="btn btn-primary" id="run-button">実行</button>
             </div>
-            <div class="field">
-              <label for="end-row">終了行 (任意)</label>
-              <input class="input" type="number" id="end-row" placeholder="空欄で最後まで">
+          </form>
+        </section>
+
+        <aside class="anyai-app-support">
+          <section class="anyai-support-card">
+            <div class="support-header">
+              <h2 class="mt-0">最近のシート</h2>
             </div>
-            <div class="field">
-              <label>Gemini モデル</label>
-              <label class="radio"><input type="radio" name="model-name" value="gemini-pro-latest" checked><span>Gemini Pro (latest)</span></label>
-              <label class="radio"><input type="radio" name="model-name" value="gemini-flash-latest"><span>Gemini Flash (latest)</span></label>
-            </div>
-            <div class="field">
-              <label for="workers">並列処理数</label>
-              <input class="input" type="number" id="workers" value="10" min="1" max="50">
-            </div>
-            <div class="field">
-              <label for="output-language">出力言語</label>
-              <select class="input" id="output-language">
-                <option value="Japanese" selected>日本語</option>
-                <option value="English">English</option>
-                <option value="Korean">한국어</option>
-                <option value="Thai">ภาษาไทย</option>
-                <option value="Vietnamese">Tiếng Việt</option>
-              </select>
-            </div>
-            <div class="field">
-              <label class="checkbox">
-                <input type="checkbox" id="debug-mode">
-                <span>デバッグモード（逐次処理＆エラー自動再実行ログ）</span>
-              </label>
-            </div>
-          </div>
-          <details>
-            <summary>詳細設定 (任意)</summary>
-            <div class="grid" style="margin-top:var(--anyai-space-04); gap:var(--anyai-space-04); grid-template-columns: repeat(auto-fit, minmax(180px,1fr));">
-              <div class="field">
-                <label for="video-sheet-name">動画シート名</label>
-                <input class="input" type="text" id="video-sheet-name" value="RawData_Video">
-              </div>
-              <div class="field">
-                <label for="comment-sheet-name">コメントシート名</label>
-                <input class="input" type="text" id="comment-sheet-name" value="RawData_VideoComment">
-              </div>
-              <div class="field">
-                <label for="output-sheet-name">出力シート名</label>
-                <input class="input" type="text" id="output-sheet-name" value="RawData_Video&lt;&gt;Comment">
-              </div>
-              <div class="field">
-                <label for="video-context-start-col">動画列 (開始)</label>
-                <input class="input" type="text" id="video-context-start-col" value="E" maxlength="3">
-              </div>
-              <div class="field">
-                <label for="video-context-end-col">動画列 (終了)</label>
-                <input class="input" type="text" id="video-context-end-col" value="E" maxlength="3">
-              </div>
-              <div class="field">
-                <label for="comment-start-col">コメント列 (開始)</label>
-                <input class="input" type="text" id="comment-start-col" value="H" maxlength="3">
-              </div>
-              <div class="field">
-                <label for="comment-end-col">コメント列 (終了)</label>
-                <input class="input" type="text" id="comment-end-col" value="Q" maxlength="3">
-              </div>
-              <div class="field">
-                <label for="output-col-letter">出力列</label>
-                <input class="input" type="text" id="output-col-letter" value="F" maxlength="2">
-              </div>
-              <div class="field">
-                <label for="batch-size">書き込みバッチ</label>
-                <input class="input" type="number" id="batch-size" value="30" min="1" max="200">
+            <p class="field-hint" id="history-empty">実行履歴はまだありません。</p>
+            <ul id="history-list" class="history-list"></ul>
+          </section>
+
+          <section class="anyai-support-card queue-card" id="queue-panel">
+            <div class="queue-header">
+              <h2 class="mt-0">ジョブキュー</h2>
+              <div class="queue-header-actions">
+                <button type="button" class="btn btn-text" data-queue-refresh>更新</button>
+                <button type="button" class="btn btn-text" data-queue-toggle>折りたたむ</button>
               </div>
             </div>
-          </details>
-          <div class="row right">
-            <button type="button" class="btn btn-outline" id="stop-button" disabled>停止</button>
-            <button type="submit" class="btn btn-primary" id="run-button">実行</button>
-          </div>
-        </form>
+            <div data-queue-body>
+              <div class="queue-content">
+                <div class="queue-list-container">
+                  <ul class="column gap-2" data-queue-list></ul>
+                  <p class="text-subtle" data-queue-empty>待機中のジョブはありません。</p>
+                </div>
+                <div class="queue-details" data-queue-details hidden>
+                  <div>
+                    <strong data-queue-title>(タイトル未取得)</strong><br>
+                    <a href="#" target="_blank" data-queue-url></a>
+                  </div>
+                  <div>機能: <span data-queue-job-type>-</span></div>
+                  <div>状態: <span data-queue-status class="queue-status queue-status-queued">queued</span></div>
+                  <div>順番: <span data-queue-order>-</span></div>
+                  <div class="queue-controls">
+                    <button type="button" class="btn btn-outline" data-queue-move-up>上へ</button>
+                    <button type="button" class="btn btn-outline" data-queue-move-down>下へ</button>
+                    <button type="button" class="btn btn-outline" data-queue-remove>削除</button>
+                    <button type="button" class="btn btn-outline" data-queue-apply>更新</button>
+                  </div>
+                  <textarea data-queue-json rows="6"></textarea>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="anyai-support-card">
+            <div class="support-header">
+              <h2 class="mt-0">Execution Log</h2>
+            </div>
+            <div id="log-container"><span class="text-subtle">Awaiting configuration...</span></div>
+          </section>
+        </aside>
       </div>
-    </div>
-    <aside class="column gap-4" style="flex:1; min-width:260px;">
-      <div class="card">
-        <div class="card-header">
-          <strong>Spreadsheet History</strong>
-        </div>
-        <div class="card-body">
-          <p class="text-subtle" id="history-empty">実行履歴はまだありません。</p>
-          <ul id="history-list" class="column gap-2" style="list-style:none; margin:0; padding:0;"></ul>
-        </div>
-      </div>
-      <div class="card queue-card" id="queue-panel">
-        <div class="card-header queue-header">
-          <strong>Current Queue</strong>
-          <div class="queue-header-actions">
-            <button type="button" class="btn btn-text" data-queue-refresh>更新</button>
-            <button type="button" class="btn btn-text" data-queue-toggle>折りたたむ</button>
-          </div>
-        </div>
-        <div class="card-body" data-queue-body>
-          <div class="queue-content">
-            <div class="queue-list-container">
-              <ul class="column gap-2" data-queue-list style="list-style:none; margin:0; padding:0; overflow-y:auto; max-height:240px;"></ul>
-              <p class="text-subtle" data-queue-empty>待機中のジョブはありません。</p>
-            </div>
-            <div class="queue-details" data-queue-details hidden>
-              <div>
-                <strong data-queue-title>(タイトル未取得)</strong><br>
-                <a href="#" target="_blank" data-queue-url></a>
-              </div>
-              <div>機能: <span data-queue-job-type>-</span></div>
-              <div>状態: <span data-queue-status class="queue-status queue-status-queued">queued</span></div>
-              <div>順番: <span data-queue-order>-</span></div>
-              <div class="queue-controls">
-                <button type="button" class="btn btn-outline" data-queue-move-up>上へ</button>
-                <button type="button" class="btn btn-outline" data-queue-move-down>下へ</button>
-                <button type="button" class="btn btn-outline" data-queue-remove>削除</button>
-                <button type="button" class="btn btn-outline" data-queue-apply>更新</button>
-              </div>
-              <textarea data-queue-json rows="6"></textarea>
-            </div>
-          </div>
-        </div>
-      </div>
-    </aside>
+    </main>
   </div>
-
-  <section class="mt-6">
-    <div class="card">
-      <div class="card-header">
-        <strong>Execution Log</strong>
-      </div>
-      <div class="card-body">
-        <div id="log-container"><span class="text-subtle">Awaiting configuration...</span></div>
-      </div>
-    </div>
-  </section>
-</div>
-  </main>
-</div>
 
 <script>
   const loadingOverlay = window.AnyAILoading || {
@@ -211,6 +515,67 @@
     hide: () => {},
     requireKeys: async () => true,
   };
+
+  function setupModePills() {
+    document.querySelectorAll('.mode-options').forEach((group) => {
+      const pills = Array.from(group.querySelectorAll('.mode-pill'));
+      if (!pills.length) return;
+      const radios = pills.map((pill) => pill.querySelector('input[type="radio"]'));
+
+      function sync() {
+        pills.forEach((pill, index) => {
+          const radio = radios[index];
+          const checked = radio.checked;
+          pill.setAttribute('aria-checked', checked ? 'true' : 'false');
+          pill.tabIndex = checked ? 0 : -1;
+        });
+      }
+
+      function activate(index, focus = true) {
+        const radio = radios[index];
+        if (radio.disabled) return;
+        if (!radio.checked) {
+          radio.checked = true;
+          radio.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+          sync();
+        }
+        if (focus) {
+          pills[index].focus();
+        }
+      }
+
+      pills.forEach((pill, index) => {
+        const radio = radios[index];
+        pill.addEventListener('click', (event) => {
+          event.preventDefault();
+          activate(index, false);
+          sync();
+        });
+
+        pill.addEventListener('keydown', (event) => {
+          let direction = 0;
+          if (event.key === 'ArrowRight' || event.key === 'ArrowDown') direction = 1;
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') direction = -1;
+          if (direction === 0) return;
+          event.preventDefault();
+          const total = pills.length;
+          let next = index;
+          do {
+            next = (next + direction + total) % total;
+          } while (radios[next].disabled && next !== index);
+          activate(next);
+          sync();
+        });
+
+        radio.addEventListener('change', sync);
+      });
+
+      sync();
+    });
+  }
+
+  setupModePills();
 
   const form = document.getElementById('review-form');
   const logContainer = document.getElementById('log-container');
@@ -235,7 +600,7 @@
   }
 
   const queueManager = (window.AnyAIQueueManager && queuePanel)
-    ? window.AnyAIQueueManager.init({ root: queuePanel, log })
+    ? window.AnyAIQueueManager.init({ root: queuePanel, log, jobType: 'video_summarizer' })
     : null;
 
   function finalizeUI() {

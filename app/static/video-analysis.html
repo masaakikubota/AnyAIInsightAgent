@@ -14,177 +14,752 @@
 <script defer src="/static/anyai/vendor/lucide.js"></script>
 <script defer src="/static/anyai/sidebar.js"></script>
 <script defer src="/static/anyai/core/anyai.js"></script>
-<script defer src="/static/anyai/queue-manager.js"></script>
 <style>
-  .page { padding: var(--anyai-space-08, 48px) 0 var(--anyai-space-10, 80px); }
   form .grid-2 { display: grid; gap: var(--anyai-space-04, 20px); grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   #log-container { height: 320px; overflow-y: auto; font-family: var(--anyai-font-mono, 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace); font-size: 0.9rem; white-space: pre-wrap; background: var(--anyai-surface-alt, #f4f6ff); padding: var(--anyai-space-04, 16px); border-radius: var(--anyai-radius-md, 16px); border: 1px solid var(--anyai-border, #dfe3f0); }
+  #history-list { list-style: none; margin: 0; padding: 0; }
   #history-list li { cursor: pointer; border: 1px solid var(--anyai-border, #dfe3f0); border-radius: var(--anyai-radius-sm, 12px); padding: var(--anyai-space-03, 12px) var(--anyai-space-04, 16px); transition: background .15s ease; }
   #history-list li:hover { background: var(--anyai-surface-alt, #f4f6ff); }
-  .layout-two-column { display:flex; gap:var(--anyai-space-05, 24px); align-items:flex-start; flex-wrap:wrap; }
-  .layout-two-column > * { flex:1 1 320px; }
-  .side-column { display:flex; flex-direction:column; gap:var(--anyai-space-05, 24px); min-width:300px; }
-  .history-card { flex:1; }
-  .queue-card { flex:1; position:relative; }
-  .queue-card .card-body { display:flex; flex-direction:column; gap:var(--anyai-space-04, 16px); }
-  .queue-header { display:flex; justify-content:space-between; align-items:center; gap:var(--anyai-space-04, 16px); }
-  .queue-header-actions { display:flex; gap:var(--anyai-space-02, 8px); }
-  .queue-content { display:flex; gap:var(--anyai-space-04, 16px); flex:1; min-height:220px; flex-wrap:wrap; }
-  .queue-list-container { flex:1 1 220px; display:flex; flex-direction:column; gap:var(--anyai-space-03, 12px); overflow:hidden; }
-  .queue-details { flex:1 1 220px; display:flex; flex-direction:column; gap:var(--anyai-space-03, 12px); }
-  .queue-details textarea { flex:1; resize:vertical; font-family:var(--anyai-font-mono, 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace); font-size:0.85rem; }
-  .queue-controls { display:flex; flex-wrap:wrap; gap:var(--anyai-space-02, 8px); }
-  .queue-item { border:1px solid var(--anyai-border, #dfe3f0); border-radius:var(--anyai-radius-sm, 12px); padding:var(--anyai-space-03, 12px) var(--anyai-space-04, 16px); background:var(--anyai-surface, #ffffff); display:flex; flex-direction:column; gap:var(--anyai-space-02, 8px); cursor:pointer; }
-  .queue-item.is-active { border-color:var(--anyai-color-primary-500, #4a63ff); box-shadow:0 0 0 1px var(--anyai-color-primary-300, #8fa3ff); }
-  .queue-item-sub { display:flex; justify-content:space-between; gap:var(--anyai-space-02, 8px); color:var(--anyai-text-muted, #596080); font-size:0.85rem; }
-  .queue-item-type { font-size:0.75rem; color:var(--anyai-text-muted, #596080); text-transform:uppercase; letter-spacing:0.04em; }
-  .queue-status { display:inline-flex; align-items:center; gap:var(--anyai-space-02, 8px); padding:0 var(--anyai-space-02, 8px); border-radius:var(--anyai-radius-pill, 999px); font-size:0.75rem; text-transform:uppercase; letter-spacing:0.03em; }
-  .queue-status-queued { background:var(--anyai-color-info-100, #e6f1ff); color:var(--anyai-color-info-700, #2459d6); }
-  .queue-status-running { background:var(--anyai-color-success-100, #e5f6ee); color:var(--anyai-color-success-700, #1a7f4b); }
-  .queue-status-paused { background:var(--anyai-color-warning-100, #fff4d6); color:var(--anyai-color-warning-800, #8c5a00); }
-  .queue-status-cancelled { background:var(--anyai-color-danger-100, #ffe4e6); color:var(--anyai-color-danger-700, #b42318); }
-  .queue-status-completed { background:var(--anyai-color-neutral-200, #f0f2f8); color:var(--anyai-color-neutral-700, #3e4a66); }
-  .queue-card .btn.btn-text { padding:0 var(--anyai-space-02, 8px); }
-  .queue-details a { word-break:break-all; font-size:0.85rem; color:var(--anyai-color-primary-600, #3358ff); }
+  .support-header { display:flex; justify-content:space-between; align-items:center; gap:var(--anyai-space-03, 12px); }
+  .mode-options {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--anyai-space-2);
+    flex-wrap: wrap;
+  }
+
+  .mode-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--anyai-space-2);
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
+    background: linear-gradient(135deg,
+      color-mix(in srgb, #ffffff, var(--anyai-border) 4%),
+      color-mix(in srgb, #ffffff, var(--anyai-border) 12%)
+    );
+    color: color-mix(in srgb, var(--anyai-text), transparent 25%);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+      box-shadow 0.2s ease, transform 0.15s ease;
+    user-select: none;
+  }
+
+  .mode-pill input[type="radio"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    border: 0;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(100%);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .mode-pill span {
+    font-size: var(--anyai-fs-2);
+    line-height: 1;
+  }
+
+  .mode-pill:not([aria-checked="true"]) {
+    border-color: color-mix(in srgb, var(--anyai-border), transparent 30%);
+  }
+
+  .mode-pill:not([aria-checked="true"]):hover {
+    border-color: color-mix(in srgb, var(--anyai-border), var(--anyai-primary, #2955ff) 28%);
+    color: color-mix(in srgb, var(--anyai-text), transparent 10%);
+    background: linear-gradient(135deg,
+      color-mix(in srgb, #ffffff, var(--anyai-primary, #2955ff) 12%),
+      color-mix(in srgb, #ffffff, var(--anyai-primary, #2955ff) 20%)
+    );
+  }
+
+  .mode-pill:focus-within {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 75%);
+  }
+
+  .mode-pill[aria-checked="true"] {
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--anyai-primary, #2955ff), white 12%),
+      color-mix(in srgb, var(--anyai-primary, #2955ff), black 6%)
+    );
+    border-color: color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 12%);
+    color: #ffffff;
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 80%),
+      0 12px 28px rgba(41, 85, 255, 0.25);
+    transform: translateY(-1px);
+  }
+  .queue-status {
+    display: flex;
+    align-items: center;
+    gap: var(--anyai-space-2, 8px);
+    font-size: var(--anyai-fs-2, 14px);
+  }
+
+  .queue-status-label {
+    color: var(--anyai-text-subtle, #5a627d);
+    font-weight: 600;
+  }
+
+  .queue-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    flex: 0 0 auto;
+  }
+
+  .queue-status-dot--idle {
+    background: color-mix(in srgb, #fcbf49, transparent 30%);
+    box-shadow: 0 0 0 3px color-mix(in srgb, #fcbf49, transparent 70%);
+  }
+
+  @keyframes queue-status-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(18, 161, 80, 0.28); }
+    70% { box-shadow: 0 0 0 6px rgba(18, 161, 80, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(18, 161, 80, 0); }
+  }
+
+  .queue-status-dot--active {
+    background: var(--anyai-success, #12a150);
+    animation: queue-status-pulse 1.8s ease-out infinite;
+  }
+
+  .queue-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 12px;
+    border-radius: 999px;
+    font-size: var(--anyai-fs-1, 12px);
+    font-weight: 600;
+    line-height: 1.2;
+    border: 1px solid transparent;
+  }
+
+  .queue-chip--idle {
+    background: transparent;
+    border-color: transparent;
+    color: color-mix(in srgb, var(--anyai-text, #1f2432), transparent 35%);
+    padding: 0;
+  }
+
+  .queue-chip--active {
+    background: color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 82%);
+    border-color: color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 58%);
+    color: color-mix(in srgb, var(--anyai-primary, #2955ff), black 18%);
+  }
+
+  .queue-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .queue-edit-button,
+  .queue-save-button {
+    position: relative;
+  }
+
+  .queue-edit-button {
+    font-size: 1.2rem;
+    line-height: 1;
+    letter-spacing: -2px;
+  }
+
+  .queue-save-button {
+    box-shadow: 0 6px 18px rgba(45, 91, 255, 0.18);
+  }
+
+  .queue-save-button:hover,
+  .queue-save-button:focus-visible {
+    box-shadow: 0 8px 20px rgba(45, 91, 255, 0.18);
+  }
+
+  .queue-save-button[aria-busy="true"] {
+    box-shadow: 0 6px 16px rgba(45, 91, 255, 0.16);
+  }
+
+  .queue-delete-button {
+    box-shadow: 0 6px 18px rgba(209, 67, 67, 0.18);
+  }
+
+  .queue-delete-button:hover,
+  .queue-delete-button:focus-visible {
+    box-shadow: 0 8px 22px rgba(209, 67, 67, 0.2);
+  }
+
+  .queue-delete-button[aria-busy="true"] {
+    box-shadow: 0 6px 16px rgba(209, 67, 67, 0.16);
+  }
+
+  #queue-list .queue-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--anyai-space-3, 12px);
+    padding: var(--anyai-space-3, 12px) var(--anyai-space-4, 16px);
+    border: 1px solid color-mix(in srgb, var(--anyai-border, #dfe3f0), transparent 12%);
+    border-radius: var(--anyai-radius-2, 12px);
+    background: var(--anyai-surface, #ffffff);
+  }
+
+  #queue-list .queue-row + .queue-row {
+    margin-top: var(--anyai-space-3, 12px);
+  }
+
+  .queue-row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .queue-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--anyai-space-2, 8px);
+    font-size: var(--anyai-fs-1, 12px);
+    color: var(--anyai-text-subtle, #5a627d);
+  }
+
+  .queue-row.is-editing {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 80%);
+  }
+
+  .queue-toast {
+    position: fixed;
+    top: clamp(16px, 4vw, 40px);
+    left: 50%;
+    transform: translate(-50%, -140%);
+    opacity: 0;
+    pointer-events: none;
+    padding: var(--anyai-space-4, 16px) var(--anyai-space-5, 20px);
+    border-radius: var(--anyai-radius-2, 10px);
+    font-size: var(--anyai-fs-2, 14px);
+    font-weight: 600;
+    background: #ffffff;
+    color: var(--anyai-text, #1f2432);
+    border: 1px solid color-mix(in srgb, var(--anyai-border, #dfe3f0), transparent 18%);
+    border-left: 4px solid var(--queue-toast-accent, var(--anyai-primary, #2955ff));
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+    min-width: min(360px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    text-align: center;
+    z-index: 120;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+  }
+
+  .queue-toast.is-visible {
+    transform: translate(-50%, 0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .queue-toast[data-state="success"] {
+    --queue-toast-accent: var(--anyai-success, #12a150);
+  }
+
+  .queue-toast[data-state="error"] {
+    --queue-toast-accent: var(--anyai-danger, #d14343);
+  }
+
+  .anyai-form-actions {
+    margin-top: var(--anyai-space-6, 24px);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--anyai-space-3, 12px);
+    justify-content: center;
+    align-items: center;
+  }
+
+  .anyai-form-actions .btn {
+    min-width: 120px;
+  }
+
+  .field-with-action {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .field-with-action .input {
+    flex: 1 1 auto;
+    min-width: 0;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right: 0;
+  }
+
+  .field-with-action .input-action-btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--anyai-space-4, 16px);
+    min-width: 72px;
+    border-radius: 0 var(--anyai-radius-2, 12px) var(--anyai-radius-2, 12px) 0;
+    border-left: 0;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    font-weight: 600;
+    transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  }
+
+  .field-with-action .input-action-btn:not(.btn-soft-accent) {
+    border: none;
+    box-shadow: 0 4px 10px rgba(31, 36, 50, 0.12);
+  }
+
+  .field-with-action .input-action-btn:not(.btn-soft-accent):hover,
+  .field-with-action .input-action-btn:not(.btn-soft-accent):focus-visible {
+    box-shadow: 0 6px 16px rgba(31, 36, 50, 0.16);
+    outline: none;
+  }
+
+  .field-with-action .input-action-btn.btn-soft-accent:hover,
+  .field-with-action .input-action-btn.btn-soft-accent:focus-visible {
+    transform: translateY(-1px);
+  }
+
+  .field-with-action .input-action-btn.btn-soft-accent {
+    border-left: 0;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+
+  .anyai-action-bar {
+    position: fixed;
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, 0);
+    bottom: clamp(var(--anyai-space-6, 24px), 6vw, var(--anyai-space-9, 64px));
+    display: flex;
+    justify-content: center;
+    gap: var(--anyai-space-2, 8px);
+    padding: var(--anyai-space-2, 8px) var(--anyai-space-3, 12px);
+    background: color-mix(in srgb, var(--anyai-panel, #ffffff), transparent 4%);
+    border: 1px solid color-mix(in srgb, var(--anyai-border, #dfe3f0), transparent 15%);
+    border-radius: var(--anyai-radius-pill, 999px);
+    box-shadow: var(--anyai-shadow, 0 1px 2px rgba(15, 23, 42, 0.08));
+    z-index: 50;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  .anyai-action-bar.is-hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 16px);
+  }
+
+  .anyai-action-bar.is-empty {
+    display: none;
+  }
+
+  @media (max-width: 720px) {
+    .anyai-form-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .anyai-form-actions .btn {
+      width: 100%;
+    }
+  }
+
+  .sheet-selection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--anyai-space-3, 12px);
+    margin-top: var(--anyai-space-3, 12px);
+  }
+
+  .custom-select {
+    position: relative;
+    width: 100%;
+  }
+
+  .custom-select-native {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(100%);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .custom-select-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--anyai-space-3);
+    padding: 6px 40px 6px 12px;
+    border-radius: var(--anyai-radius-2);
+    border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
+    background: #ffffff;
+    color: var(--anyai-text, #1f2432);
+    font: inherit;
+    line-height: 1.4;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+  }
+
+  .custom-select-toggle::after {
+    content: "";
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='none' stroke='%23545d72' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.2' d='m3 5 4 4 4-4'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: transform 0.2s ease;
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .custom-select.is-open .custom-select-toggle {
+    border-radius: var(--anyai-radius-2) var(--anyai-radius-2) 0 0;
+    border-color: color-mix(in srgb, var(--anyai-border), var(--anyai-primary, #2955ff) 40%);
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 85%),
+      0 10px 30px rgba(36, 43, 68, 0.08);
+  }
+
+  .custom-select.is-open .custom-select-toggle::after {
+    transform: rotate(180deg);
+  }
+
+  .custom-select-label {
+    flex: 1 1 auto;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: var(--anyai-space-2);
+  }
+
+  .custom-select.is-disabled .custom-select-toggle {
+    cursor: not-allowed;
+    background: #f5f7fb;
+    color: color-mix(in srgb, var(--anyai-text), transparent 35%);
+  }
+
+  .custom-select.is-disabled .custom-select-toggle::after {
+    filter: grayscale(1) opacity(0.65);
+  }
+
+  .custom-select-menu {
+    position: absolute;
+    left: 0;
+    top: calc(100% - 1px);
+    width: 100%;
+    background: #ffffff;
+    border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
+    border-top: 0;
+    border-radius: 0 0 var(--anyai-radius-2) var(--anyai-radius-2);
+    box-shadow: 0 22px 40px rgba(36, 43, 68, 0.16);
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 4px 0;
+    z-index: 70;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+
+  .custom-select.is-open .custom-select-menu {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  .custom-select-option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 10px 14px;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .custom-select-option:hover,
+  .custom-select-option:focus-visible {
+    outline: none;
+    background: color-mix(in srgb, var(--anyai-primary), transparent 90%);
+  }
+
+  .custom-select-option.is-selected {
+    background: color-mix(in srgb, var(--anyai-primary), transparent 85%);
+    font-weight: 600;
+  }
+
+  .custom-select-option.is-disabled {
+    color: color-mix(in srgb, var(--anyai-text), transparent 45%);
+    cursor: not-allowed;
+  }
+
+  .custom-select-option.is-disabled:hover {
+    background: transparent;
+  }
+
+  .validation-banner {
+    display: none;
+    margin-top: var(--anyai-space-3, 12px);
+    padding: var(--anyai-space-3) var(--anyai-space-4);
+    border-radius: var(--anyai-radius-2);
+    font-size: var(--anyai-fs-2);
+    font-weight: 600;
+  }
+
+  .validation-banner[data-state] { display: block; }
+  .validation-banner[data-state="error"] {
+    background: color-mix(in srgb, var(--anyai-danger), transparent 80%);
+    color: var(--anyai-danger);
+  }
+  .validation-banner[data-state="success"] {
+    background: color-mix(in srgb, var(--anyai-success), transparent 82%);
+    color: var(--anyai-success);
+  }
+  .validation-banner[data-state="info"] {
+    background: color-mix(in srgb, var(--anyai-primary), transparent 88%);
+    color: color-mix(in srgb, var(--anyai-primary), transparent 20%);
+  }
 </style>
 </head>
 <body>
   <div class="anyai-layout">
     <aside class="anyai-sidebar" data-active-tool="video-analysis"></aside>
     <main class="anyai-content">
-      <div class="page container">
-  <h1 class="mb-4">AnyAIVideoAnalysis</h1>
-  <div class="layout-two-column">
-    <div class="card" style="min-width:320px;">
-      <div class="card-body">
-        <form id="runner-form" class="column gap-4">
-          <div class="field">
-            <label for="sheet-url">Google Spreadsheet URL</label>
-            <input class="input" type="url" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..." required>
-          </div>
-          <div class="grid-2">
-            <div class="field">
-              <label for="source-sheet-name">Source Sheet Name</label>
-              <input class="input" type="text" id="source-sheet-name" value="RawData_Video">
-            </div>
-            <div class="field">
-              <label for="video-col-letter">Video URL Column</label>
-              <input class="input" type="text" id="video-col-letter" value="D">
-            </div>
-          </div>
-          <div class="grid-2">
-            <div class="field">
-              <label for="output-sheet-name">Output Sheet Name</label>
-              <input class="input" type="text" id="output-sheet-name" placeholder="未指定: Source Sheet">
-            </div>
-            <div class="field">
-              <label for="output-col-letter">Output Column</label>
-              <input class="input" type="text" id="output-col-letter" value="E">
-            </div>
-          </div>
-          <div class="grid-2">
-            <div class="field">
-              <label for="start-row">Start Row</label>
-              <input class="input" type="number" id="start-row" value="2" min="2">
-            </div>
-            <div class="field">
-              <label for="end-row">End Row (任意)</label>
-              <input class="input" type="number" id="end-row" placeholder="最後まで">
-            </div>
-          </div>
-          <div class="grid-2">
-            <div class="field">
-              <label>Gemini Model</label>
-              <div class="radio-group">
-                <label class="radio"><input type="radio" name="model-name" value="gemini-flash-latest" checked><span>Gemini Flash (latest)</span></label>
-                <label class="radio"><input type="radio" name="model-name" value="gemini-pro-latest"><span>Gemini Pro (latest)</span></label>
+      <div class="anyai-app">
+        <section class="anyai-app-primary" aria-labelledby="analysis-heading">
+          <h1 id="analysis-heading" class="mt-0 page-title-with-icon">
+            <span class="page-title-icon" aria-hidden="true"><i data-lucide="film"></i></span>
+            <span>AnyAIVideoAnalysis</span>
+          </h1>
+          <p class="field-hint">動画シートを指定してバッチ解析を実行し、結果をスプレッドシートへ書き戻します。</p>
+
+          <form id="runner-form" class="anyai-form">
+            <section class="anyai-form-section" aria-labelledby="sheet-section-heading">
+              <header>
+                <h2 id="sheet-section-heading" class="mt-0">入力設定</h2>
+                <p class="field-hint">スプレッドシートを読み込み、動画データと出力先を選択してください。</p>
+              </header>
+              <div class="field">
+                <label for="sheet-url">スプレッドシートURL / ID</label>
+                <p class="field-hint">対象のGoogleシートURLまたはIDを入力し、Setでシート一覧を読み込みます。</p>
+                <div class="field-with-action">
+                  <input class="input" type="url" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..." required>
+                  <button type="button" class="btn btn-primary input-action-btn" id="btn-spreadsheet-set">Set</button>
+                </div>
               </div>
-            </div>
-            <div class="field">
-              <label for="workers">Batch</label>
-              <input class="input" type="number" id="workers" value="5" min="1" max="50">
-            </div>
-          </div>
-          <div class="field">
-            <label class="checkbox">
-              <input type="checkbox" id="debug-mode">
-              <span>デバッグモード（逐次処理＆エラー自動再実行ログ）</span>
-            </label>
-          </div>
-          <div class="row right">
-            <button type="button" class="btn btn-outline" id="stop-button" disabled>停止</button>
-            <button type="submit" class="btn btn-primary" id="run-button">実行</button>
-            <button type="button" class="btn btn-text" id="queue-add-button">キューに追加</button>
-          </div>
-        </form>
-      </div>
-    </div>
-    <aside class="side-column">
-      <div class="card history-card">
-        <div class="card-header"><strong>Spreadsheet History</strong></div>
-        <div class="card-body">
-          <p class="text-subtle" id="history-empty">実行履歴はまだありません。</p>
-          <ul id="history-list" class="column gap-2" style="list-style:none; margin:0; padding:0;"></ul>
-        </div>
-      </div>
-      <div class="card queue-card" id="queue-panel">
-        <div class="card-header queue-header">
-          <strong>Current Queue</strong>
-          <div class="queue-header-actions">
-            <button type="button" class="btn btn-text" data-queue-refresh>更新</button>
-            <button type="button" class="btn btn-text" data-queue-toggle>折りたたむ</button>
-          </div>
-        </div>
-        <div class="card-body" data-queue-body>
-          <div class="queue-content">
-            <div class="queue-list-container">
-              <ul class="column gap-2" data-queue-list style="list-style:none; margin:0; padding:0; overflow-y:auto; max-height:240px;"></ul>
-              <p class="text-subtle" data-queue-empty>待機中のジョブはありません。</p>
-            </div>
-            <div class="queue-details" data-queue-details hidden>
-              <div>
-                <strong data-queue-title>(タイトル未取得)</strong><br>
-                <a href="#" target="_blank" data-queue-url></a>
+              <div class="sheet-selection-grid">
+                <div class="field" id="source-sheet-field">
+                  <label for="source-sheet-name">動画データ シート</label>
+                  <select id="source-sheet-name" name="source_sheet_name" class="js-custom-select" data-placeholder="Setで読み込んでください" disabled required>
+                    <option value="">Setで読み込んでください</option>
+                  </select>
+                  <p class="field-hint">動画URLや解析対象の行を含むシートを選択します。</p>
+                  <details class="field-info field-info-inline">
+                    <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
+                    <div class="info-panel">動画URL列と解析対象の情報が揃っていることを確認してから選択してください。</div>
+                  </details>
+                </div>
+                <div class="field" id="output-sheet-field">
+                  <label for="output-sheet-name">出力先 シート</label>
+                  <select id="output-sheet-name" name="output_sheet_name" class="js-custom-select" data-placeholder="Setで読み込んでください" disabled>
+                    <option value="">Setで読み込んでください</option>
+                  </select>
+                  <p class="field-hint">生成結果を書き込むシート。未選択のまま実行すると動画データ シートに書き込みます。</p>
+                  <details class="field-info field-info-inline">
+                    <summary class="info-toggle"><span class="info-toggle-icon" aria-hidden="true">i</span><span>詳細</span></summary>
+                    <div class="info-panel">結果を別シートに保存したい場合のみ指定してください。</div>
+                  </details>
+                </div>
               </div>
-              <div>機能: <span data-queue-job-type>-</span></div>
-              <div>状態: <span data-queue-status class="queue-status queue-status-queued">queued</span></div>
-              <div>順番: <span data-queue-order>-</span></div>
-              <div class="queue-controls">
-                <button type="button" class="btn btn-outline" data-queue-move-up>上へ</button>
-                <button type="button" class="btn btn-outline" data-queue-move-down>下へ</button>
-                <button type="button" class="btn btn-outline" data-queue-remove>削除</button>
-                <button type="button" class="btn btn-outline" data-queue-apply>更新</button>
+              <div id="validation-banner" class="validation-banner" role="status" aria-live="polite"></div>
+              <div class="grid-2">
+                <div class="field">
+                  <label for="video-col-letter">Video URL Column</label>
+                  <input class="input" type="text" id="video-col-letter" value="D">
+                </div>
+                <div class="field">
+                  <label for="output-col-letter">Output Column</label>
+                  <input class="input" type="text" id="output-col-letter" value="E">
+                </div>
               </div>
-              <textarea data-queue-json rows="6"></textarea>
+              <div class="grid-2">
+                <div class="field">
+                  <label for="start-row">Start Row</label>
+                  <input class="input" type="number" id="start-row" value="2" min="2">
+                </div>
+                <div class="field">
+                  <label for="end-row">End Row (任意)</label>
+                  <input class="input" type="number" id="end-row" placeholder="最後まで">
+                </div>
+              </div>
+            </section>
+
+            <section class="anyai-form-section" aria-labelledby="run-section-heading">
+              <header>
+                <h2 id="run-section-heading" class="mt-0">実行設定</h2>
+                <p class="field-hint">使用するモデルとバッチ設定、ログ出力方法を指定します。</p>
+              </header>
+              <div class="grid-2">
+                <div class="field">
+                  <label id="analysis-model-label">Gemini Model</label>
+                  <div class="mode-options" role="radiogroup" aria-labelledby="analysis-model-label">
+                    <label class="mode-pill" role="radio" aria-checked="true" tabindex="0">
+                      <input type="radio" name="model-name" value="gemini-flash-latest" checked>
+                      <span>Gemini Flash</span>
+                    </label>
+                    <label class="mode-pill" role="radio" aria-checked="false" tabindex="-1">
+                      <input type="radio" name="model-name" value="gemini-pro-latest">
+                      <span>Gemini Pro</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="workers">Batch</label>
+                  <input class="input" type="number" id="workers" value="5" min="1" max="50">
+                </div>
+              </div>
+              <div class="field">
+                <label class="checkbox">
+                  <input type="checkbox" id="debug-mode">
+                  <span>デバッグモード（逐次処理＆エラー自動再実行ログ）</span>
+                </label>
+              </div>
+            </section>
+            <div class="anyai-form-actions" id="analysis-action-area">
+              <button type="button" class="btn btn-outline" id="stop-button" disabled>停止</button>
+              <button type="submit" class="btn btn-primary" id="run-button">実行</button>
+              <button type="button" class="btn btn-soft-accent" id="queue-add-button">キューに追加</button>
             </div>
+          </form>
+        </section>
+
+        <aside class="anyai-app-support">
+          <section class="anyai-support-card">
+            <div class="support-header">
+              <h2 class="mt-0">最近のシート</h2>
+            </div>
+            <p class="field-hint" id="history-empty">実行履歴はまだありません。</p>
+            <ul id="history-list" class="column gap-2"></ul>
+          </section>
+
+          <div class="anyai-support-card support-metrics">
+            <div class="support-header">
+              <h2 class="mt-0">ジョブキュー</h2>
+              <button id="btn-queue-start" class="btn btn-primary" type="button">キュー開始</button>
+            </div>
+            <div id="queue-status" class="queue-status"></div>
+            <div id="queue-list" class="stack-sm"></div>
           </div>
-        </div>
-      </div>
+
+          <section class="anyai-support-card">
+            <div class="support-header">
+              <h2 class="mt-0">実行ログ</h2>
+            </div>
+            <div id="log-container"><span class="text-subtle">Awaiting configuration...</span></div>
+      </section>
     </aside>
   </div>
-
-  <section class="mt-6">
-    <div class="card">
-      <div class="card-header">
-        <strong>Execution Log</strong>
-      </div>
-      <div class="card-body">
-        <div id="log-container"><span class="text-subtle">Awaiting configuration...</span></div>
-      </div>
-    </div>
-  </section>
-    </div>
-  </main>
+  <div class="anyai-action-bar" role="region" aria-label="動画解析操作">
+    <button type="button" class="btn btn-outline" data-proxy-for="stop-button">停止</button>
+    <button type="button" class="btn btn-primary" data-proxy-for="run-button">実行</button>
+    <button type="button" class="btn btn-soft-accent" data-proxy-for="queue-add-button">キューに追加</button>
+  </div>
+  <div id="queue-toast" class="queue-toast" role="status" aria-live="polite" aria-hidden="true"></div>
+</main>
 </div>
 
 <script>
-  const loadingOverlay = window.AnyAILoading || {
-    run: async (task) => task(),
-    wrap: async (promise) => promise,
-    show: () => {},
-    hide: () => {},
-    requireKeys: async () => true,
-  };
+const loadingOverlay = window.AnyAILoading || {
+  run: async (task) => task(),
+  wrap: async (promise) => promise,
+  show: () => {},
+  hide: () => {},
+  requireKeys: async () => true,
+};
+
+function setupModePills() {
+  document.querySelectorAll('.mode-options').forEach((group) => {
+    const pills = Array.from(group.querySelectorAll('.mode-pill'));
+    if (!pills.length) return;
+    const radios = pills.map((pill) => pill.querySelector('input[type="radio"]'));
+
+    function sync() {
+      pills.forEach((pill, index) => {
+        const radio = radios[index];
+        const checked = radio.checked;
+        pill.setAttribute('aria-checked', checked ? 'true' : 'false');
+        pill.tabIndex = checked ? 0 : -1;
+      });
+    }
+
+    function activate(index, focus = true) {
+      const radio = radios[index];
+      if (radio.disabled) return;
+      if (!radio.checked) {
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        sync();
+      }
+      if (focus) {
+        pills[index].focus();
+      }
+    }
+
+    pills.forEach((pill, index) => {
+      const radio = radios[index];
+      pill.addEventListener('click', (event) => {
+        event.preventDefault();
+        activate(index, false);
+        sync();
+      });
+
+      pill.addEventListener('keydown', (event) => {
+        let direction = 0;
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') direction = 1;
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') direction = -1;
+        if (direction === 0) return;
+        event.preventDefault();
+        const total = pills.length;
+        let next = index;
+        do {
+          next = (next + direction + total) % total;
+        } while (radios[next].disabled && next !== index);
+        activate(next);
+        sync();
+      });
+
+      radio.addEventListener('change', sync);
+    });
+
+    sync();
+  });
+}
+
+setupModePills();
 
   const form = document.getElementById('runner-form');
   const logContainer = document.getElementById('log-container');
@@ -194,7 +769,503 @@
   const historyList = document.getElementById('history-list');
   const historyEmpty = document.getElementById('history-empty');
   const queueAddButton = document.getElementById('queue-add-button');
-  const queuePanel = document.getElementById('queue-panel');
+  const queueStatus = document.getElementById('queue-status');
+  const queueList = document.getElementById('queue-list');
+  const queueStartButton = document.getElementById('btn-queue-start');
+  const QUEUE_JOB_TYPE = 'video_analysis';
+  const QUEUE_ENDPOINTS = {
+    state: '/queue-state',
+    reorder: '/queue-reorder',
+    remove: '/queue-remove',
+    update: '/queue-update',
+  };
+  const sheetSetButton = document.getElementById('btn-spreadsheet-set');
+  const sourceSheetSelect = document.getElementById('source-sheet-name');
+  const outputSheetSelect = document.getElementById('output-sheet-name');
+  const validationBanner = document.getElementById('validation-banner');
+  const actionBar = document.querySelector('.anyai-action-bar');
+  const actionProxyButtons = actionBar ? Array.from(actionBar.querySelectorAll('[data-proxy-for]')) : [];
+  const actionProxyObservers = new Map();
+  const primaryPanel = document.querySelector('.anyai-app-primary');
+  const formActions = document.getElementById('analysis-action-area');
+  let actionBarResizeObserver = null;
+  let actionBarIntersectionObserver = null;
+  let actionBarInitialized = false;
+  const queueToast = document.getElementById('queue-toast');
+  let queueToastTimer = null;
+  const customSelectRegistry = new WeakMap();
+  let resolvedSpreadsheetId = '';
+  let resolvedSheets = [];
+  let queueRefreshTimer = null;
+  let latestQueueItems = [];
+  let editingJobId = '';
+  const videoColInput = document.getElementById('video-col-letter');
+  const outputColInput = document.getElementById('output-col-letter');
+  const startRowInput = document.getElementById('start-row');
+  const endRowInput = document.getElementById('end-row');
+  const workersInput = document.getElementById('workers');
+  const debugCheckbox = document.getElementById('debug-mode');
+  const modelRadios = Array.from(document.querySelectorAll('input[name="model-name"]'));
+
+  function hideQueueToast() {
+    if (!queueToast) return;
+    queueToast.classList.remove('is-visible');
+    queueToast.setAttribute('aria-hidden', 'true');
+    window.setTimeout(() => {
+      if (!queueToast.classList.contains('is-visible')) {
+        queueToast.textContent = '';
+        queueToast.removeAttribute('data-state');
+      }
+    }, 220);
+  }
+
+  function showQueueToast(message, options = {}) {
+    if (!queueToast) return;
+    const state = options.state || 'success';
+    const duration = typeof options.duration === 'number' ? options.duration : 3000;
+    if (queueToastTimer) {
+      clearTimeout(queueToastTimer);
+      queueToastTimer = null;
+    }
+    queueToast.setAttribute('data-state', state);
+    queueToast.textContent = message || '';
+    queueToast.setAttribute('aria-hidden', 'false');
+    void queueToast.offsetWidth;
+    queueToast.classList.add('is-visible');
+    if (duration > 0) {
+      queueToastTimer = window.setTimeout(() => {
+        hideQueueToast();
+      }, duration);
+    }
+  }
+
+  if (queueToast) {
+    queueToast.addEventListener('click', () => {
+      hideQueueToast();
+    });
+  }
+
+  function normaliseQueueItems(snapshot) {
+    const list = Array.isArray(snapshot) ? snapshot : [];
+    return list
+      .filter((item) => item && item.process_id && (!item.job_type || item.job_type === QUEUE_JOB_TYPE))
+      .map((item) => ({
+        job_id: item.process_id,
+        process_id: item.process_id,
+        status: item.status || 'queued',
+        sheet_name: item.sheet_title || '',
+        sheet_title: item.sheet_title || '',
+        sheet_url: item.sheet_url || '',
+        params: item.params || {},
+        job_type: item.job_type || '',
+        mode: item.job_type || '',
+        order: typeof item.order === 'number' ? item.order : null,
+        enqueued_at: item.enqueued_at ?? null,
+      }));
+  }
+
+  function applyQueueSnapshot(snapshot) {
+    latestQueueItems = normaliseQueueItems(snapshot);
+    renderQueueStatus(latestQueueItems);
+    renderQueueList(latestQueueItems);
+  }
+
+  function getProxyTarget(proxy) {
+    if (!proxy) return null;
+    const targetId = proxy.dataset.proxyFor;
+    return targetId ? document.getElementById(targetId) : null;
+  }
+
+  function positionActionBar() {
+    if (!actionBar || !primaryPanel) return;
+    const hasVisibleProxy = actionProxyButtons.some((proxy) => proxy.style.display !== 'none');
+    if (!hasVisibleProxy) return;
+    const panelRect = primaryPanel.getBoundingClientRect();
+    if (panelRect.width <= 0) return;
+    actionBar.style.removeProperty('width');
+    const naturalWidth = actionBar.offsetWidth;
+    const maxWidth = Math.max(panelRect.width - 24, 0);
+    const finalWidth = maxWidth > 0 ? Math.min(naturalWidth, maxWidth) : naturalWidth;
+    actionBar.style.width = `${finalWidth}px`;
+    actionBar.style.left = `${panelRect.left + panelRect.width / 2}px`;
+  }
+
+  function updateProxyState(proxy) {
+    if (!proxy) return;
+    const target = getProxyTarget(proxy);
+    if (!target) {
+      proxy.disabled = true;
+      proxy.style.display = 'none';
+      proxy.removeAttribute('aria-busy');
+      return;
+    }
+
+    const targetStyle = window.getComputedStyle(target);
+    const hidden =
+      targetStyle.display === 'none' ||
+      targetStyle.visibility === 'hidden' ||
+      target.hasAttribute('hidden');
+    proxy.style.display = hidden ? 'none' : '';
+    proxy.disabled = target.disabled || hidden;
+    if (!hidden) {
+      proxy.textContent = target.textContent;
+    }
+    if (target.hasAttribute('aria-busy')) {
+      proxy.setAttribute('aria-busy', target.getAttribute('aria-busy'));
+    } else {
+      proxy.removeAttribute('aria-busy');
+    }
+  }
+
+  function updateActionBarVisibility() {
+    if (!actionBar) return;
+    const hasProxies = actionProxyButtons.length > 0;
+    const hasEnabled = actionProxyButtons.some((proxy) => !proxy.disabled);
+    actionBar.classList.toggle('is-empty', !hasProxies);
+    actionBar.classList.toggle('is-hidden', !hasEnabled);
+    if (hasEnabled) {
+      positionActionBar();
+    }
+  }
+
+  function syncActionProxies() {
+    if (!actionBar) return;
+    actionProxyButtons.forEach(updateProxyState);
+    updateActionBarVisibility();
+  }
+
+  function initActionProxies() {
+    if (!actionBar || !actionProxyButtons.length) return;
+    actionProxyButtons.forEach((proxy) => {
+      const target = getProxyTarget(proxy);
+      proxy.addEventListener('click', (event) => {
+        event.preventDefault();
+        const currentTarget = getProxyTarget(proxy);
+        if (currentTarget && !currentTarget.disabled) {
+          currentTarget.click();
+        }
+      });
+
+      if (target) {
+        const observer = new MutationObserver(() => updateProxyState(proxy));
+        observer.observe(target, { attributes: true, attributeFilter: ['disabled', 'aria-busy', 'hidden', 'style'] });
+        actionProxyObservers.set(proxy, observer);
+      }
+
+      updateProxyState(proxy);
+    });
+
+    if (!actionBarInitialized) {
+      if ('ResizeObserver' in window && primaryPanel) {
+        actionBarResizeObserver = new ResizeObserver(() => positionActionBar());
+        actionBarResizeObserver.observe(primaryPanel);
+      }
+      window.addEventListener('resize', positionActionBar);
+      window.addEventListener('orientationchange', positionActionBar);
+      if ('IntersectionObserver' in window && formActions) {
+        actionBarIntersectionObserver = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              positionActionBar();
+              if (entry.isIntersecting) {
+                actionBar.classList.add('is-hidden');
+              } else {
+                actionBar.classList.remove('is-hidden');
+              }
+            });
+          },
+          { threshold: 0.2 }
+        );
+        actionBarIntersectionObserver.observe(formActions);
+      }
+      actionBarInitialized = true;
+    }
+
+    updateActionBarVisibility();
+  }
+
+  function setupCustomSelect(select) {
+    if (!select || customSelectRegistry.has(select)) return;
+
+    const placeholder = select.dataset.placeholder || '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'custom-select';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'custom-select-toggle';
+    toggle.setAttribute('aria-haspopup', 'listbox');
+    toggle.setAttribute('aria-expanded', 'false');
+
+    const label = document.createElement('span');
+    label.className = 'custom-select-label';
+    label.textContent = placeholder;
+    toggle.appendChild(label);
+
+    const menu = document.createElement('div');
+    menu.className = 'custom-select-menu';
+    menu.setAttribute('role', 'listbox');
+    menu.hidden = true;
+    menu.tabIndex = -1;
+
+    const menuId = `${select.id || `custom-select-${Math.random().toString(36).slice(2)}`}-menu`;
+    menu.id = menuId;
+    toggle.setAttribute('aria-controls', menuId);
+    toggle.setAttribute('role', 'combobox');
+
+    const parent = select.parentNode;
+    parent.insertBefore(wrapper, select);
+    wrapper.appendChild(toggle);
+    wrapper.appendChild(menu);
+    wrapper.appendChild(select);
+
+    select.classList.add('custom-select-native');
+    select.tabIndex = -1;
+    select.setAttribute('aria-hidden', 'true');
+
+    const state = {
+      select,
+      wrapper,
+      toggle,
+      label,
+      menu,
+      placeholder,
+      isOpen: false,
+      focusIndex: -1,
+      optionButtons: [],
+    };
+
+    function refreshLabel() {
+      const selected = Array.from(select.selectedOptions || [])[0];
+      const text = selected ? selected.textContent : '';
+      label.textContent = text || state.placeholder || '';
+      state.wrapper.classList.toggle('has-value', Boolean(selected && selected.value));
+    }
+
+    function syncSelectedClass() {
+      const value = select.value;
+      state.optionButtons.forEach((btn) => {
+        const isSelected = btn.dataset.value === value;
+        btn.classList.toggle('is-selected', isSelected);
+        btn.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+      });
+    }
+
+    function enabledOptions() {
+      return state.optionButtons.filter((btn) => !btn.disabled);
+    }
+
+    function focusOption(index) {
+      const enabled = enabledOptions();
+      if (!enabled.length) return;
+      const clamped = Math.max(0, Math.min(index, enabled.length - 1));
+      const target = enabled[clamped];
+      if (!target) return;
+      target.focus();
+      if (!target.id) {
+        const rawIndex = Math.max(0, state.optionButtons.indexOf(target));
+        target.id = `${state.menu.id}-option-${rawIndex}`;
+      }
+      state.toggle.setAttribute('aria-activedescendant', target.id);
+      state.focusIndex = clamped;
+      const containerRect = state.menu.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      if (targetRect.top < containerRect.top) {
+        state.menu.scrollTop -= containerRect.top - targetRect.top + 4;
+      } else if (targetRect.bottom > containerRect.bottom) {
+        state.menu.scrollTop += targetRect.bottom - containerRect.bottom + 4;
+      }
+    }
+
+    function focusSelected() {
+      const enabled = enabledOptions();
+      const index = enabled.findIndex((btn) => btn.dataset.value === select.value);
+      if (index >= 0) {
+        focusOption(index);
+      } else {
+        focusOption(0);
+      }
+    }
+
+    function closeMenu({ focusToggle = false } = {}) {
+      if (!state.isOpen) return;
+      state.isOpen = false;
+      state.wrapper.classList.remove('is-open');
+      state.menu.hidden = true;
+      state.toggle.setAttribute('aria-expanded', 'false');
+      state.toggle.removeAttribute('aria-activedescendant');
+      state.focusIndex = -1;
+      document.removeEventListener('pointerdown', handleDocumentPointer, true);
+      document.removeEventListener('keydown', handleDocumentKeydown, true);
+      if (focusToggle) {
+        state.toggle.focus();
+      }
+    }
+
+    function handleDocumentPointer(event) {
+      if (state.wrapper.contains(event.target)) return;
+      closeMenu();
+    }
+
+    function handleDocumentKeydown(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMenu({ focusToggle: true });
+      }
+    }
+
+    function buildMenu() {
+      state.optionButtons.forEach((btn) => btn.remove());
+      state.optionButtons = Array.from(select.options || []).map((option) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'custom-select-option';
+        button.dataset.value = option.value;
+        button.textContent = option.textContent || '';
+        button.disabled = option.disabled;
+        button.setAttribute('role', 'option');
+
+        if (option.dataset.sheetId) {
+          button.dataset.sheetId = option.dataset.sheetId;
+        }
+
+        button.addEventListener('click', () => {
+          if (option.disabled) return;
+          select.value = option.value;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          closeMenu({ focusToggle: true });
+        });
+
+        button.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            button.click();
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            focusOption(state.focusIndex - 1);
+          } else if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            focusOption(state.focusIndex + 1);
+          } else if (event.key === 'Home') {
+            event.preventDefault();
+            focusOption(0);
+          } else if (event.key === 'End') {
+            event.preventDefault();
+            const enabled = enabledOptions();
+            focusOption(enabled.length - 1);
+          } else if (event.key === 'Escape') {
+            event.preventDefault();
+            closeMenu({ focusToggle: true });
+          }
+        });
+
+        state.menu.appendChild(button);
+        return button;
+      });
+      syncSelectedClass();
+    }
+
+    function openMenu() {
+      if (state.isOpen || select.disabled) return;
+      buildMenu();
+      state.isOpen = true;
+      state.wrapper.classList.add('is-open');
+      state.menu.hidden = false;
+      state.toggle.setAttribute('aria-expanded', 'true');
+      document.addEventListener('pointerdown', handleDocumentPointer, true);
+      document.addEventListener('keydown', handleDocumentKeydown, true);
+      requestAnimationFrame(() => {
+        focusSelected();
+      });
+    }
+
+    function syncDisabled() {
+      const disabled = select.disabled;
+      state.toggle.disabled = disabled;
+      state.toggle.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+      state.wrapper.classList.toggle('is-disabled', disabled);
+      if (disabled) {
+        closeMenu();
+      }
+    }
+
+    state.toggle.addEventListener('click', () => {
+      if (state.isOpen) {
+        closeMenu();
+      } else {
+        openMenu();
+      }
+    });
+
+    state.toggle.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        openMenu();
+      }
+    });
+
+    state.menu.addEventListener('focusout', (event) => {
+      if (!state.wrapper.contains(event.relatedTarget)) {
+        closeMenu();
+      }
+    });
+
+    select.addEventListener('change', () => {
+      refreshLabel();
+      syncSelectedClass();
+    });
+
+    const optionObserver = new MutationObserver(() => {
+      buildMenu();
+      refreshLabel();
+    });
+    optionObserver.observe(select, { childList: true });
+
+    const attributeObserver = new MutationObserver(() => {
+      syncDisabled();
+    });
+    attributeObserver.observe(select, { attributes: true, attributeFilter: ['disabled'] });
+
+    customSelectRegistry.set(select, {
+      state,
+      refreshLabel,
+      syncDisabled,
+      syncSelectedClass,
+      setPlaceholder(placeholderText) {
+        state.placeholder = placeholderText || '';
+        if (!select.value) {
+          state.label.textContent = state.placeholder;
+        }
+      },
+    });
+
+    refreshLabel();
+    syncDisabled();
+    buildMenu();
+  }
+
+  function updateCustomSelectPlaceholder(select, placeholderText) {
+    const entry = customSelectRegistry.get(select);
+    if (!entry) return;
+    entry.state.placeholder = placeholderText || '';
+    if (!select.value) {
+      entry.state.label.textContent = entry.state.placeholder;
+    }
+    entry.syncSelectedClass();
+  }
+
+  function syncCustomSelectDisabled(select) {
+    const entry = customSelectRegistry.get(select);
+    if (!entry) return;
+    entry.syncDisabled();
+  }
+
+  function refreshCustomSelect(select) {
+    const entry = customSelectRegistry.get(select);
+    if (!entry) return;
+    entry.refreshLabel();
+    entry.syncSelectedClass();
+  }
   let currentProcessId = null;
   let eventSource = null;
 
@@ -209,16 +1280,544 @@
     logContainer.scrollTop = logContainer.scrollHeight;
   }
 
-  const queueManager = (window.AnyAIQueueManager && queuePanel)
-    ? window.AnyAIQueueManager.init({ root: queuePanel, log: appendLog })
-    : null;
+  function clearEditingState() {
+    if (form && form.dataset) {
+      delete form.dataset.editing;
+    }
+    editingJobId = '';
+  }
+
+  function renderQueueStatus(data) {
+    if (!queueStatus) return;
+    queueStatus.innerHTML = '';
+    let isRunning = false;
+    let runningId = '';
+    if (Array.isArray(data)) {
+      const runningItem = data.find((item) => (item.status || '').toLowerCase() === 'running');
+      if (runningItem) {
+        isRunning = true;
+        runningId = runningItem.job_id || runningItem.process_id || '';
+      }
+    } else if (data && typeof data === 'object') {
+      isRunning = Boolean(data.running || data.isRunning);
+      runningId = data.current || data.running_job_id || data.runningId || '';
+    }
+    const label = document.createElement('span');
+    label.className = 'queue-status-label';
+    label.textContent = isRunning ? '稼働中' : '待機中';
+    const dot = document.createElement('span');
+    dot.className = `queue-status-dot ${isRunning ? 'queue-status-dot--active' : 'queue-status-dot--idle'}`;
+    queueStatus.appendChild(label);
+    queueStatus.appendChild(dot);
+    const chip = document.createElement('span');
+    chip.className = `queue-chip ${isRunning ? 'queue-chip--active' : 'queue-chip--idle'}`;
+    chip.textContent = isRunning ? (runningId || '実行中') : '停止中';
+    queueStatus.appendChild(chip);
+  }
+
+  async function moveQueueItem(jobId, direction, button) {
+    if (!direction) return;
+    const release = setButtonBusy(button, '移動中...');
+    try {
+      const res = await fetch(QUEUE_ENDPOINTS.reorder, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ process_id: jobId, direction }),
+      });
+      if (!res.ok) {
+        showQueueToast('並び替えに失敗しました', { state: 'error' });
+        return;
+      }
+      const result = await res.json().catch(() => null);
+      if (result && Array.isArray(result.queue)) {
+        applyQueueSnapshot(result.queue);
+      } else {
+        await refreshQueue();
+      }
+    } catch (error) {
+      console.error(error);
+      showQueueToast('並び替えに失敗しました', { state: 'error' });
+    } finally {
+      release();
+    }
+  }
+
+  async function deleteQueueItem(jobId, button) {
+    const release = setButtonBusy(button, '削除中...');
+    try {
+      const res = await fetch(QUEUE_ENDPOINTS.remove, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ process_id: jobId }),
+      });
+      if (!res.ok) {
+        showQueueToast('削除に失敗しました', { state: 'error' });
+        return;
+      }
+      const result = await res.json().catch(() => null);
+      if (editingJobId === jobId) {
+        clearEditingState();
+      }
+      showQueueToast('削除しました', { state: 'success' });
+      if (result && Array.isArray(result.queue)) {
+        applyQueueSnapshot(result.queue);
+      } else {
+        await refreshQueue();
+      }
+    } catch (error) {
+      console.error(error);
+      showQueueToast('削除に失敗しました', { state: 'error' });
+    } finally {
+      release();
+    }
+  }
+
+  function createQueueRow(item, index) {
+    const row = document.createElement('div');
+    row.className = 'row queue-row';
+    row.dataset.jobId = item.job_id;
+    if (editingJobId && editingJobId === item.job_id) {
+      row.classList.add('is-editing');
+    }
+
+    const info = document.createElement('div');
+    info.className = 'queue-row-info';
+    const title = document.createElement('strong');
+    title.textContent = item.sheet_name || '(タイトル未取得)';
+    const meta = document.createElement('div');
+    meta.className = 'queue-row-meta';
+    const metaParts = [
+      `<code>${item.job_id}</code>`,
+      `status: ${item.status || 'unknown'}`,
+    ];
+    if (item.mode) {
+      metaParts.push(item.mode);
+    }
+    meta.innerHTML = metaParts.map((part) => `<span>${part}</span>`).join('');
+    info.appendChild(title);
+    info.appendChild(meta);
+    row.appendChild(info);
+
+    const actions = document.createElement('div');
+    actions.className = 'queue-actions';
+
+    const upBtn = document.createElement('button');
+    upBtn.className = 'btn btn-ghost';
+    upBtn.textContent = '↑';
+    upBtn.addEventListener('click', async () => {
+      await moveQueueItem(item.job_id, 'up', upBtn);
+    });
+
+    const downBtn = document.createElement('button');
+    downBtn.className = 'btn btn-ghost';
+    downBtn.textContent = '↓';
+    downBtn.addEventListener('click', async () => {
+      await moveQueueItem(item.job_id, 'down', downBtn);
+    });
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-soft-accent queue-edit-button';
+    editBtn.setAttribute('aria-label', '編集');
+    editBtn.textContent = '✎';
+    editBtn.addEventListener('click', () => {
+      void loadQueueJobIntoForm(item.job_id);
+    });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn-primary queue-save-button';
+    saveBtn.textContent = '編集を保存';
+    saveBtn.addEventListener('click', async () => {
+      await saveQueueEdit(item.job_id, saveBtn);
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-danger queue-delete-button';
+    deleteBtn.setAttribute('aria-label', '削除');
+    deleteBtn.textContent = '✕';
+    deleteBtn.addEventListener('click', async () => {
+      await deleteQueueItem(item.job_id, deleteBtn);
+    });
+
+    actions.appendChild(upBtn);
+    actions.appendChild(downBtn);
+    actions.appendChild(editBtn);
+    actions.appendChild(saveBtn);
+    actions.appendChild(deleteBtn);
+    row.appendChild(actions);
+    return row;
+  }
+
+  function renderQueueList(items) {
+    if (!queueList) return;
+    queueList.innerHTML = '';
+    if (!items.length) {
+      const empty = document.createElement('p');
+      empty.className = 'text-subtle';
+      empty.textContent = '待機中のジョブはありません。';
+      queueList.appendChild(empty);
+      if (editingJobId) {
+        clearEditingState();
+      }
+      return;
+    }
+
+    items.forEach((item, index) => {
+      queueList.appendChild(createQueueRow(item, index));
+    });
+
+    if (editingJobId) {
+      const stillExists = items.some((item) => item.job_id === editingJobId);
+      if (!stillExists) {
+        clearEditingState();
+      }
+    }
+
+  }
+
+  function selectSheetOption(select, targetName, targetId) {
+    if (!select) return;
+    let matched = false;
+    const options = Array.from(select.options || []);
+    if (targetId != null) {
+      const option = options.find((opt) => opt.dataset && opt.dataset.sheetId === String(targetId));
+      if (option) {
+        select.value = option.value;
+        matched = true;
+      }
+    }
+    if (!matched && targetName) {
+      const option = options.find((opt) => opt.value === targetName);
+      if (option) {
+        select.value = option.value;
+        matched = true;
+      }
+    }
+    if (!matched) {
+      select.value = '';
+    }
+    refreshCustomSelect(select);
+  }
+
+  async function applyQueueConfig(config) {
+    if (!config) return;
+    const sheetUrl = config.sheet_url || config.spreadsheet_url || '';
+    if (sheetInput) {
+      sheetInput.value = sheetUrl;
+    }
+    resolvedSpreadsheetId = config.spreadsheet_id || sheetUrl || '';
+    if (sheetUrl) {
+      await handleSpreadsheetSet();
+      selectSheetOption(sourceSheetSelect, config.source_sheet_name || '', config.source_sheet_id);
+      selectSheetOption(outputSheetSelect, config.output_sheet_name || '', config.output_sheet_id);
+    }
+    if (videoColInput && config.video_col_letter) {
+      videoColInput.value = config.video_col_letter;
+    }
+    if (outputColInput) {
+      outputColInput.value = config.output_col_letter || '';
+    }
+    if (startRowInput && config.start_row != null) {
+      startRowInput.value = config.start_row;
+    }
+    if (endRowInput) {
+      endRowInput.value = config.end_row != null ? config.end_row : '';
+    }
+    if (workersInput && config.workers != null) {
+      workersInput.value = config.workers;
+    }
+    if (debugCheckbox) {
+      debugCheckbox.checked = Boolean(config.debug_mode);
+    }
+    if (modelRadios.length) {
+      const targetModel = config.model_name || config.model;
+      const matched = modelRadios.find((radio) => radio.value === targetModel);
+      if (matched) {
+        matched.checked = true;
+      }
+    }
+    showValidationBanner('info', '読み込んだ設定です。必要に応じて再度 Set を実行してください。');
+  }
+
+  async function fetchQueueConfig(jobId) {
+    const lookup = () => {
+      const match = latestQueueItems.find((item) => item.job_id === jobId);
+      return match ? match.params || null : null;
+    };
+    let config = lookup();
+    if (config) {
+      return config;
+    }
+    await refreshQueue();
+    return lookup();
+  }
+
+  async function loadQueueJobIntoForm(jobId) {
+    try {
+      const config = await fetchQueueConfig(jobId);
+      if (!config) {
+        showQueueToast('設定取得に失敗しました', { state: 'error' });
+        return;
+      }
+      await applyQueueConfig(config);
+    if (form) {
+      form.dataset.editing = jobId;
+    }
+    editingJobId = jobId;
+    renderQueueList(latestQueueItems);
+    showQueueToast('フォームに読み込みました。編集後に「編集を保存」を押してください。', { state: 'info' });
+  } catch (error) {
+    console.error(error);
+    showQueueToast('設定取得に失敗しました', { state: 'error' });
+  }
+  }
+
+  function buildQueueEditFormData() {
+    const fd = new FormData();
+    const sheetUrl = sheetInput ? sheetInput.value.trim() : '';
+    if (sheetUrl) {
+      fd.set('sheet_url', sheetUrl);
+    }
+    if (resolvedSpreadsheetId) {
+      fd.set('spreadsheet_id', resolvedSpreadsheetId);
+    }
+    if (sourceSheetSelect && sourceSheetSelect.value) {
+      fd.set('source_sheet_name', sourceSheetSelect.value);
+      const option = sourceSheetSelect.options[sourceSheetSelect.selectedIndex];
+      if (option && option.dataset.sheetId) {
+        fd.set('source_sheet_id', option.dataset.sheetId);
+      }
+    }
+    if (outputSheetSelect && outputSheetSelect.value) {
+      fd.set('output_sheet_name', outputSheetSelect.value);
+      const option = outputSheetSelect.options[outputSheetSelect.selectedIndex];
+      if (option && option.dataset.sheetId) {
+        fd.set('output_sheet_id', option.dataset.sheetId);
+      }
+    }
+    if (videoColInput && videoColInput.value) {
+      fd.set('video_col_letter', videoColInput.value);
+    }
+    if (outputColInput && outputColInput.value) {
+      fd.set('output_col_letter', outputColInput.value);
+    }
+    if (startRowInput && startRowInput.value) {
+      fd.set('start_row', startRowInput.value);
+    }
+    if (endRowInput && endRowInput.value) {
+      fd.set('end_row', endRowInput.value);
+    } else {
+      fd.delete('end_row');
+    }
+    if (workersInput && workersInput.value) {
+      fd.set('workers', workersInput.value);
+    }
+    if (debugCheckbox) {
+      fd.set('debug_mode', debugCheckbox.checked ? 'true' : 'false');
+    }
+    const selectedModel = modelRadios.find((radio) => radio.checked);
+    if (selectedModel) {
+      fd.set('model_name', selectedModel.value);
+    }
+    return fd;
+  }
+
+  async function saveQueueEdit(jobId, button) {
+    if (!form || form.dataset.editing !== jobId) {
+      showQueueToast('編集対象を読み込んでください。', { state: 'error' });
+      return;
+    }
+    const fd = buildQueueEditFormData();
+    if (!fd.get('sheet_url')) {
+      showQueueToast('スプレッドシートURLを入力してください。', { state: 'error' });
+      return;
+    }
+    const release = setButtonBusy(button, '保存中...');
+    try {
+      const updates = {};
+      fd.forEach((value, key) => {
+        updates[key] = value;
+      });
+      const res = await fetch(QUEUE_ENDPOINTS.update, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ process_id: jobId, updates }),
+      });
+      if (!res.ok) {
+        showQueueToast('保存に失敗しました', { state: 'error' });
+        return;
+      }
+      const result = await res.json().catch(() => null);
+      showQueueToast('保存しました', { state: 'success' });
+      clearEditingState();
+      if (result && Array.isArray(result.queue)) {
+        applyQueueSnapshot(result.queue);
+      } else {
+        await refreshQueue();
+      }
+    } catch (error) {
+      console.error(error);
+      showQueueToast('保存に失敗しました', { state: 'error' });
+    } finally {
+      release();
+    }
+  }
+
+  async function refreshQueue() {
+    try {
+      const res = await fetch(QUEUE_ENDPOINTS.state);
+      if (!res.ok) return;
+      const data = await res.json();
+      applyQueueSnapshot(data);
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  function showValidationBanner(state, message) {
+    if (!validationBanner) return;
+    if (!state) {
+      validationBanner.removeAttribute('data-state');
+      validationBanner.textContent = message || '';
+      return;
+    }
+    validationBanner.setAttribute('data-state', state);
+    validationBanner.textContent = message || '';
+  }
+
+  function setButtonBusy(button, busyLabel) {
+    if (!button) return () => {};
+    const original = {
+      text: button.textContent,
+      disabled: button.disabled,
+    };
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    if (busyLabel) {
+      button.textContent = busyLabel;
+    }
+    return () => {
+      button.disabled = original.disabled;
+      button.textContent = original.text;
+      button.removeAttribute('aria-busy');
+    };
+  }
+
+  function clearSheetSelections(message = 'Setで読み込んでください') {
+    const reset = (select) => {
+      if (!select) return;
+      const placeholder = message || select.dataset.placeholder || 'Setで読み込んでください';
+      select.innerHTML = `<option value="">${placeholder}</option>`;
+      select.disabled = true;
+      select.dataset.placeholder = placeholder;
+      updateCustomSelectPlaceholder(select, placeholder);
+      syncCustomSelectDisabled(select);
+      refreshCustomSelect(select);
+    };
+    reset(sourceSheetSelect);
+    reset(outputSheetSelect);
+    resolvedSpreadsheetId = '';
+    resolvedSheets = [];
+    clearEditingState();
+  }
+
+  function populateSheetOptions(sheets) {
+    const previousSource = sourceSheetSelect ? sourceSheetSelect.value : '';
+    const previousOutput = outputSheetSelect ? outputSheetSelect.value : '';
+    resolvedSheets = Array.isArray(sheets) ? sheets : [];
+    const hasSheets = resolvedSheets.length > 0;
+    const placeholderLabel = hasSheets ? '対象シートを選択してください' : 'シートが見つかりません';
+
+    const build = (select, preferredValue) => {
+      if (!select) return;
+      select.innerHTML = '';
+      const isOutputSelect = select === outputSheetSelect;
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = isOutputSelect ? '未指定（入力シートを使用）' : placeholderLabel;
+      placeholder.disabled = !isOutputSelect && !hasSheets;
+      placeholder.selected = true;
+      if (hasSheets && !isOutputSelect) {
+        placeholder.hidden = true;
+      }
+      select.appendChild(placeholder);
+
+      resolvedSheets.forEach((sheet) => {
+        const option = document.createElement('option');
+        const sheetName = sheet.sheet_name || sheet.title || '';
+        option.value = sheetName;
+        option.textContent = sheetName || '(名称未設定)';
+        if (sheet.sheet_id != null) {
+          option.dataset.sheetId = String(sheet.sheet_id);
+        }
+        select.appendChild(option);
+      });
+
+      select.disabled = !hasSheets;
+      select.dataset.placeholder = isOutputSelect ? '未指定（入力シートを使用）' : placeholderLabel;
+
+      if (hasSheets) {
+        let targetValue = '';
+        if (preferredValue && resolvedSheets.some((s) => (s.sheet_name || s.title) === preferredValue)) {
+          targetValue = preferredValue;
+        } else if (select === sourceSheetSelect && resolvedSheets[0]) {
+          targetValue = resolvedSheets[0].sheet_name || resolvedSheets[0].title || '';
+        }
+        if (targetValue) {
+          select.value = targetValue;
+        }
+      } else {
+        select.value = '';
+      }
+
+      updateCustomSelectPlaceholder(select, select.dataset.placeholder || placeholderLabel);
+      syncCustomSelectDisabled(select);
+      refreshCustomSelect(select);
+    };
+
+    build(sourceSheetSelect, previousSource);
+    build(outputSheetSelect, previousOutput);
+  }
+
+  async function handleSpreadsheetSet() {
+    if (!sheetInput || !sheetSetButton) return;
+    const url = parseSheetValue(sheetInput.value);
+    if (!url) {
+      showValidationBanner('error', 'スプレッドシートURLを入力してください。');
+      return;
+    }
+    showValidationBanner(null, '');
+    clearSheetSelections('シート一覧を取得中...');
+    const release = setButtonBusy(sheetSetButton, '取得中...');
+    try {
+      const res = await fetch('/sheets/list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spreadsheet_url: url }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data || !data.ok) {
+        const message = (data && data.message) || 'シート一覧の取得に失敗しました。';
+        showValidationBanner('error', message);
+        clearSheetSelections('再度 Set を実行してください');
+        return;
+      }
+      resolvedSpreadsheetId = data.spreadsheet_id || url;
+      populateSheetOptions(Array.isArray(data.sheets) ? data.sheets : []);
+      showValidationBanner('info', 'シート一覧を読み込みました。対象シートを選択してください。');
+    } catch (error) {
+      showValidationBanner('error', `シート一覧の取得に失敗しました: ${error instanceof Error ? error.message : error}`);
+      clearSheetSelections('再度 Set を実行してください');
+    } finally {
+      release();
+    }
+  }
 
   function getFormPayload() {
     return {
-      sheet_url: document.getElementById('sheet-url').value,
-      source_sheet_name: document.getElementById('source-sheet-name').value,
+      sheet_url: sheetInput.value,
+      source_sheet_name: sourceSheetSelect ? sourceSheetSelect.value : '',
       video_col_letter: document.getElementById('video-col-letter').value,
-      output_sheet_name: document.getElementById('output-sheet-name').value,
+      output_sheet_name: outputSheetSelect ? outputSheetSelect.value : '',
       output_col_letter: document.getElementById('output-col-letter').value,
       start_row: document.getElementById('start-row').value,
       end_row: document.getElementById('end-row').value,
@@ -237,6 +1836,7 @@
       eventSource = null;
     }
     currentProcessId = null;
+    syncActionProxies();
   }
 
   function parseSheetValue(value) {
@@ -284,12 +1884,115 @@
       li.addEventListener('click', () => {
         sheetInput.value = value;
         sheetInput.focus();
+        clearSheetSelections();
+        showValidationBanner(null, '');
       });
       historyList.appendChild(li);
     }
   }
 
   renderHistory();
+  if (sourceSheetSelect) {
+    setupCustomSelect(sourceSheetSelect);
+  }
+  if (outputSheetSelect) {
+    setupCustomSelect(outputSheetSelect);
+  }
+  clearSheetSelections();
+  if (sheetSetButton) {
+    sheetSetButton.addEventListener('click', () => {
+      void handleSpreadsheetSet();
+    });
+  }
+  if (sourceSheetSelect) {
+    sourceSheetSelect.addEventListener('change', () => {
+      refreshCustomSelect(sourceSheetSelect);
+      showValidationBanner(null, '');
+    });
+  }
+  if (outputSheetSelect) {
+    outputSheetSelect.addEventListener('change', () => {
+      refreshCustomSelect(outputSheetSelect);
+    });
+  }
+  if (sheetInput) {
+    sheetInput.addEventListener('input', () => {
+      resolvedSpreadsheetId = '';
+      clearSheetSelections();
+      showValidationBanner(null, '');
+      clearEditingState();
+    });
+  }
+
+  initActionProxies();
+  syncActionProxies();
+
+  if (queueStartButton) {
+    queueStartButton.addEventListener('click', async () => {
+      const release = setButtonBusy(queueStartButton, '起動中...');
+      try {
+        if (!latestQueueItems.length) {
+          showQueueToast('キューにジョブがありません', { state: 'error' });
+          return;
+        }
+        const runningJob = latestQueueItems.find((item) => (item.status || '').toLowerCase() === 'running');
+        if (runningJob) {
+          showQueueToast('既に実行中のジョブがあります', { state: 'info' });
+          return;
+        }
+        const targetJob =
+          latestQueueItems.find((item) => (item.status || '').toLowerCase() === 'paused') || latestQueueItems[0];
+        if (!targetJob) {
+          showQueueToast('起動可能なジョブが見つかりません', { state: 'error' });
+          return;
+        }
+        const res = await fetch(QUEUE_ENDPOINTS.update, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ process_id: targetJob.job_id, updates: { status: 'queued' } }),
+        });
+        if (!res.ok) {
+          showQueueToast('キュー起動に失敗しました', { state: 'error' });
+          return;
+        }
+        const result = await res.json().catch(() => null);
+        showQueueToast('キューを起動しました', { state: 'success' });
+        if (result && Array.isArray(result.queue)) {
+          applyQueueSnapshot(result.queue);
+        } else {
+          await refreshQueue();
+        }
+      } catch (error) {
+        console.error(error);
+        showQueueToast('キュー起動に失敗しました', { state: 'error' });
+      } finally {
+        release();
+      }
+    });
+  }
+
+  void refreshQueue();
+  queueRefreshTimer = window.setInterval(refreshQueue, 5000);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (queueRefreshTimer) {
+        clearInterval(queueRefreshTimer);
+        queueRefreshTimer = null;
+      }
+    } else {
+      void refreshQueue();
+      if (!queueRefreshTimer) {
+        queueRefreshTimer = window.setInterval(refreshQueue, 5000);
+      }
+    }
+  });
+
+  window.addEventListener('beforeunload', () => {
+    if (queueRefreshTimer) {
+      clearInterval(queueRefreshTimer);
+    }
+  });
 
   stopButton.addEventListener('click', async () => {
     if (!currentProcessId) {
@@ -297,6 +2000,7 @@
       return;
     }
     stopButton.disabled = true;
+    syncActionProxies();
     appendLog('-> 停止信号を送信します...');
     try {
       await fetch('/stop-analysis', {
@@ -325,6 +2029,7 @@
     runButton.disabled = true;
     runButton.textContent = '実行中...';
     stopButton.disabled = false;
+    syncActionProxies();
 
     try {
       const response = await loadingOverlay.run(() =>
@@ -338,6 +2043,7 @@
       if (!response.ok) {
         const errorMessage = result.error || result.detail || result.message || 'Unknown error';
         appendLog(`Error: ${errorMessage}`, true);
+        showQueueToast('実行リクエストに失敗しました', { state: 'error' });
         resetUI();
         return;
       }
@@ -347,17 +2053,9 @@
       const jobParams = { ...payload };
       addToHistory(jobSheetUrl, jobTitle, 'queued');
       appendLog(`-> Process ID: ${currentProcessId}`);
+      showQueueToast('ジョブを開始しました', { state: 'success' });
 
-      if (queueManager) {
-        queueManager.addJob({
-          process_id: currentProcessId,
-          status: result.queued_only ? 'paused' : 'queued',
-          sheet_title: jobTitle,
-          sheet_url: jobSheetUrl,
-          params: jobParams,
-          job_type: result.job_type,
-        });
-      }
+      await refreshQueue();
 
       eventSource = new EventSource(`/stream-logs?process_id=${currentProcessId}`);
       eventSource.onmessage = (evt) => appendLog(evt.data);
@@ -366,9 +2064,7 @@
           const queuePayload = JSON.parse(evt.data);
           const status = queuePayload.status || 'queued';
           appendLog(`-> ジョブ ${queuePayload.process_id} の状態: ${status}`);
-          if (queueManager) {
-            queueManager.handleQueueEvent(queuePayload);
-          }
+          void refreshQueue();
           if (queuePayload.process_id === currentProcessId) {
             addToHistory(queuePayload.sheet_url || jobSheetUrl, queuePayload.sheet_title || jobTitle, status);
             renderHistory();
@@ -388,14 +2084,13 @@
       eventSource.addEventListener('complete', (evt) => {
         appendLog(`-> ${evt.data}`);
         addToHistory(jobSheetUrl, jobTitle, 'completed');
-        if (queueManager) {
-          queueManager.handleCompletion(currentProcessId);
-        }
+        void refreshQueue();
         renderHistory();
         resetUI();
       });
     } catch (error) {
       appendLog(`Network or server error: ${error}`, true);
+      showQueueToast('実行リクエストに失敗しました', { state: 'error' });
       resetUI();
     }
   });
@@ -412,6 +2107,7 @@
 
       try {
         queueAddButton.disabled = true;
+        syncActionProxies();
         appendLog('-> 設定内容をキューに追加します...');
         const response = await fetch('/run-analysis', {
           method: 'POST',
@@ -422,6 +2118,7 @@
         if (!response.ok) {
           const errorMessage = result.error || result.detail || result.message || 'Unknown error';
           appendLog(`Error: ${errorMessage}`, true);
+          showQueueToast('キュー追加に失敗しました', { state: 'error' });
           return;
         }
 
@@ -432,21 +2129,15 @@
         addToHistory(jobSheetUrl, jobTitle, initialStatus);
         renderHistory();
         appendLog(`-> Process ID: ${processId} (キューに追加済み)`);
+        showQueueToast('キューに追加しました', { state: 'success' });
 
-        if (queueManager) {
-          queueManager.addJob({
-            process_id: processId,
-            status: initialStatus,
-            sheet_title: jobTitle,
-            sheet_url: jobSheetUrl,
-            params: { ...payload },
-            job_type: result.job_type,
-          });
-        }
+        await refreshQueue();
       } catch (error) {
         appendLog(`Network or server error: ${error}`, true);
+        showQueueToast('キュー追加に失敗しました', { state: 'error' });
       } finally {
         queueAddButton.disabled = false;
+        syncActionProxies();
       }
     });
   }

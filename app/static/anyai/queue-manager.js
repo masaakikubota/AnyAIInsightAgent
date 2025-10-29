@@ -1,6 +1,13 @@
 ;(function (window) {
   function noop() {}
 
+  const QUEUE_ENDPOINTS = {
+    state: '/queue-state',
+    reorder: '/queue-reorder',
+    remove: '/queue-remove',
+    update: '/queue-update',
+  };
+
   function toElement(target) {
     if (!target) return null;
     return typeof target === 'string' ? document.querySelector(target) : target;
@@ -46,6 +53,7 @@
     }
 
     const log = (options && options.log) || noop;
+    const jobType = (options && options.jobType) || null;
     const listEl = root.querySelector('[data-queue-list]');
     const emptyEl = root.querySelector('[data-queue-empty]');
     const detailsEl = root.querySelector('[data-queue-details]');
@@ -72,7 +80,16 @@
     let selectedId = null;
 
     function setItems(next) {
-      items = next.map(normaliseItem).filter(Boolean);
+      const previous = items;
+      items = next
+        .map((raw) => {
+          const fallbackType =
+            raw?.job_type || previous.find((itm) => itm.process_id === raw?.process_id)?.job_type || jobType || raw?.mode;
+          const normalised = normaliseItem({ ...raw, job_type: fallbackType });
+          return normalised;
+        })
+        .filter(Boolean)
+        .filter((item) => !jobType || !item.job_type || item.job_type === jobType);
       renderList();
       if (selectedId) {
         const match = items.find((i) => i.process_id === selectedId);
@@ -86,8 +103,11 @@
     }
 
     function upsertItem(item) {
-      const normalised = normaliseItem(item);
+      const existing = item && items.find((q) => q.process_id === item.process_id);
+      const fallbackType = item?.job_type || existing?.job_type || jobType || item?.mode;
+      const normalised = normaliseItem({ ...item, job_type: fallbackType });
       if (!normalised) return;
+      if (jobType && normalised.job_type && normalised.job_type !== jobType) return;
       const idx = items.findIndex((q) => q.process_id === normalised.process_id);
       if (idx === -1) {
         items.push(normalised);
@@ -175,24 +195,13 @@
     }
 
     function refresh() {
-      return fetch('/queue')
+      return fetch('/queue-state')
         .then((res) => {
           if (!res.ok) throw new Error(res.statusText || 'Failed to load queue state');
           return res.json();
         })
         .then((data) => {
-          const items = Array.isArray(data?.items)
-            ? data.items.map((item, index) => ({
-                process_id: item.job_id,
-                status: item.status,
-                sheet_title: item.sheet_name || '',
-                sheet_url: item.sheet_url || '',
-                params: item.params || {},
-                order: index,
-                enqueued_at: item.enqueued_at,
-                job_type: item.mode || item.job_type || '',
-              }))
-            : [];
+          const items = Array.isArray(data) ? data : [];
           setItems(items);
         })
         .catch((error) => {
@@ -202,6 +211,7 @@
 
     function handleQueueEvent(payload) {
       if (!payload || !payload.process_id) return;
+      if (jobType && payload.job_type && payload.job_type !== jobType) return;
       upsertItem(payload);
     }
 
@@ -214,13 +224,19 @@
         sheet_url: job.sheet_url,
         params: job.params,
         order: job.order,
+        job_type: job.job_type || jobType || job.mode,
       });
       selectById(job.process_id);
     }
 
     function handleCompletion(processId) {
       if (!processId) return;
-      handleQueueEvent({ process_id: processId, status: 'completed' });
+      const existing = items.find((item) => item.process_id === processId);
+      handleQueueEvent({
+        process_id: processId,
+        status: 'completed',
+        job_type: existing?.job_type || jobType || existing?.mode,
+      });
     }
 
     function move(direction) {
@@ -230,35 +246,46 @@
       if (currentIdx === -1) return;
       const delta = direction === 'up' ? -1 : 1;
       let newIndex = currentIdx + delta;
-      newIndex = Math.max(0, Math.min(newIndex, ordered.length - 1));
-      const fd = new FormData();
-      fd.set('position', String(newIndex));
-      fetch(`/queue/${encodeURIComponent(selectedId)}/move`, {
+      if (newIndex < 0 || newIndex >= ordered.length) return;
+      fetch(QUEUE_ENDPOINTS.reorder, {
         method: 'POST',
-        body: fd,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ process_id: selectedId, direction }),
       })
         .then((res) => {
           if (!res.ok) throw new Error(res.statusText || 'Failed to reorder');
           return res.json();
         })
-        .then(() => {
-          refresh().then(() => selectById(selectedId));
+        .then((payload) => {
+          if (payload && Array.isArray(payload.queue)) {
+            setItems(payload.queue);
+            selectById(selectedId);
+          } else {
+            refresh().then(() => selectById(selectedId));
+          }
         })
         .catch((error) => log(`-> 並び替えに失敗: ${error}`));
     }
 
     function removeSelected() {
       if (!selectedId) return;
-      fetch(`/queue/${encodeURIComponent(selectedId)}`, {
-        method: 'DELETE',
+      fetch(QUEUE_ENDPOINTS.remove, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ process_id: selectedId }),
       })
         .then((res) => {
           if (!res.ok) throw new Error(res.statusText || 'Failed to remove queue item');
+          return res.json();
         })
-        .then(() => {
+        .then((payload) => {
           selectedId = null;
           renderDetails(null);
-          refresh();
+          if (payload && Array.isArray(payload.queue)) {
+            setItems(payload.queue);
+          } else {
+            refresh();
+          }
         })
         .catch((error) => log(`-> キューの削除に失敗: ${error}`));
     }

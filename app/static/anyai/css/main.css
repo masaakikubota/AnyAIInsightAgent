@@ -836,7 +836,29 @@ body {
   display: flex;
   align-items: baseline;
   gap: var(--anyai-space-3, 12px);
-  margin-bottom: var(--anyai-space-3, 12px);
+  margin-bottom: 0;
+}
+
+.anyai-form-group > header {
+  margin-bottom: 0;
+}
+
+.anyai-support-card > h1,
+.anyai-support-card > h2,
+.anyai-support-card > header,
+.anyai-support-card .support-header {
+  margin-bottom: 0;
+}
+
+section > header,
+section > h1,
+section > h2,
+section > h3,
+section > header > h1,
+section > header > h2,
+section > header > h3 {
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .anyai-form-fields {
@@ -1283,6 +1305,7 @@ body {
 
 /* anyai.utilities.css — 便利クラス（必要に応じて追加） */
 .mt-0{margin-top:0}.mb-0{margin-bottom:0}
+h2.mt-0{margin:0}
 .mt-3{margin-top:var(--anyai-space-3)}.mb-3{margin-bottom:var(--anyai-space-3)}
 .mt-5{margin-top:var(--anyai-space-5)}.mb-5{margin-bottom:var(--anyai-space-5)}
 .p-4{padding:var(--anyai-space-4)}.p-5{padding:var(--anyai-space-5)}
@@ -1294,3 +1317,4 @@ body {
 .max-lg{max-width:var(--anyai-content-lg);margin-inline:auto}
 .text-subtle{color:var(--anyai-text-subtle)}
 .text-danger{color:var(--anyai-danger)}.text-success{color:var(--anyai-success)}
+.list-disc{list-style:disc;margin:0}

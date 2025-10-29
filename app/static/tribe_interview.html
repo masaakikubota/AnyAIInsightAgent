@@ -31,16 +31,74 @@
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       }
 
-      .mode-radio-group {
-        display: flex;
-        gap: var(--anyai-space-3);
-        flex-wrap: nowrap;
-      }
-      .mode-radio-group label {
+      .mode-options {
         display: inline-flex;
         align-items: center;
         gap: var(--anyai-space-2);
+        flex-wrap: wrap;
+      }
+      .mode-pill {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--anyai-space-2);
+        padding: 0.45rem 1rem;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
+        background: linear-gradient(135deg,
+          color-mix(in srgb, #ffffff, var(--anyai-border) 4%),
+          color-mix(in srgb, #ffffff, var(--anyai-border) 12%)
+        );
+        color: color-mix(in srgb, var(--anyai-text), transparent 25%);
         font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+          box-shadow 0.2s ease, transform 0.15s ease;
+        user-select: none;
+      }
+      .mode-pill input[type="radio"] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        border: 0;
+        clip: rect(0, 0, 0, 0);
+        clip-path: inset(100%);
+        overflow: hidden;
+        white-space: nowrap;
+      }
+      .mode-pill span {
+        font-size: var(--anyai-fs-2);
+        line-height: 1;
+      }
+      .mode-pill:not([aria-checked="true"]) {
+        border-color: color-mix(in srgb, var(--anyai-border), transparent 30%);
+      }
+      .mode-pill:not([aria-checked="true"]):hover {
+        border-color: color-mix(in srgb, var(--anyai-border), var(--anyai-primary, #2955ff) 28%);
+        color: color-mix(in srgb, var(--anyai-text), transparent 10%);
+        background: linear-gradient(135deg,
+          color-mix(in srgb, #ffffff, var(--anyai-primary, #2955ff) 12%),
+          color-mix(in srgb, #ffffff, var(--anyai-primary, #2955ff) 20%)
+        );
+      }
+      .mode-pill:focus-within {
+        outline: none;
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 75%);
+      }
+      .mode-pill[aria-checked="true"] {
+        background: linear-gradient(135deg,
+          color-mix(in srgb, var(--anyai-primary, #2955ff), white 12%),
+          color-mix(in srgb, var(--anyai-primary, #2955ff), black 6%)
+        );
+        border-color: color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 12%);
+        color: #ffffff;
+        box-shadow:
+          0 0 0 3px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 80%),
+          0 12px 28px rgba(41, 85, 255, 0.25);
+        transform: translateY(-1px);
       }
       .muted {
         color: var(--anyai-text-subtle);
@@ -306,11 +364,33 @@
         .anyai-form-actions {
           justify-content: center;
         }
-        .anyai-form-actions .btn {
-          width: 100%;
-        }
+      .anyai-form-actions .btn {
+        width: 100%;
       }
-    </style>
+    }
+
+    details.section-toggle:not(.section-toggle-left)[open] .caret { transform: rotate(180deg); }
+
+    details.section-toggle-left > summary {
+      gap: var(--anyai-space-3);
+    }
+
+    .section-toggle-left .caret {
+      margin: 0;
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 8px solid currentColor;
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
+      transition: transform 0.2s ease;
+    }
+
+    .section-toggle-left[open] .caret {
+      transform: rotate(0deg);
+    }
+  </style>
   </head>
   <body>
     <div class="anyai-layout">
@@ -338,10 +418,16 @@
                   </div>
                 </div>
                 <div class="field">
-                  <span class="sr-only" id="mode-label">モード選択</span>
-                  <div class="mode-radio-group" role="radiogroup" aria-labelledby="mode-label">
-                    <label><input type="radio" name="mode" value="product" checked /> 製品モード</label>
-                    <label><input type="radio" name="mode" value="communication" /> コミュニケーションモード</label>
+                  <label id="mode-label">モード設定</label>
+                  <div class="mode-options" role="radiogroup" aria-labelledby="mode-label">
+                    <label class="mode-pill" role="radio" aria-checked="true" tabindex="0">
+                      <input type="radio" name="mode" value="product" checked />
+                      <span>製品モード</span>
+                    </label>
+                    <label class="mode-pill" role="radio" aria-checked="false" tabindex="-1">
+                      <input type="radio" name="mode" value="communication" />
+                      <span>コミュニケーションモード</span>
+                    </label>
                   </div>
                   <p class="field-hint">製品モードは商品評価、コミュニケーションモードはタグライン評価にフォーカスします。</p>
                 </div>
@@ -478,6 +564,67 @@
           hide: () => {},
           requireKeys: async () => true,
         };
+
+        function setupModePills() {
+          document.querySelectorAll('.mode-options').forEach((group) => {
+            const pills = Array.from(group.querySelectorAll('.mode-pill'));
+            if (!pills.length) return;
+            const radios = pills.map((pill) => pill.querySelector('input[type="radio"]'));
+
+            function sync() {
+              pills.forEach((pill, index) => {
+                const radio = radios[index];
+                const checked = radio.checked;
+                pill.setAttribute('aria-checked', checked ? 'true' : 'false');
+                pill.tabIndex = checked ? 0 : -1;
+              });
+            }
+
+            function activate(index, focus = true) {
+              const radio = radios[index];
+              if (radio.disabled) return;
+              if (!radio.checked) {
+                radio.checked = true;
+                radio.dispatchEvent(new Event('change', { bubbles: true }));
+              } else {
+                sync();
+              }
+              if (focus) {
+                pills[index].focus();
+              }
+            }
+
+            pills.forEach((pill, index) => {
+              const radio = radios[index];
+              pill.addEventListener('click', (event) => {
+                event.preventDefault();
+                activate(index, false);
+                sync();
+              });
+
+              pill.addEventListener('keydown', (event) => {
+                let direction = 0;
+                if (event.key === 'ArrowRight' || event.key === 'ArrowDown') direction = 1;
+                if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') direction = -1;
+                if (direction === 0) return;
+                event.preventDefault();
+                const total = pills.length;
+                let next = index;
+                do {
+                  next = (next + direction + total) % total;
+                } while (radios[next].disabled && next !== index);
+                activate(next);
+                sync();
+              });
+
+              radio.addEventListener('change', sync);
+            });
+
+            sync();
+          });
+        }
+
+        setupModePills();
 
         const form = document.getElementById('tribe-form');
         const spreadsheetUrlInput = document.getElementById('spreadsheet_url');
