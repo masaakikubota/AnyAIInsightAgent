@@ -21,6 +21,82 @@
   #history-list li { cursor: pointer; border: 1px solid var(--anyai-border, #dfe3f0); border-radius: var(--anyai-radius-sm, 12px); padding: var(--anyai-space-03, 12px) var(--anyai-space-04, 16px); transition: background .15s ease; }
   #history-list li:hover { background: var(--anyai-surface-alt, #f4f6ff); }
   .support-header { display:flex; justify-content:space-between; align-items:center; gap:var(--anyai-space-03, 12px); }
+  .mode-options {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--anyai-space-2);
+    flex-wrap: wrap;
+  }
+
+  .mode-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--anyai-space-2);
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--anyai-border), transparent 20%);
+    background: linear-gradient(135deg,
+      color-mix(in srgb, #ffffff, var(--anyai-border) 4%),
+      color-mix(in srgb, #ffffff, var(--anyai-border) 12%)
+    );
+    color: color-mix(in srgb, var(--anyai-text), transparent 25%);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+      box-shadow 0.2s ease, transform 0.15s ease;
+    user-select: none;
+  }
+
+  .mode-pill input[type="radio"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    border: 0;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(100%);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .mode-pill span {
+    font-size: var(--anyai-fs-2);
+    line-height: 1;
+  }
+
+  .mode-pill:not([aria-checked="true"]) {
+    border-color: color-mix(in srgb, var(--anyai-border), transparent 30%);
+  }
+
+  .mode-pill:not([aria-checked="true"]):hover {
+    border-color: color-mix(in srgb, var(--anyai-border), var(--anyai-primary, #2955ff) 28%);
+    color: color-mix(in srgb, var(--anyai-text), transparent 10%);
+    background: linear-gradient(135deg,
+      color-mix(in srgb, #ffffff, var(--anyai-primary, #2955ff) 12%),
+      color-mix(in srgb, #ffffff, var(--anyai-primary, #2955ff) 20%)
+    );
+  }
+
+  .mode-pill:focus-within {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 75%);
+  }
+
+  .mode-pill[aria-checked="true"] {
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--anyai-primary, #2955ff), white 12%),
+      color-mix(in srgb, var(--anyai-primary, #2955ff), black 6%)
+    );
+    border-color: color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 12%);
+    color: #ffffff;
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--anyai-primary, #2955ff), transparent 80%),
+      0 12px 28px rgba(41, 85, 255, 0.25);
+    transform: translateY(-1px);
+  }
   .queue-status {
     display: flex;
     align-items: center;
@@ -483,7 +559,7 @@
           <form id="runner-form" class="anyai-form">
             <section class="anyai-form-section" aria-labelledby="sheet-section-heading">
               <header>
-                <h2 id="sheet-section-heading" class="mt-0">入力シート</h2>
+                <h2 id="sheet-section-heading" class="mt-0">入力設定</h2>
                 <p class="field-hint">スプレッドシートを読み込み、動画データと出力先を選択してください。</p>
               </header>
               <div class="field">
@@ -548,10 +624,16 @@
               </header>
               <div class="grid-2">
                 <div class="field">
-                  <label>Gemini Model</label>
-                  <div class="radio-group">
-                    <label class="radio"><input type="radio" name="model-name" value="gemini-flash-latest" checked><span>Gemini Flash (latest)</span></label>
-                    <label class="radio"><input type="radio" name="model-name" value="gemini-pro-latest"><span>Gemini Pro (latest)</span></label>
+                  <label id="analysis-model-label">Gemini Model</label>
+                  <div class="mode-options" role="radiogroup" aria-labelledby="analysis-model-label">
+                    <label class="mode-pill" role="radio" aria-checked="true" tabindex="0">
+                      <input type="radio" name="model-name" value="gemini-flash-latest" checked>
+                      <span>Gemini Flash</span>
+                    </label>
+                    <label class="mode-pill" role="radio" aria-checked="false" tabindex="-1">
+                      <input type="radio" name="model-name" value="gemini-pro-latest">
+                      <span>Gemini Pro</span>
+                    </label>
                   </div>
                 </div>
                 <div class="field">
@@ -610,13 +692,74 @@
 </div>
 
 <script>
-  const loadingOverlay = window.AnyAILoading || {
-    run: async (task) => task(),
-    wrap: async (promise) => promise,
-    show: () => {},
-    hide: () => {},
-    requireKeys: async () => true,
-  };
+const loadingOverlay = window.AnyAILoading || {
+  run: async (task) => task(),
+  wrap: async (promise) => promise,
+  show: () => {},
+  hide: () => {},
+  requireKeys: async () => true,
+};
+
+function setupModePills() {
+  document.querySelectorAll('.mode-options').forEach((group) => {
+    const pills = Array.from(group.querySelectorAll('.mode-pill'));
+    if (!pills.length) return;
+    const radios = pills.map((pill) => pill.querySelector('input[type="radio"]'));
+
+    function sync() {
+      pills.forEach((pill, index) => {
+        const radio = radios[index];
+        const checked = radio.checked;
+        pill.setAttribute('aria-checked', checked ? 'true' : 'false');
+        pill.tabIndex = checked ? 0 : -1;
+      });
+    }
+
+    function activate(index, focus = true) {
+      const radio = radios[index];
+      if (radio.disabled) return;
+      if (!radio.checked) {
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        sync();
+      }
+      if (focus) {
+        pills[index].focus();
+      }
+    }
+
+    pills.forEach((pill, index) => {
+      const radio = radios[index];
+      pill.addEventListener('click', (event) => {
+        event.preventDefault();
+        activate(index, false);
+        sync();
+      });
+
+      pill.addEventListener('keydown', (event) => {
+        let direction = 0;
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') direction = 1;
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') direction = -1;
+        if (direction === 0) return;
+        event.preventDefault();
+        const total = pills.length;
+        let next = index;
+        do {
+          next = (next + direction + total) % total;
+        } while (radios[next].disabled && next !== index);
+        activate(next);
+        sync();
+      });
+
+      radio.addEventListener('change', sync);
+    });
+
+    sync();
+  });
+}
+
+setupModePills();
 
   const form = document.getElementById('runner-form');
   const logContainer = document.getElementById('log-container');

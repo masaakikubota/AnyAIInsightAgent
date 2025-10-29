@@ -14,31 +14,6 @@
   <script defer src="/static/anyai/sidebar.js"></script>
   <script defer src="/static/anyai/core/anyai.js"></script>
   <style>
-    .anyai-app {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: var(--anyai-space-6);
-    }
-
-    .anyai-app > * {
-      width: 100%;
-      box-sizing: border-box;
-    }
-
-
-    .settings-card {
-      display: flex;
-      flex-direction: column;
-      gap: var(--anyai-space-5);
-      background: var(--anyai-panel);
-      border-radius: var(--anyai-radius-3);
-      border: 1px solid var(--anyai-border);
-      padding: var(--anyai-space-6);
-      width: 100%;
-      box-sizing: border-box;
-    }
-
     .settings-grid {
       display: grid;
       gap: var(--anyai-space-4);
@@ -123,19 +98,15 @@
       border-color: var(--anyai-border);
     }
 
-    .masked-key {
+    .input-key {
       font-family: var(--anyai-font-mono, 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace);
-      font-size: 0.85rem;
-      color: var(--anyai-text-subtle);
+      white-space: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
     }
 
-    .masked-key.is-empty {
-      font-style: italic;
-    }
-
-    .settings-card > * {
-      width: 100%;
-      box-sizing: border-box;
+    .input-key::-webkit-scrollbar {
+      height: 6px;
     }
 
     .row {
@@ -155,70 +126,73 @@
     <aside class="anyai-sidebar" data-active-tool="settings-api"></aside>
     <main class="anyai-content">
       <div class="anyai-app">
-        <header class="anyai-app-header">
-          <div>
-            <h1 class="anyai-title">APIキー設定</h1>
-            <p class="anyai-subtitle">Comment Enhancer や動画スイート機能で利用する OpenAI / Gemini の APIキーを管理します。</p>
-          </div>
-        </header>
+        <section class="anyai-app-primary" aria-labelledby="settings-heading">
+          <h1 id="settings-heading" class="mt-0 page-title-with-icon">
+            <span class="page-title-icon" aria-hidden="true"><i data-lucide="key"></i></span>
+            <span>APIキー設定</span>
+          </h1>
+          <p class="field-hint">Comment Enhancer や動画スイート機能で利用する OpenAI / Gemini の APIキーを管理します。</p>
 
-        <section class="settings-card" aria-labelledby="section-keys">
-          <div>
-            <h2 id="section-keys" class="mt-0">キーの状態</h2>
-            <p class="text-subtle">キーはサーバープロセスの環境変数として登録され、任意で <code>.env</code> に保存できます。</p>
-          </div>
+          <form id="keys-form" class="anyai-form" autocomplete="off">
+            <section class="anyai-form-section" aria-labelledby="section-keys">
+              <header>
+                <h2 id="section-keys" class="mt-0">キーの状態</h2>
+                <p class="field-hint">キーはサーバープロセスの環境変数として登録され、任意で <code>.env</code> に保存できます。</p>
+              </header>
 
-          <div class="settings-grid" role="list">
-            <div class="field-block" role="listitem">
-              <div class="input-row">
-                <label for="openai-key" class="text-strong">OpenAI API Key</label>
-                <span class="status-badge" data-status="openai">-</span>
-              </div>
-              <div class="input-row">
-                <input id="openai-key" name="openai-key" type="password" autocomplete="off" placeholder="sk-..." class="input">
-                <button type="button" class="btn btn-subtle" data-toggle-password="openai-key">表示</button>
-              </div>
-              <span class="masked-key" data-mask="openai">未設定</span>
-              <p class="field-hint">例: <code>gpt-4.1</code> 系列を利用するには有効な OpenAI APIキーが必要です。</p>
-            </div>
+              <div class="settings-grid" role="list">
+                <div class="field-block" role="listitem">
+                  <div class="input-row">
+                    <label for="openai-key" class="text-strong">OpenAI API Key</label>
+                    <span class="status-badge" data-status="openai">-</span>
+                  </div>
+                  <div class="input-row">
+                    <input id="openai-key" name="openai-key" type="password" autocomplete="off" placeholder="sk-..." class="input input-key">
+                    <button type="button" class="btn btn-subtle" data-toggle-password="openai-key">表示</button>
+                  </div>
+                  <p class="field-hint">例: <code>gpt-4.1</code> 系列を利用するには有効な OpenAI APIキーが必要です。</p>
+                </div>
 
-            <div class="field-block" role="listitem">
-              <div class="input-row">
-                <label for="gemini-key" class="text-strong">Gemini API Key</label>
-                <span class="status-badge" data-status="gemini">-</span>
+                <div class="field-block" role="listitem">
+                  <div class="input-row">
+                    <label for="gemini-key" class="text-strong">Gemini API Key</label>
+                    <span class="status-badge" data-status="gemini">-</span>
+                  </div>
+                  <div class="input-row">
+                    <input id="gemini-key" name="gemini-key" type="password" autocomplete="off" placeholder="AIza..." class="input input-key">
+                    <button type="button" class="btn btn-subtle" data-toggle-password="gemini-key">表示</button>
+                  </div>
+                  <p class="field-hint">動画分析・レビュー機能では Gemini Flash / Pro モデルが使用されます。</p>
+                </div>
               </div>
-              <div class="input-row">
-                <input id="gemini-key" name="gemini-key" type="password" autocomplete="off" placeholder="AIza..." class="input">
-                <button type="button" class="btn btn-subtle" data-toggle-password="gemini-key">表示</button>
-              </div>
-              <span class="masked-key" data-mask="gemini">未設定</span>
-              <p class="field-hint">動画分析・レビュー機能では Gemini Flash / Pro モデルが使用されます。</p>
-            </div>
-          </div>
 
-          <form id="keys-form" class="column gap-4">
-            <label class="checkbox">
-              <input type="checkbox" id="persist-keys">
-              <span>保存して再起動後も利用する（<code>.env</code> に書き込み）</span>
-            </label>
-            <div class="message" id="status-message" data-state="info">
-              キーを入力して「保存」を押すと即座に反映されます。
-            </div>
-            <div class="row gap-3">
-              <button type="submit" class="btn btn-primary">保存</button>
-              <button type="button" class="btn btn-outline" id="refresh-status">再読み込み</button>
-            </div>
+              <label class="checkbox">
+                <input type="checkbox" id="persist-keys">
+                <span>保存して再起動後も利用する（<code>.env</code> に書き込み）</span>
+              </label>
+              <div class="message" id="status-message" data-state="info">
+                キーを入力して「保存」を押すと即座に反映されます。
+              </div>
+              <div class="row gap-3">
+                <button type="submit" class="btn btn-primary">保存</button>
+                <button type="button" class="btn btn-outline" id="refresh-status">再読み込み</button>
+              </div>
+            </section>
           </form>
         </section>
 
-        <section class="settings-card">
-          <h2 class="mt-0">ヘルプ</h2>
-          <ul class="list-disc">
-            <li>OpenAIキーが未設定の場合、Comment Enhancer は実行できません。</li>
-            <li>キーを更新した後は自動的に全ワーカープロセスへ反映されます。</li>
-            <li>誤ったキーで保存した場合は空欄のまま再度保存し、正しいキーを入力してください。</li>
-          </ul>
-        </section>
+        <aside class="anyai-app-support">
+          <section class="anyai-support-card">
+            <div class="support-header">
+              <h2 class="mt-0">ヘルプ</h2>
+            </div>
+            <ul class="list-disc">
+              <li>OpenAIキーが未設定の場合、Comment Enhancer は実行できません。</li>
+              <li>キーを更新した後は自動的に全ワーカープロセスへ反映されます。</li>
+              <li>誤ったキーで保存した場合は空欄のまま再度保存し、正しいキーを入力してください。</li>
+            </ul>
+          </section>
+        </aside>
       </div>
     </main>
   </div>
@@ -228,10 +202,6 @@
       openai: document.querySelector('[data-status="openai"]'),
       gemini: document.querySelector('[data-status="gemini"]'),
     };
-    const maskedLabels = {
-      openai: document.querySelector('[data-mask="openai"]'),
-      gemini: document.querySelector('[data-mask="gemini"]'),
-    };
     const messageEl = document.getElementById('status-message');
     const formEl = document.getElementById('keys-form');
     const persistEl = document.getElementById('persist-keys');
@@ -240,6 +210,17 @@
       openai: document.getElementById('openai-key'),
       gemini: document.getElementById('gemini-key'),
     };
+    const toggleButtons = {};
+
+    Object.values(inputs).forEach((input) => {
+      if (!input) return;
+      input.dataset.visibility = 'hidden';
+      input.dataset.hasMaskedOnly = 'false';
+      input.dataset.masked = '';
+      input.addEventListener('input', () => {
+        input.dataset.hasMaskedOnly = 'false';
+      });
+    });
 
     const STATUS_TEXT = {
       ready: '設定済み',
@@ -259,11 +240,38 @@
       badge.classList.toggle('is-missing', !isReady);
     }
 
-    function setMaskedValue(kind, masked) {
-      const el = maskedLabels[kind];
-      if (!el) return;
-      el.textContent = masked || '未設定';
-      el.classList.toggle('is-empty', !masked);
+    function applyKeyField(kind, info) {
+      const input = inputs[kind];
+      if (!input) return;
+      const button = toggleButtons[input.id];
+      const masked = info.masked || '';
+      const shouldStayVisible = input.dataset.visibility === 'visible' && Boolean(masked);
+
+      input.dataset.masked = masked;
+      if (masked) {
+        input.dataset.hasMaskedOnly = 'true';
+      } else {
+        input.dataset.hasMaskedOnly = 'false';
+      }
+
+      if (shouldStayVisible) {
+        input.type = 'text';
+        input.value = masked;
+        input.dataset.visibility = 'visible';
+        if (button) button.textContent = '隠す';
+      } else {
+        input.dataset.visibility = 'hidden';
+        input.type = 'password';
+        input.value = masked || '';
+        if (button) button.textContent = '表示';
+      }
+
+      if (!masked) {
+        input.value = '';
+        if (button) button.textContent = '表示';
+      }
+
+      input.scrollLeft = 0;
     }
 
     function parseKeyInfo(info) {
@@ -290,9 +298,9 @@
         const openaiInfo = parseKeyInfo(keys.openai);
         const geminiInfo = parseKeyInfo(keys.gemini);
         setStatusBadge('openai', openaiInfo.ready);
-        setMaskedValue('openai', openaiInfo.masked);
+        applyKeyField('openai', openaiInfo);
         setStatusBadge('gemini', geminiInfo.ready);
-        setMaskedValue('gemini', geminiInfo.masked);
+        applyKeyField('gemini', geminiInfo);
         setMessage('最新のキー状態を取得しました。', 'info');
       } catch (error) {
         console.error(error);
@@ -334,7 +342,21 @@
         }
 
         inputs.openai.value = '';
+        inputs.openai.dataset.masked = '';
+        inputs.openai.dataset.hasMaskedOnly = 'false';
+        inputs.openai.dataset.visibility = 'hidden';
+        if (toggleButtons[inputs.openai.id]) {
+          toggleButtons[inputs.openai.id].textContent = '表示';
+        }
+
         inputs.gemini.value = '';
+        inputs.gemini.dataset.masked = '';
+        inputs.gemini.dataset.hasMaskedOnly = 'false';
+        inputs.gemini.dataset.visibility = 'hidden';
+        if (toggleButtons[inputs.gemini.id]) {
+          toggleButtons[inputs.gemini.id].textContent = '表示';
+        }
+
         persistEl.checked = false;
 
         setMessage('APIキーを保存しました。すぐに反映されます。', 'success');
@@ -350,13 +372,33 @@
     });
 
     document.querySelectorAll('[data-toggle-password]').forEach((button) => {
+      const targetId = button.dataset.togglePassword;
+      if (targetId) {
+        toggleButtons[targetId] = button;
+      }
       button.addEventListener('click', () => {
-        const targetId = button.dataset.togglePassword;
         const input = document.getElementById(targetId);
         if (!input) return;
-        const isHidden = input.type === 'password';
-        input.type = isHidden ? 'text' : 'password';
-        button.textContent = isHidden ? '隠す' : '表示';
+        const isCurrentlyVisible = input.dataset.visibility === 'visible';
+        if (isCurrentlyVisible) {
+          input.type = 'password';
+          input.dataset.visibility = 'hidden';
+          if (input.dataset.hasMaskedOnly === 'true') {
+            input.value = input.dataset.masked || '';
+          }
+          button.textContent = '表示';
+          input.scrollLeft = 0;
+        } else {
+          input.type = 'text';
+          input.dataset.visibility = 'visible';
+          if (input.dataset.hasMaskedOnly === 'true') {
+            input.value = input.dataset.masked || '';
+          }
+          button.textContent = '隠す';
+          requestAnimationFrame(() => {
+            input.scrollLeft = input.scrollWidth;
+          });
+        }
       });
     });
 

@@ -139,6 +139,46 @@ Unless otherwise noted, core styles live in `/static/anyai/css/main.css` and the
 - **Grid Utilities:** `.grid-2`, `.grid-3` patterns appear in `main.css` and handle responsive column layouts.
 - **Checkbox Rows:** `.checkbox-grid.two-col` (see `app/static/dashboard.html:210`).
 
+### 2.8 Optional Section Toggle (Left Arrow Variant)
+- **Purpose:** For non-required/optional blocks where the caret should appear before the title instead of on the right.
+- **Markup:**
+  ```html
+  <details class="section-toggle section-toggle-left">
+    <summary>
+      <span class="caret" aria-hidden="true"></span>
+      <span>列レンジ・バッチ設定 (任意)</span>
+    </summary>
+    <!-- optional content -->
+  </details>
+  ```
+- **CSS:** Add alongside existing section-toggle rules (see `app/static/video-comment-review.html:204`).
+  ```css
+  details.section-toggle:not(.section-toggle-left)[open] .caret {
+    transform: rotate(180deg);
+  }
+
+  details.section-toggle-left > summary {
+    gap: var(--anyai-space-3);
+  }
+
+  .section-toggle-left .caret {
+    margin: 0;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid currentColor;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+    transition: transform 0.2s ease;
+  }
+
+  .section-toggle-left[open] .caret {
+    transform: rotate(0deg);
+  }
+  ```
+- **References:** Implemented in `app/static/video-comment-review.html` for the “列レンジ・バッチ設定” optional section.
+
 ---
 
 ## 3. Job Queue System
@@ -228,7 +268,7 @@ Unless otherwise noted, core styles live in `/static/anyai/css/main.css` and the
 - **Loading State:** `setButtonBusy(button, label)` helper (see index.html) temporarily sets `aria-busy`, disables the button, and locks width.
 - **Proxy Buttons:** Any button in the floating `anyai-action-bar` requires `data-proxy-for="target-button-id"`. JS will manage disabled/busy states automatically.
 
----
+
 
 ## 6. Additional Combos
 
