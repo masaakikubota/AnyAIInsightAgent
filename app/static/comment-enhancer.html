@@ -828,6 +828,13 @@ const scoreSheetGidInput = document.getElementById('score_sheet_gid');
     const queueStatus = document.getElementById('queue-status');
     const queueList = document.getElementById('queue-list');
     const queueStartButton = document.getElementById('btn-queue-start');
+    const QUEUE_JOB_TYPE = 'comment_enhancer';
+    const QUEUE_ENDPOINTS = {
+      state: '/queue-state',
+      reorder: '/queue-reorder',
+      remove: '/queue-remove',
+      update: '/queue-update',
+    };
     const refreshQueueButton = document.getElementById('btn-refresh-queue');
     const modelSelect = document.getElementById('model-select');
     const fallbackSelect = document.getElementById('fallback-model');
@@ -885,6 +892,31 @@ function showQueueToast(message, options = {}) {
       queueToast.addEventListener('click', () => {
         hideQueueToast();
       });
+    }
+
+    function normaliseQueueItems(snapshot) {
+      const list = Array.isArray(snapshot) ? snapshot : [];
+      return list
+        .filter((item) => item && item.process_id && (!item.job_type || item.job_type === QUEUE_JOB_TYPE))
+        .map((item) => ({
+          job_id: item.process_id,
+          process_id: item.process_id,
+          status: item.status || 'queued',
+          sheet_name: item.sheet_title || '',
+          sheet_title: item.sheet_title || '',
+          sheet_url: item.sheet_url || '',
+          params: item.params || {},
+          job_type: item.job_type || '',
+          mode: item.job_type || '',
+          order: typeof item.order === 'number' ? item.order : null,
+          enqueued_at: item.enqueued_at ?? null,
+        }));
+    }
+
+    function applyQueueSnapshot(snapshot) {
+      latestQueueItems = normaliseQueueItems(snapshot);
+      renderQueueStatus(latestQueueItems);
+      renderQueueList(latestQueueItems);
     }
 
     function getProxyTarget(proxy) {
@@ -1406,8 +1438,18 @@ function showQueueToast(message, options = {}) {
     function renderQueueStatus(data) {
       if (!queueStatus) return;
       queueStatus.innerHTML = '';
-      const isRunning = Boolean(data && data.running);
-      const runningId = data && (data.current || data.running_job_id);
+      let isRunning = false;
+      let runningId = '';
+      if (Array.isArray(data)) {
+        const runningItem = data.find((item) => (item.status || '').toLowerCase() === 'running');
+        if (runningItem) {
+          isRunning = true;
+          runningId = runningItem.job_id || runningItem.process_id || '';
+        }
+      } else if (data && typeof data === 'object') {
+        isRunning = Boolean(data.running || data.isRunning);
+        runningId = data.current || data.running_job_id || data.runningId || '';
+      }
       const label = document.createElement('span');
       label.className = 'queue-status-label';
       label.textContent = isRunning ? '稼働中' : '待機中';
@@ -1421,17 +1463,25 @@ function showQueueToast(message, options = {}) {
       queueStatus.appendChild(chip);
     }
 
-    async function moveQueueItem(jobId, position, button) {
+    async function moveQueueItem(jobId, direction, button) {
+      if (!direction) return;
       const release = setButtonBusy(button, '移動中...');
       try {
-        const fd = new FormData();
-        fd.set('position', String(position));
-        const res = await fetch(`/queue/${jobId}/move`, { method: 'POST', body: fd });
+        const res = await fetch(QUEUE_ENDPOINTS.reorder, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ process_id: jobId, direction }),
+        });
         if (!res.ok) {
           showQueueToast('並び替えに失敗しました', { state: 'error' });
           return;
         }
-        await refreshQueue();
+        const result = await res.json().catch(() => null);
+        if (result && Array.isArray(result.queue)) {
+          applyQueueSnapshot(result.queue);
+        } else {
+          await refreshQueue();
+        }
       } catch (error) {
         console.error(error);
         showQueueToast('並び替えに失敗しました', { state: 'error' });
@@ -1443,16 +1493,25 @@ function showQueueToast(message, options = {}) {
     async function deleteQueueItem(jobId, button) {
       const release = setButtonBusy(button, '削除中...');
       try {
-        const res = await fetch(`/queue/${jobId}`, { method: 'DELETE' });
+        const res = await fetch(QUEUE_ENDPOINTS.remove, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ process_id: jobId }),
+        });
         if (!res.ok) {
           showQueueToast('削除に失敗しました', { state: 'error' });
           return;
         }
+        const result = await res.json().catch(() => null);
         if (editingJobId === jobId) {
           clearEditingState();
         }
         showQueueToast('削除しました', { state: 'success' });
-        await refreshQueue();
+        if (result && Array.isArray(result.queue)) {
+          applyQueueSnapshot(result.queue);
+        } else {
+          await refreshQueue();
+        }
       } catch (error) {
         console.error(error);
         showQueueToast('削除に失敗しました', { state: 'error' });
@@ -1496,14 +1555,14 @@ function showQueueToast(message, options = {}) {
       upBtn.className = 'btn btn-ghost';
       upBtn.textContent = '↑';
       upBtn.addEventListener('click', () => {
-        void moveQueueItem(item.job_id, Math.max(0, index - 1), upBtn);
+        void moveQueueItem(item.job_id, 'up', upBtn);
       });
 
       const downBtn = document.createElement('button');
       downBtn.className = 'btn btn-ghost';
       downBtn.textContent = '↓';
       downBtn.addEventListener('click', () => {
-        void moveQueueItem(item.job_id, index + 1, downBtn);
+        void moveQueueItem(item.job_id, 'down', downBtn);
       });
 
       const editBtn = document.createElement('button');
@@ -1565,17 +1624,16 @@ function showQueueToast(message, options = {}) {
     }
 
     async function fetchQueueConfig(jobId) {
-      const res = await fetch(`/jobs/${jobId}/config`);
-      if (!res.ok) {
-        throw new Error(`Failed to fetch config (${res.status})`);
+      const lookup = () => {
+        const match = latestQueueItems.find((item) => item.job_id === jobId);
+        return match ? match.params || null : null;
+      };
+      let config = lookup();
+      if (config) {
+        return config;
       }
-      const text = await res.text();
-      try {
-        return JSON.parse(text);
-      } catch (error) {
-        console.error('Queue config parse error', error);
-        return null;
-      }
+      await refreshQueue();
+      return lookup();
     }
 
     async function applyQueueConfig(config) {
@@ -1706,14 +1764,27 @@ function showQueueToast(message, options = {}) {
       }
       const release = setButtonBusy(button, '保存中...');
       try {
-        const res = await fetch(`/queue/${jobId}/edit`, { method: 'POST', body: fd });
+        const updates = {};
+        fd.forEach((value, key) => {
+          updates[key] = value;
+        });
+        const res = await fetch(QUEUE_ENDPOINTS.update, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ process_id: jobId, updates }),
+        });
         if (!res.ok) {
           showQueueToast('保存に失敗しました', { state: 'error' });
           return;
         }
+        const result = await res.json().catch(() => null);
         showQueueToast('保存しました', { state: 'success' });
         clearEditingState();
-        await refreshQueue();
+        if (result && Array.isArray(result.queue)) {
+          applyQueueSnapshot(result.queue);
+        } else {
+          await refreshQueue();
+        }
       } catch (error) {
         console.error(error);
         showQueueToast('保存に失敗しました', { state: 'error' });
@@ -1724,13 +1795,10 @@ function showQueueToast(message, options = {}) {
 
     async function refreshQueue() {
       try {
-        const res = await fetch('/queue');
+        const res = await fetch(QUEUE_ENDPOINTS.state);
         if (!res.ok) return;
         const data = await res.json();
-        const items = Array.isArray(data.items) ? data.items : [];
-        latestQueueItems = items;
-        renderQueueStatus(data);
-        renderQueueList(items);
+        applyQueueSnapshot(data);
       } catch (error) {
         console.error(error);
       }
@@ -2067,13 +2135,37 @@ function showQueueToast(message, options = {}) {
       queueStartButton.addEventListener('click', async () => {
         const release = setButtonBusy(queueStartButton, '起動中...');
         try {
-          const res = await fetch('/queue/start', { method: 'POST' });
+          if (!latestQueueItems.length) {
+            showQueueToast('キューにジョブがありません', { state: 'error' });
+            return;
+          }
+          const runningJob = latestQueueItems.find((item) => (item.status || '').toLowerCase() === 'running');
+          if (runningJob) {
+            showQueueToast('既に実行中のジョブがあります', { state: 'info' });
+            return;
+          }
+          const targetJob =
+            latestQueueItems.find((item) => (item.status || '').toLowerCase() === 'paused') || latestQueueItems[0];
+          if (!targetJob) {
+            showQueueToast('起動可能なジョブが見つかりません', { state: 'error' });
+            return;
+          }
+          const res = await fetch(QUEUE_ENDPOINTS.update, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ process_id: targetJob.job_id, updates: { status: 'queued' } }),
+          });
           if (!res.ok) {
             showQueueToast('キュー起動に失敗しました', { state: 'error' });
             return;
           }
+          const result = await res.json().catch(() => null);
           showQueueToast('キューを起動しました', { state: 'success' });
-          await refreshQueue();
+          if (result && Array.isArray(result.queue)) {
+            applyQueueSnapshot(result.queue);
+          } else {
+            await refreshQueue();
+          }
         } catch (error) {
           console.error(error);
           showQueueToast('キュー起動に失敗しました', { state: 'error' });

@@ -600,7 +600,7 @@
   }
 
   const queueManager = (window.AnyAIQueueManager && queuePanel)
-    ? window.AnyAIQueueManager.init({ root: queuePanel, log })
+    ? window.AnyAIQueueManager.init({ root: queuePanel, log, jobType: 'video_summarizer' })
     : null;
 
   function finalizeUI() {

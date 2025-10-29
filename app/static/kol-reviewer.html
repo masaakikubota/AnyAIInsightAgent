@@ -603,7 +603,7 @@
   }
 
   const queueManager = (window.AnyAIQueueManager && queuePanel)
-    ? window.AnyAIQueueManager.init({ root: queuePanel, log })
+    ? window.AnyAIQueueManager.init({ root: queuePanel, log, jobType: 'kol_reviewer' })
     : null;
 
   function finalizeUI() {
