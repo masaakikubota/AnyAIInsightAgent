@@ -836,7 +836,18 @@ body {
   display: flex;
   align-items: baseline;
   gap: var(--anyai-space-3, 12px);
-  margin-bottom: var(--anyai-space-3, 12px);
+  margin-bottom: 0;
+}
+
+.anyai-form-group > header {
+  margin-bottom: 0;
+}
+
+.anyai-support-card > h1,
+.anyai-support-card > h2,
+.anyai-support-card > header,
+.anyai-support-card .support-header {
+  margin-bottom: 0;
 }
 
 .anyai-form-fields {
