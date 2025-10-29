@@ -299,6 +299,12 @@ def update_job(process_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
 
         update_payload = dict(updates)
         status_update = update_payload.pop("status", None)
+        status_value: Optional[str] = None
+
+        if status_update is not None:
+            status_value = str(status_update).strip().lower()
+            if status_value not in {"queued", "paused"}:
+                return {"error": "ステータスは queued または paused のみ更新できます。"}
 
         merged_config = copy.deepcopy(job_info["config"])
         merged_config.update(update_payload)
@@ -314,10 +320,7 @@ def update_job(process_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
             meta["job_type"] = update_payload["job_type"]
             job_info["job_type"] = update_payload["job_type"]
 
-        if status_update is not None:
-            status_value = str(status_update).strip().lower()
-            if status_value not in {"queued", "paused"}:
-                return {"error": "ステータスは queued または paused のみ更新できます。"}
+        if status_value is not None:
             meta["status"] = status_value
             if status_value == "queued" and current_job_id is None:
                 _start_next_job_locked()
