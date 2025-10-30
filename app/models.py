@@ -37,8 +37,8 @@ class RunConfig(BaseModel):
     pipeline_queue_size: Optional[conint(ge=1, le=2000)] = None
     validation_max_workers: conint(ge=1, le=64) = 4
     validation_worker_timeout_sec: conint(ge=1, le=300) = 30
-    writer_flush_interval_sec: confloat(ge=0.1, le=30.0) = 6.0
-    writer_flush_batch_size: conint(ge=1, le=500) = 50
+    writer_flush_interval_sec: confloat(ge=0.1, le=30.0) = 18.0
+    writer_flush_batch_size: conint(ge=1, le=500) = 425
     writer_retry_limit: conint(ge=1, le=10) = 5
     writer_retry_initial_delay_sec: confloat(ge=0.1, le=10.0) = 0.5
     writer_retry_backoff_multiplier: confloat(ge=1.0, le=5.0) = 2.0

@@ -777,7 +777,7 @@ class ScoringPipeline:
                 else:
                     row_chunks = [all_rows]
 
-                payload_batches: List[List[dict]] = []
+                payload_entries: List[dict] = []
 
                 for chunk_rows in row_chunks:
                     analysis_subset = {
@@ -786,16 +786,16 @@ class ScoringPipeline:
                         if row in snapshot_analysis_buffer
                     }
                     if analysis_subset:
-                        analysis_payload = [
-                            payload
-                            for _, payload in build_row_value_ranges(
-                                category_start_col=self.cfg.category_start_col,
-                                sheet_name=self.sheet_name,
-                                update_buffer=analysis_subset,
-                            )
-                        ]
-                        if analysis_payload:
-                            payload_batches.append(analysis_payload)
+                        payload_entries.extend(
+                            [
+                                payload
+                                for _, payload in build_row_value_ranges(
+                                    category_start_col=self.cfg.category_start_col,
+                                    sheet_name=self.sheet_name,
+                                    update_buffer=analysis_subset,
+                                )
+                            ]
+                        )
 
                     score_subset = {
                         row: snapshot_score_buffer[row]
@@ -803,18 +803,18 @@ class ScoringPipeline:
                         if row in snapshot_score_buffer
                     }
                     if score_subset:
-                        score_payload = [
-                            payload
-                            for _, payload in build_row_value_ranges(
-                                category_start_col=self.cfg.category_start_col,
-                                sheet_name=self.score_sheet_name or self.sheet_name,
-                                update_buffer=score_subset,
-                            )
-                        ]
-                        if score_payload:
-                            payload_batches.append(score_payload)
+                        payload_entries.extend(
+                            [
+                                payload
+                                for _, payload in build_row_value_ranges(
+                                    category_start_col=self.cfg.category_start_col,
+                                    sheet_name=self.score_sheet_name or self.sheet_name,
+                                    update_buffer=score_subset,
+                                )
+                            ]
+                        )
 
-                if not payload_batches:
+                if not payload_entries:
                     self._stats.flush_count += 1
                     self._completed_requests += len(snapshot_updates)
                     for entry in snapshot_updates:
@@ -839,13 +839,19 @@ class ScoringPipeline:
                     else 0
                 )
 
+                max_entries_per_request = 500
+                payload_groups: List[List[dict]] = [
+                    payload_entries[i : i + max_entries_per_request]
+                    for i in range(0, len(payload_entries), max_entries_per_request)
+                ]
+
                 async def perform_flush() -> None:
                     attempts = 0
                     delay = self.writer_retry_initial_delay
                     last_error: Optional[Exception] = None
                     while attempts < self.writer_retry_limit:
                         try:
-                            for batch_payload in payload_batches:
+                            for batch_payload in payload_groups:
                                 await asyncio.to_thread(
                                     batch_update_values, self.spreadsheet_id, batch_payload
                                 )

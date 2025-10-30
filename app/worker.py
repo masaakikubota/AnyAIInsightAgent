@@ -695,13 +695,13 @@ class JobManager:
                         )
 
                         async def mark_unit(unit: PipelineUnit, result: ScoreResult) -> None:
-                            if not count_progress:
-                                return
                             async with progress_lock:
                                 key = f"{unit.row_index}:{unit.block_index}"
                                 if key in completed_blocks:
                                     return
                                 completed_blocks.add(key)
+                                if not count_progress:
+                                    return
                                 job.processed_rows += 1
                                 logger.debug(
                                     "Job %s unit completed row=%s block=%s processed=%s/%s",
@@ -756,14 +756,15 @@ class JobManager:
 
                         if job.cfg.auto_slowdown:
                             if rate_429_batch > 0:
+                                slowdown_duration = 70
                                 slowdown_history.append(
-                                    {"batch": batch_num, "action": "pause", "reason": "429", "duration_sec": 120}
+                                    {"batch": batch_num, "action": "pause", "reason": "429", "duration_sec": slowdown_duration}
                                 )
                                 log_chunk(
                                     chunk_idx + 1,
-                                    "Rate limit detected; pausing scoring for 120 seconds",
+                                    f"Rate limit detected; pausing scoring for {slowdown_duration} seconds",
                                 )
-                                await asyncio.sleep(120)
+                                await asyncio.sleep(slowdown_duration)
                                 clean_batches = 0
                             else:
                                 clean_batches += 1
@@ -809,102 +810,6 @@ class JobManager:
                         # 完了したチャンクはメモリ節約のためクリア
                         chunk_units.clear()
                         break
-
-            # Retry passes for cells still blank (up to 4 additional passes)
-            for retry_round in range(4):
-                if job.cancel_flag:
-                    break
-                log_retry(retry_round + 1, "Scanning sheet for blank scores")
-                # Refresh rows to inspect blanks
-                rows = await asyncio.to_thread(fetch_sheet_values, spreadsheet_id, sheet_name)
-                retry_units: List[Tuple[int, int, int]] = []
-                for row_abs_idx in active_row_indices:
-                    for (ridx, block_index, col_offset) in blocks.get(row_abs_idx, []):
-                        if is_completed((ridx, block_index, col_offset)):
-                            continue
-                        cats = read_categories_from_sheet(rows, job.cfg, row_abs_idx, col_offset)
-                        if not cats:
-                            continue
-                        row_vals = rows[row_abs_idx] if row_abs_idx < len(rows) else []
-                        base = job.cfg.category_start_col - 1 + col_offset
-                        need = False
-                        for i in range(len(cats)):
-                            col_idx = base + i
-                            val = row_vals[col_idx] if col_idx < len(row_vals) else ""
-                            if str(val).strip() == "":
-                                need = True
-                                break
-                        if need:
-                            retry_units.append((row_abs_idx, block_index, col_offset))
-
-                if not retry_units:
-                    break  # nothing to retry
-
-                # Process retry units in chunks of sheet_chunk_rows
-                count_progress = False  # do not change processed_rows in retry passes
-                pos = 0
-                while pos < len(retry_units):
-                    batch_units = retry_units[pos : pos + job.cfg.sheet_chunk_rows]
-                    pos += len(batch_units)
-                    batch_num += 1
-                    batch_agg = {"rate_429_batch": 0}
-
-                    pipeline_units = [
-                        PipelineUnit(row_index=u[0], block_index=u[1], col_offset=u[2])
-                        for u in batch_units
-                    ]
-
-                    async def mark_unit_retry(unit: PipelineUnit, result: ScoreResult) -> None:
-                        # Retryパスでは processed_rows を更新しない
-                        return
-
-                    pipeline = ScoringPipeline(
-                        cfg=job.cfg,
-                        spreadsheet_id=spreadsheet_id,
-                        sheet_name=sheet_name,
-                        score_sheet_name=score_sheet_name,
-                        invoke_concurrency=min(current_conc, max(1, len(pipeline_units))),
-                        rows=rows,
-                        utter_col_index=utter_col,
-                        category_reader=cached_category_reader,
-                        score_cache=score_cache,
-                        mark_unit_completed=mark_unit_retry,
-                        flush_interval=job.cfg.writer_flush_interval_sec,
-                        flush_unit_threshold=job.cfg.writer_flush_batch_size,
-                        invoke_queue_size=job.cfg.pipeline_queue_size,
-                        validation_max_workers=job.cfg.validation_max_workers,
-                        validation_timeout=job.cfg.validation_worker_timeout_sec,
-                        writer_retry_limit=job.cfg.writer_retry_limit,
-                        writer_retry_initial_delay=job.cfg.writer_retry_initial_delay_sec,
-                        writer_retry_backoff_multiplier=job.cfg.writer_retry_backoff_multiplier,
-                        sheet_batch_row_size=job.cfg.sheet_chunk_rows,
-                        video_mode=job.cfg.mode == "video",
-                        event_logger=lambda msg, rid=retry_round + 1: log_retry(rid, msg),
-                        shared_writer=shared_writer,
-                        category_vectors=category_vector_cache,
-                    )
-                    stats = await pipeline.run(pipeline_units)
-                    rate_429_total += stats.rate_429_count
-                    batch_agg["rate_429_batch"] += stats.rate_429_count
-                    log_retry(
-                        retry_round + 1,
-                        "Processed retry batch: "
-                        f"tasks={stats.processed_units}, cache_hits={stats.cache_hits}, rate_limits={stats.rate_429_count}",
-                    )
-
-                    if job.cfg.auto_slowdown:
-                        if batch_agg["rate_429_batch"] > 0:
-                            slowdown_history.append(
-                                {"batch": batch_num, "action": "pause", "reason": "429", "duration_sec": 120}
-                            )
-                            log_retry(
-                                retry_round + 1,
-                                "Rate limit detected during retry; pausing for 120 seconds",
-                            )
-                            await asyncio.sleep(120)
-                            clean_batches = 0
-                        else:
-                            clean_batches += 1
 
             job.status = JobStatus.cancelled if job.cancel_flag else JobStatus.completed
             log_stage("Done", f"Job finished with status {job.status.value}")

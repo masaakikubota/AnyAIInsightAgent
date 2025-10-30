@@ -188,7 +188,7 @@ class SharedSheetWriter:
             for i in range(0, len(all_rows), self._sheet_batch_row_size)
         ]
 
-        payload_batches: List[List[dict]] = []
+        payload_entries: List[dict] = []
         for chunk_rows in row_chunks:
             analysis_subset = {
                 row: analysis_buffer[row]
@@ -196,16 +196,16 @@ class SharedSheetWriter:
                 if row in analysis_buffer
             }
             if analysis_subset:
-                analysis_payload = [
-                    payload
-                    for _, payload in build_row_value_ranges(
-                        category_start_col=self._cfg.category_start_col,
-                        sheet_name=self._sheet_name,
-                        update_buffer=analysis_subset,
-                    )
-                ]
-                if analysis_payload:
-                    payload_batches.append(analysis_payload)
+                payload_entries.extend(
+                    [
+                        payload
+                        for _, payload in build_row_value_ranges(
+                            category_start_col=self._cfg.category_start_col,
+                            sheet_name=self._sheet_name,
+                            update_buffer=analysis_subset,
+                        )
+                    ]
+                )
 
             score_subset = {
                 row: score_buffer[row]
@@ -213,18 +213,18 @@ class SharedSheetWriter:
                 if row in score_buffer
             }
             if score_subset:
-                score_payload = [
-                    payload
-                    for _, payload in build_row_value_ranges(
-                        category_start_col=self._cfg.category_start_col,
-                        sheet_name=self._score_sheet_name,
-                        update_buffer=score_subset,
-                    )
-                ]
-                if score_payload:
-                    payload_batches.append(score_payload)
+                payload_entries.extend(
+                    [
+                        payload
+                        for _, payload in build_row_value_ranges(
+                            category_start_col=self._cfg.category_start_col,
+                            sheet_name=self._score_sheet_name,
+                            update_buffer=score_subset,
+                        )
+                    ]
+                )
 
-        if not payload_batches:
+        if not payload_entries:
             await self._mark_entries_completed(updates_snapshot)
             self._log("Skipped Sheets update: nothing to write")
             return
@@ -235,13 +235,19 @@ class SharedSheetWriter:
         analysis_cells = sum(len(cols) for cols in analysis_buffer.values()) if analysis_buffer else 0
         score_cells = sum(len(cols) for cols in score_buffer.values()) if score_buffer else 0
 
+        max_entries_per_request = 500
+        payload_groups: List[List[dict]] = [
+            payload_entries[i : i + max_entries_per_request]
+            for i in range(0, len(payload_entries), max_entries_per_request)
+        ]
+
         async def perform_flush() -> None:
             attempts = 0
             delay = self._writer_retry_initial_delay
             last_error: Optional[Exception] = None
             while attempts < self._writer_retry_limit:
                 try:
-                    for batch_payload in payload_batches:
+                    for batch_payload in payload_groups:
                         await asyncio.to_thread(
                             batch_update_values,
                             self._spreadsheet_id,
