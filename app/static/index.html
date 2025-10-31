@@ -978,10 +978,10 @@
                     <h3 id="execution-heading" class="band-title">実行設定</h3>
                     <div class="anyai-form-fields is-two-column">
                       <div class="field"><label for="batch_size">カテゴリ同梱数 N</label><input type="number" name="batch_size" id="batch_size" value="10" min="1" max="50" />
-                        <p class="field-hint">SSRモードでは 1 に固定されます。</p>
+                        <p class="field-hint">SSRオン/オフに関わらず任意の数値を設定できます。</p>
                       </div>
                       <div class="field"><label for="max_category_cols">最大カテゴリ列数</label><input type="number" name="max_category_cols" id="max_category_cols" value="200" min="1" max="10000" />
-                        <p class="field-hint">Videoモードでは最初の列のみ処理します。</p>
+                        <p class="field-hint">Videoモードでも複数列を一度にスコアリングできます（N設定に応じます）。</p>
                       </div>
                       <div class="field"><label for="concurrency-input">同時実行数</label><input type="number" name="concurrency" value="50" min="1" max="200" id="concurrency-input" /></div>
                       <div class="field"><label for="max_retries">最大リトライ回数</label><input type="number" name="max_retries" id="max_retries" value="3" min="0" max="50" /></div>
@@ -1246,8 +1246,8 @@
           fallbackModel: 'gpt-5-nano',
         },
         video: {
-          batchSize: '1',
-          maxCategoryCols: '1',
+          batchSize: '10',
+          maxCategoryCols: '200',
           concurrency: '15',
           timeout: '300',
           primaryModel: 'gemini-flash-latest',
@@ -2366,15 +2366,6 @@
 
       clearSheetSelections();
 
-      const lockInput = (el, value) => {
-        if (!el) return;
-        el.value = value;
-        el.setAttribute('readonly', 'readonly');
-        el.setAttribute('aria-readonly', 'true');
-        el.min = value;
-        el.max = value;
-      };
-
       const unlockInput = (el, min, max) => {
         if (!el) return;
         el.removeAttribute('readonly');
@@ -2457,31 +2448,19 @@
           }
         }
 
-        if (!ssrEnabled) {
-          restoreNonSSRValues(mode);
+        const storedValues = nonSSRState[mode] || defaults;
+
+        restoreNonSSRValues(mode);
+
+        unlockInput(batchSizeInput, '1', '50');
+        if (!batchSizeInput.value) {
+          batchSizeInput.value = storedValues.batchSize || defaults.batchSize;
         }
 
-        if (isVideoMode) {
-          const lockedBatch = defaults.batchSize || MODE_DEFAULTS.video.batchSize || '1';
-          lockInput(batchSizeInput, lockedBatch);
-          if (maxCategoryInput) {
-            const lockedMax = defaults.maxCategoryCols || lockedBatch;
-            lockInput(maxCategoryInput, lockedMax);
-          }
-        } else if (ssrEnabled) {
-          lockInput(batchSizeInput, '1');
-          if (maxCategoryInput) {
-            unlockInput(maxCategoryInput, '1', '10000');
-            if (!maxCategoryInput.value) {
-              maxCategoryInput.value = defaults.maxCategoryCols || MODE_DEFAULTS.csv.maxCategoryCols;
-            }
-          }
-        } else {
-          unlockInput(batchSizeInput, '1', '50');
-          if (maxCategoryInput) {
-            unlockInput(maxCategoryInput, '1', '10000');
-            const stored = nonSSRState[mode] || defaults;
-            maxCategoryInput.value = stored.maxCategoryCols || defaults.maxCategoryCols;
+        if (maxCategoryInput) {
+          unlockInput(maxCategoryInput, '1', '10000');
+          if (!maxCategoryInput.value) {
+            maxCategoryInput.value = storedValues.maxCategoryCols || defaults.maxCategoryCols;
           }
         }
 
@@ -2492,15 +2471,9 @@
           timeoutInput.value = defaults.timeout || MODE_DEFAULTS.csv.timeout;
         }
 
-        if (!ssrEnabled && !isVideoMode) {
-          batchSizeInput.removeAttribute('title');
-          batchSizeInput.removeAttribute('aria-disabled');
-          batchSizeInput.disabled = false;
-        } else {
-          batchSizeInput.setAttribute('title', isVideoMode ? 'VideoモードではN=1固定です' : 'SSR有効時はN=1固定です');
-          batchSizeInput.setAttribute('aria-disabled', 'true');
-          batchSizeInput.disabled = true;
-        }
+        batchSizeInput.removeAttribute('title');
+        batchSizeInput.removeAttribute('aria-disabled');
+        batchSizeInput.disabled = false;
 
         updateSSREnabled();
         toggleSheetFields(ssrEnabled);
@@ -2601,10 +2574,6 @@
         fd.set('mode', selectedMode);
         if (enableSSR.checked) {
           fd.set('batch_size', '1');
-        }
-        if (selectedMode === 'video') {
-          fd.set('batch_size', MODE_DEFAULTS.video.batchSize);
-          fd.set('max_category_cols', MODE_DEFAULTS.video.maxCategoryCols);
         }
         fd.set('sheet_keyword', getAnalysisSheetKeyword());
         fd.set('score_sheet_keyword', getScoreSheetKeyword());
@@ -2772,21 +2741,29 @@
       }
 
       batchSizeInput.addEventListener('change', () => {
-        if (enableSSR.checked) return;
+        if (!nonSSRState[currentMode]) {
+          nonSSRState[currentMode] = {};
+        }
         nonSSRState[currentMode].batchSize = batchSizeInput.value;
       });
       if (maxCategoryInput) {
         maxCategoryInput.addEventListener('change', () => {
-          if (enableSSR.checked) return;
+          if (!nonSSRState[currentMode]) {
+            nonSSRState[currentMode] = {};
+          }
           nonSSRState[currentMode].maxCategoryCols = maxCategoryInput.value;
         });
       }
       concurrencyInput.addEventListener('change', () => {
-        if (enableSSR.checked) return;
+        if (!nonSSRState[currentMode]) {
+          nonSSRState[currentMode] = {};
+        }
         nonSSRState[currentMode].concurrency = concurrencyInput.value;
       });
       timeoutInput.addEventListener('change', () => {
-        if (enableSSR.checked) return;
+        if (!nonSSRState[currentMode]) {
+          nonSSRState[currentMode] = {};
+        }
         nonSSRState[currentMode].timeout = timeoutInput.value;
       });
 
