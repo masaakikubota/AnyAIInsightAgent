@@ -69,11 +69,11 @@ text and appends absolute/relative scores plus anchor metadata under
 pipeline for observability.
 
 ## Concurrency rule
-When SSR mode is enabled we force the batch size (“カテゴリ同梱数 N”) to 1:
+When SSR mode is enabled we encourage small batch sizes but no longer force them:
 
-* UI disables the input and shows a tooltip (“SSR forces N=1”).
-* The job API coerces incoming values and emits `evt=ssr_concurrency_forced`.
-* Worker startup re-applies the guard in case configurations are loaded from disk.
+* UI は SSR ON/OFF を問わずカテゴリ同梱数を編集可能に保つ。
+* Job API は送信された `batch_size` を尊重し、必要な検証のみを行う。
+* Worker 起動時は `max_category_cols` を `batch_size` 以上に正規化するだけで強制固定はしない。
 
 ## Embedding fallback
 `embed_with_fallback` now wraps the primary provider (default: OpenAI

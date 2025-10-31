@@ -234,13 +234,6 @@ async def create_job(
         default_timeout = RunConfig.model_fields["video_timeout_default"].default
         concurrency_value = concurrency or default_concurrency
         timeout_value = timeout_sec or default_timeout
-        if batch_size_value != 1:
-            raise HTTPException(
-                status_code=400,
-                detail="Videoモードではカテゴリ同梱数Nは1のみ指定できます。",
-            )
-        batch_size_value = 1
-        max_category_cols_value = 1
         if not primary_model_value:
             primary_model_value = "gemini-flash-latest"
         fallback_model_value = ""
@@ -249,10 +242,6 @@ async def create_job(
             primary_model_value = "gemini-flash-lite-latest"
         if not fallback_model_value:
             fallback_model_value = "gpt-5-nano"
-
-    if enable_ssr and batch_size_value != 1:
-        logger.debug("evt=ssr_concurrency_forced value=1 scope=request")
-        batch_size_value = 1
 
     primary_provider = _infer_provider(primary_model_value, default=Provider.gemini)
     fallback_provider = (
@@ -495,17 +484,11 @@ async def edit_job(
         if not primary_model_value:
             primary_model_value = "gemini-flash-latest"
         fallback_model_value = ""
-        batch_size_value = 1
-        max_category_cols = 1
     else:
         if not primary_model_value:
             primary_model_value = "gemini-flash-lite-latest"
         if not fallback_model_value:
             fallback_model_value = "gpt-5-nano"
-
-    if enable_ssr and batch_size_value != 1:
-        logger.debug("evt=ssr_concurrency_forced value=1 scope=edit job_id=%s", job_id)
-        batch_size_value = 1
 
     primary_provider = _infer_provider(primary_model_value, default=Provider.gemini)
     fallback_provider = (

@@ -39,7 +39,52 @@ except ImportError:  # pragma: no cover - available when google-api-core is inst
     GoogleDeadlineExceeded = None
 
 # --- Flask and Environment Imports ---
-from flask import Flask, request, jsonify, Response, render_template
+try:
+    from flask import Flask, request, jsonify, Response, render_template
+except ModuleNotFoundError:  # pragma: no cover - allow headless workers without Flask
+    class _FlaskStub:
+        """Minimal stub so worker functions can run without Flask installed."""
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            self._routes = {}
+
+        def route(self, *_args, **_kwargs):
+            def _decorate(func):
+                return func
+
+            return _decorate
+
+        def run(self, *_args, **_kwargs) -> None:  # pragma: no cover - headless usage only
+            raise RuntimeError(
+                "Flask is required to run the legacy video analysis HTTP server. "
+                "Install dependencies with 'pip install -r requirements.txt'."
+            )
+
+    class _RequestStub:
+        def __getattr__(self, name):  # pragma: no cover - defensive
+            raise RuntimeError(
+                "Flask request object is unavailable. Install Flask to serve HTTP endpoints."
+            )
+
+    def _jsonify_stub(*_args, **_kwargs):  # pragma: no cover - defensive
+        raise RuntimeError(
+            "Flask is required for jsonify(). Install Flask to use the HTTP server features."
+        )
+
+    class _ResponseStub:  # pragma: no cover - defensive
+        pass
+
+    def _render_template_stub(*_args, **_kwargs):  # pragma: no cover - defensive
+        raise RuntimeError(
+            "Flask is required for render_template(). Install Flask to use the HTTP server features."
+        )
+
+    Flask = _FlaskStub
+    request = _RequestStub()
+    jsonify = _jsonify_stub
+    Response = _ResponseStub
+    render_template = _render_template_stub
+
 from dotenv import load_dotenv
 
 # --- Suppress common warnings ---
@@ -104,6 +149,14 @@ def _load_confidential_keys():
         print(f"WARNING: Failed to load confidential keys: {e}", file=sys.stderr)
 
 _load_confidential_keys()
+
+
+def _worksheet_batch_update_safe(ws, requests):
+    """Invoke worksheet.batch_update without letting it mutate the original payload."""
+    if not requests:
+        return None
+    safe_payload = [dict(entry) for entry in requests]
+    return ws.batch_update(safe_payload)
 
 # ==============================================================================
 # --- Global Configuration & State ---
@@ -815,7 +868,7 @@ def analysis_main_logic(config: dict, log_q: multiprocessing.Queue):
                 if len(update_requests) >= BATCH_SIZE:
                     log_message(f"  -> Writing batch of {len(update_requests)} results to the sheet...", queue=log_q)
                     try:
-                        output_ws.batch_update(update_requests)
+                        _worksheet_batch_update_safe(output_ws, update_requests)
                         log_message("  -> Batch write successful.", queue=log_q)
                         update_requests = []  # Clear the batch
                     except Exception as e:
@@ -827,7 +880,7 @@ def analysis_main_logic(config: dict, log_q: multiprocessing.Queue):
         if update_requests:
             log_message(f"-> Writing final batch of {len(update_requests)} results to the sheet...", queue=log_q)
             try:
-                output_ws.batch_update(update_requests)
+                _worksheet_batch_update_safe(output_ws, update_requests)
                 log_message("-> Final batch write successful.", queue=log_q)
             except Exception as e:
                 log_message(f"-> WARNING: Failed to write final batch to sheet: {e}", is_error=True, queue=log_q)
@@ -868,13 +921,13 @@ def analysis_main_logic(config: dict, log_q: multiprocessing.Queue):
                     })
                     if len(update_requests) >= 10:
                         try:
-                            output_ws.batch_update(update_requests)
+                            _worksheet_batch_update_safe(output_ws, update_requests)
                             update_requests = []
                         except Exception as e:
                             log_message(f"  -> WARNING: Failed to write retry batch: {e}", is_error=True, queue=log_q)
             if update_requests:
                 try:
-                    output_ws.batch_update(update_requests)
+                    _worksheet_batch_update_safe(output_ws, update_requests)
                 except Exception as e:
                     log_message(f"-> WARNING: Failed to write final retry batch: {e}", is_error=True, queue=log_q)
             tasks = new_tasks
@@ -1663,7 +1716,7 @@ def comment_enhancer_main_logic(config: dict, log_q: multiprocessing.Queue):
 
             if rows_in_batch >= 15:
                 try:
-                    output_ws.batch_update(pending_updates)
+                    _worksheet_batch_update_safe(output_ws, pending_updates)
                     log_message(f"[Batch Write] Wrote {rows_in_batch} rows, {len(pending_updates)} cells.", queue=log_q)
                 except Exception as e:
                     log_message(f"[Batch Write] WARNING: Failed to write batch: {e}", is_error=True, queue=log_q)
@@ -1678,7 +1731,7 @@ def comment_enhancer_main_logic(config: dict, log_q: multiprocessing.Queue):
         # Final flush if any
         if pending_updates:
             try:
-                output_ws.batch_update(pending_updates)
+                _worksheet_batch_update_safe(output_ws, pending_updates)
                 log_message(f"[Final Write] Wrote remaining {len(pending_updates)} cells.", queue=log_q)
             except Exception as e:
                 log_message(f"[Final Write] WARNING: Failed to write final batch: {e}", is_error=True, queue=log_q)
@@ -1869,7 +1922,7 @@ def video_comment_review_main_logic(config: dict, log_q: multiprocessing.Queue):
 
                 if len(updates) >= batch_size:
                     try:
-                        output_ws.batch_update(updates)
+                        _worksheet_batch_update_safe(output_ws, updates)
                         log_message(f"[Batch Write] Wrote {len(updates)} summaries.", queue=log_q)
                     except Exception as e:
                         log_message(f"[Batch Write] WARNING: Failed to write batch: {e}", is_error=True, queue=log_q)
@@ -1881,7 +1934,7 @@ def video_comment_review_main_logic(config: dict, log_q: multiprocessing.Queue):
 
         if updates:
             try:
-                output_ws.batch_update(updates)
+                _worksheet_batch_update_safe(output_ws, updates)
                 log_message(f"[Final Write] Wrote remaining {len(updates)} summaries.", queue=log_q)
             except Exception as e:
                 log_message(f"[Final Write] WARNING: Failed to write final batch: {e}", is_error=True, queue=log_q)
@@ -1920,7 +1973,7 @@ def video_comment_review_main_logic(config: dict, log_q: multiprocessing.Queue):
                     updates.append({'range': f"{num_to_col(output_col_idx)}{row_idx}", 'values': [[summary]]})
                     if len(updates) >= batch_size:
                         try:
-                            output_ws.batch_update(updates)
+                            _worksheet_batch_update_safe(output_ws, updates)
                             updates = []
                         except Exception as e:
                             log_message(f"  -> WARNING: Failed to write retry batch: {e}", is_error=True, queue=log_q)
@@ -1928,7 +1981,7 @@ def video_comment_review_main_logic(config: dict, log_q: multiprocessing.Queue):
                         log_message(f"   - [DEBUG] Retry result for row {row_idx} ({processed_retry}/{len(retry_tasks)})", queue=log_q)
             if updates:
                 try:
-                    output_ws.batch_update(updates)
+                    _worksheet_batch_update_safe(output_ws, updates)
                 except Exception as e:
                     log_message(f"-> WARNING: Failed to write final retry batch: {e}", is_error=True, queue=log_q)
             attempt += 1
@@ -2247,7 +2300,7 @@ Content: {content}
 
                     if len(tag_updates) >= batch_size:
                         try:
-                            source_ws.batch_update(tag_updates)
+                            _worksheet_batch_update_safe(source_ws, tag_updates)
                             log_message(f"[Tag Write] Wrote {len(tag_updates)} cells.", queue=log_q)
                         except Exception as e:
                             log_message(f"[Tag Write] WARNING: Failed to write batch: {e}", is_error=True, queue=log_q)
@@ -2259,7 +2312,7 @@ Content: {content}
 
             if tag_updates:
                 try:
-                    source_ws.batch_update(tag_updates)
+                    _worksheet_batch_update_safe(source_ws, tag_updates)
                     log_message(f"[Tag Write] Wrote remaining {len(tag_updates)} cells.", queue=log_q)
                 except Exception as e:
                     log_message(f"[Tag Write] WARNING: Failed to write final batch: {e}", is_error=True, queue=log_q)
@@ -2292,7 +2345,7 @@ Content: {content}
 
                     if len(updates) >= batch_size:
                         try:
-                            source_ws.batch_update(updates)
+                            _worksheet_batch_update_safe(source_ws, updates)
                             log_message(f"[Batch Write] Wrote {len(updates)} cells.", queue=log_q)
                         except Exception as e:
                             log_message(f"[Batch Write] WARNING: Failed to write batch: {e}", is_error=True, queue=log_q)
@@ -2304,7 +2357,7 @@ Content: {content}
 
             if updates:
                 try:
-                    source_ws.batch_update(updates)
+                    _worksheet_batch_update_safe(source_ws, updates)
                     log_message(f"[Final Write] Wrote remaining {len(updates)} cells.", queue=log_q)
                 except Exception as e:
                     log_message(f"[Final Write] WARNING: Failed to write final batch: {e}", is_error=True, queue=log_q)
@@ -2347,7 +2400,7 @@ Content: {content}
                         updates.append({'range': f"{num_to_col(trend_col_idx)}{row_idx}", 'values': [[_clean(data.get("content_trends"))]]})
                         if len(updates) >= batch_size:
                             try:
-                                source_ws.batch_update(updates)
+                                _worksheet_batch_update_safe(source_ws, updates)
                                 updates = []
                             except Exception as e:
                                 log_message(f"  -> WARNING: Failed to write retry batch: {e}", is_error=True, queue=log_q)
@@ -2355,7 +2408,7 @@ Content: {content}
                             log_message(f"   - [DEBUG] Retry profile generated for row {row_idx} ({processed_retry}/{len(retry_tasks)})", queue=log_q)
                 if updates:
                     try:
-                        source_ws.batch_update(updates)
+                        _worksheet_batch_update_safe(source_ws, updates)
                     except Exception as e:
                         log_message(f"-> WARNING: Failed to write final retry batch: {e}", is_error=True, queue=log_q)
                 attempt += 1
